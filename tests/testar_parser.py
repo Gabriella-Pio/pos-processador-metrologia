@@ -45,7 +45,7 @@ def testar():
 
         print(f"\n--- DETALHAMENTO DA TABELA DIMENSIONAL ---")
         for idx, item in enumerate(dto.itens_medicao, 1):
-            print(f"  [{idx}] {item.caracteristica} | Medido: {item.valor_medido} | Desvio: {item.desvio} | Status: {item.status}")
+            print(f"  [{idx}] [{item.tipo}] {item.caracteristica} | Nominal: {item.nominal} | Medido: {item.valor_medido} | | Tolerância: {item.tol_superior} // {item.tol_inferior} | Desvio: {item.desvio} | Status: {item.status}")
 
 if __name__ == "__main__":
     testar()

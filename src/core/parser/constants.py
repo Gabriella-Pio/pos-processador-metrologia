@@ -58,3 +58,9 @@ TERMOS_PARADA_BLOCO = {
 SIGLAS_VALIDAS = {
     "ks", "kb", "ps", "pb", "ls", "lb", "rb", "rs", "ab", "as", "db", "ds", "dj", "jb", "js"
 }
+
+SECOES_METROLOGIA = {
+    "diametros", "distancias", "perpendicularidades", 
+    "cocentricidades", "coaxialidades", "cilindricidade", 
+    "paralelismo", "angulo", "posicao", "batimento"
+}

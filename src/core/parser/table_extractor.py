@@ -3,13 +3,14 @@ from dataclasses import dataclass
 from typing import List, Tuple
 from .constants import (
     LIXO_TECNICO, SIGLAS_VALIDAS, TERMOS_PARAMETROS_MAQUINA, 
-    TERMOS_CARACTERISTICAS, TERMOS_PARADA_BLOCO
+    TERMOS_CARACTERISTICAS, TERMOS_PARADA_BLOCO, SECOES_METROLOGIA
 )
 from .utils import ParserUtils
 
 @dataclass
 class MedicaoItemDto:
     caracteristica: str
+    tipo: str
     valor_medido: str
     nominal: str
     tol_superior: str
@@ -37,10 +38,12 @@ class TableExtractor:
 
     @staticmethod
     def _eh_caracteristica_real(linhas: List[str], index_atual: int) -> bool:
-        """Valida se a linha atual representa uma característica geométrica válida ou antecede uma unidade."""
         linha = linhas[index_atual]
         linha_limpa = " ".join(linha.split())
         linha_lower = linha_limpa.lower()
+
+        if linha_lower in SECOES_METROLOGIA:
+            return False
 
         if "_" in linha or linha.startswith("DIM "):
             return True
@@ -59,7 +62,6 @@ class TableExtractor:
 
     @staticmethod
     def _coletar_bloco_numerico(linhas: List[str], index_atual: int) -> List[str]:
-        """Coleta os valores numéricos estritos associados à característica usando os termos de parada centralizados."""
         nums = []
         j = index_atual + 1
         
@@ -67,7 +69,7 @@ class TableExtractor:
             prox = linhas[j]
             prox_lower = prox.lower()
             
-            if any(p in prox_lower for p in TERMOS_PARADA_BLOCO) or "_" in prox or prox.startswith("DIM "):
+            if any(p in prox_lower for p in TERMOS_PARADA_BLOCO) or "_" in prox or prox.startswith("DIM ") or prox_lower in SECOES_METROLOGIA:
                 break
                 
             if "mm" in prox or "inch" in prox or "°" in prox or re.match(r"^-?\d+([\.,]\d+)", prox):
@@ -78,7 +80,6 @@ class TableExtractor:
 
     @staticmethod
     def _mapear_colunas_numericas(nums_coletados: List[str]) -> Tuple[str, str, str, str, str]:
-        """Distribui dinamicamente os valores coletados nas colunas corretas (Completa, Unilateral ou Omitida)."""
         val_medido = nums_coletados[0]
         nominal = nums_coletados[1]
         tol_sup = "0.0000"
@@ -109,7 +110,6 @@ class TableExtractor:
 
     @staticmethod
     def _calcular_status(desvio_str: str, tol_sup_str: str, tol_inf_str: str) -> str:
-        """Calcula o status de conformidade metrológica."""
         if tol_sup_str == "N/A" or tol_inf_str == "N/A":
             return "Dentro"
 
@@ -125,11 +125,17 @@ class TableExtractor:
     def extrair(cls, linhas_totais: List[str], limite_esperado: int = 0) -> List[MedicaoItemDto]:
         itens = []
         i = 0
+        tipo_atual = None
 
         while i < len(linhas_totais):
             linha = linhas_totais[i]
             linha_limpa = " ".join(linha.split())
             linha_lower = linha_limpa.lower()
+
+            if linha_lower in SECOES_METROLOGIA:
+                tipo_atual = linha_limpa.upper()
+                i += 1
+                continue
 
             if cls._eh_lixo_ou_parametro(linha_lower, linha_limpa):
                 i += 1
@@ -144,8 +150,14 @@ class TableExtractor:
                         val_medido, nominal, tol_sup, tol_inf, desvio = cls._mapear_colunas_numericas(nums_coletados)
                         status_item = cls._calcular_status(desvio, tol_sup, tol_inf)
 
+                        if tipo_atual:
+                            tipo_final = tipo_atual
+                        else:
+                            tipo_final = ParserUtils.inferir_tipo_por_nome(linha_limpa)
+
                         itens.append(MedicaoItemDto(
                             caracteristica=linha_limpa,
+                            tipo=tipo_final,
                             valor_medido=val_medido,
                             nominal=nominal,
                             tol_superior=tol_sup,
