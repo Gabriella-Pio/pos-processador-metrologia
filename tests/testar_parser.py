@@ -31,6 +31,8 @@ def testar():
         print(f"Operador          : {dto.operador}")
         print(f"Data/Hora         : {dto.data_hora}")
         print(f"Duração           : {dto.duracao_medicao}")
+        print(f"Software          : {dto.software}")
+        print(f"Versão            : {dto.versao_software}")
         print(f"Total Medições    : {dto.numero_medicoes_cabecalho} (Itens na tabela: {len(dto.itens_medicao)})")
         print(f"Fora de Tolerância: Cabeçalho = {dto.fora_tolerancia_cabecalho} | Calculado da Tabela = {itens_fora_calculados}")
         

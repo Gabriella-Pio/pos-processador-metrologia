@@ -31,5 +31,5 @@ def inspecionar_linhas_pdf(caminho_pdf: str):
 
 if __name__ == "__main__":
     # Aponta para o seu arquivo real de entrada
-    arquivo_alvo = "input_pdfs/global peca pintada.pdf"
+    arquivo_alvo = "input_pdfs/CARCACA DE BOMBA 8.pdf"
     inspecionar_linhas_pdf(arquivo_alvo)

@@ -22,7 +22,9 @@ class HeaderExtractor:
             "run": "Não informado",
             "numero_medicoes_cabecalho": 0,
             "fora_tolerancia_cabecalho": 0,
-            "duracao_medicao": "00:00:00,0"
+            "duracao_medicao": "00:00:00,0",
+            "software": "ZEISS CALYPSO",
+            "versao_software": "Não informada"
         }
 
     @staticmethod
@@ -69,6 +71,10 @@ class HeaderExtractor:
             dados["duracao_medicao"] = proxima_linha
             return True
 
+        if any(k in linha_norm for k in CHAVES_DURACAO):
+            dados["duracao_medicao"] = proxima_linha
+            return True
+
         return False
 
     @staticmethod
@@ -87,6 +93,27 @@ class HeaderExtractor:
             m_dt = re.search(r"\b\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}\b", texto_completo)
             if m_dt:
                 dados["data_hora"] = m_dt.group(0)
+
+        # Varredura inteligente para capturar Versão e Software na Página 1
+        for i, linha in enumerate(linhas_pag1):
+            linha_upper = linha.upper()
+            
+            # Procura por padrão de versão ex: 7.8.08 ou similar (dígito.dígito.dígito)
+            if re.match(r"^\d+\.\d+\.\d+$", linha):
+                dados["versao_software"] = linha
+                # Se a linha seguinte ou anterior contiver CALYPSO
+                if i + 1 < len(linhas_pag1) and "CALYPSO" in linhas_pag1[i + 1].upper():
+                    dados["software"] = linhas_pag1[i + 1]
+                elif i - 1 >= 0 and "CALYPSO" in linhas_pag1[i - 1].upper():
+                    dados["software"] = linhas_pag1[i - 1]
+            
+            # Se a linha contiver diretamente ZEISS CALYPSO ou CALYPSO
+            if "CALYPSO" in linha_upper:
+                dados["software"] = linha
+
+        # Define uma identificação limpa baseada no nome do componente lido pelo CALYPSO
+        if dados["componente"] != "Não identificado":
+            dados["identificacao_calypso"] = f"Calypso - {dados['componente']}"
 
         return dados
 

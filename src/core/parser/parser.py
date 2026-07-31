@@ -16,6 +16,8 @@ class RelatorioCalypsoDto:
     numero_medicoes_cabecalho: int = 0
     fora_tolerancia_cabecalho: int = 0
     duracao_medicao: str = "00:00:00,0"
+    software: str = "ZEISS CALYPSO"
+    versao_software: str = "Não informada"
     itens_medicao: List[MedicaoItemDto] = field(default_factory=list)
     avisos_auditoria: List[str] = field(default_factory=list)
     texto_bruto_integral: str = ""
