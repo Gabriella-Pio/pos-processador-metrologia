@@ -1,5 +1,6 @@
 from reportlab.platypus import Paragraph, Spacer
 from .base import BaseSection
+from ..components.image_handler import ReportImageHandler
 
 class GraficaSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
@@ -9,7 +10,7 @@ class GraficaSection(BaseSection):
         # Exemplo opcional: renderizando fotos dinâmicas caso o usuário tenha anexado fotos nesta seção
         fotos_secao = contexto_extra.get("fotos_secoes", {}).get("grafica", [])
         for caminho in fotos_secao:
-            elem = self.criar_elemento_foto(caminho, width=400, height=200, styles=styles)
+            elem = ReportImageHandler.criar_elemento_foto(caminho, styles=styles)
             story.append(Spacer(1, 4))
             story.append(elem)
 

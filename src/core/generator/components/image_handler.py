@@ -1,4 +1,4 @@
-from PIL import Image, ImageOps
+from PIL import Image, ImageChops
 import os
 from reportlab.platypus import Image as RLImage, Paragraph
 
@@ -19,7 +19,7 @@ class ReportImageHandler:
             
             # 1. Auto-Crop: Remove espaços vazios baseado na cor do canto superior esquerdo
             bg = Image.new(img.mode, img.size, img.getpixel((0, 0)))
-            diff = ImageOps.difference(img, bg)
+            diff = ImageChops.difference(img, bg)
             bbox = diff.getbbox()
             
             if bbox:

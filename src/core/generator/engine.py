@@ -3,8 +3,9 @@ from reportlab.platypus import SimpleDocTemplate
 from .styles import ReportStyles
 from .constants import ReportTheme, TEMPLATE_PADRAO_OFICIAL
 from .sections import (
-    CabecalhoSection, IntroducaoSection, IdentificacaoSection, ResultadosSection,
-    GraficaSection, TomografiaSection, InterpretacaoSection, ConclusaoSection
+    CabecalhoSection, IntroducaoSection, IdentificacaoSection, ControleTecnicoSection,
+    ResultadosSection, GraficaSection, TomografiaSection, InterpretacaoSection,
+    ConclusaoSection, HistoricoVersoesSection
 )
 
 class ReportGenerator:
@@ -12,26 +13,30 @@ class ReportGenerator:
         "cabecalho": CabecalhoSection,
         "introducao": IntroducaoSection,
         "identificacao": IdentificacaoSection,
+        "controle_tecnico": ControleTecnicoSection,
         "resultados": ResultadosSection,
         "grafica": GraficaSection,
         "tomografia": TomografiaSection,
         "interpretacao": InterpretacaoSection,
-        "conclusao": ConclusaoSection
+        "conclusao": ConclusaoSection,
+        "historico_versoes": HistoricoVersoesSection,
     }
 
     @classmethod
     def gerar_relatorio_enriquecido(
-        cls, 
-        dados_parseados, 
-        caminho_saida: str, 
-        cliente_projeto: str = "Não informado", 
+        cls,
+        dados_parseados,
+        caminho_saida: str,
+        cliente_projeto: str = "Não informado",
         componente_avaliado: str = "Não informado",
         opcoes_extras: dict = None,
         template_config: list = None,
         fotos_secoes: dict = None,
         logo_senai_path: str = None,
         logo_zeiss_path: str = None,
-        versao_relatorio: str = "v1.0"
+        versao_relatorio: str = "v1.0",
+        controle_tecnico: dict = None,
+        historico_versoes: list = None,
     ):
         if opcoes_extras is None:
             opcoes_extras = {"incluir_tomografia": False}
@@ -44,10 +49,10 @@ class ReportGenerator:
             rightMargin=36, leftMargin=36,
             topMargin=36, bottomMargin=36
         )
-        
+
         story = []
         styles = ReportStyles.criar_estilos()
-        
+
         contexto_extra = {
             "cliente_projeto": cliente_projeto,
             "componente_avaliado": componente_avaliado,
@@ -55,13 +60,15 @@ class ReportGenerator:
             "fotos_secoes": fotos_secoes or {},
             "logo_senai_path": logo_senai_path,
             "logo_zeiss_path": logo_zeiss_path,
-            "versao_relatorio": versao_relatorio
+            "versao_relatorio": versao_relatorio,
+            "controle_tecnico": controle_tecnico or {},
+            "historico_versoes": historico_versoes or [],
         }
 
         for bloco in template_config:
             tipo = bloco.get("tipo")
             config = bloco.get("config", {})
-            
+
             if tipo == "tomografia" and not opcoes_extras.get("incluir_tomografia", False):
                 continue
 
@@ -72,6 +79,7 @@ class ReportGenerator:
 
         doc.build(story, onFirstPage=cls._adicionar_rodape, onLaterPages=cls._adicionar_rodape)
         print(f"[Engine] Relatório modular gerado com sucesso em: {caminho_saida}")
+
     @staticmethod
     def _adicionar_rodape(canvas, doc):
         canvas.saveState()
