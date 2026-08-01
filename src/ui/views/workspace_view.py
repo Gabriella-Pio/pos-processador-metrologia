@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -57,6 +57,11 @@ class WorkspaceView(QWidget):
         self._preview_scroll_area = QScrollArea()
         self._preview_pages_widget = QWidget()
         self._preview_pages_layout = QVBoxLayout(self._preview_pages_widget)
+        self._preview_page_items: list[dict] = []
+        self._section_anchor_map: dict[str, dict] = {}
+        self._active_preview_page: int | None = None
+        self._active_preview_anchor: dict | None = None
+        self._preview_zoom = 1.6
         self._document_title_label = QLabel("Nenhum documento carregado")
 
         self._build_ui()
@@ -147,7 +152,7 @@ class WorkspaceView(QWidget):
         self._app_state.document_changed.connect(self._on_document_changed)
         self._app_state.images_changed.connect(self._refresh_images)
         self._app_state.version_added.connect(self._refresh_versions)
-        self._vm.sections_summary_ready.connect(self._bookmarks_panel.render_sections)
+        self._vm.sections_summary_ready.connect(self._on_sections_summary_ready)
         self._vm.preview_ready.connect(self._render_preview_pages)
 
         self._vm.error_occurred.connect(
@@ -168,6 +173,8 @@ class WorkspaceView(QWidget):
 
     def _on_section_selected(self, section_id: str) -> None:
         self._active_section_id = section_id
+        self._bookmarks_panel.set_active_section(section_id)
+        self._focus_preview_section(section_id)
 
     def _on_image_dropped(self, image_path: Path) -> None:
         if self._active_section_id is None:
@@ -189,6 +196,14 @@ class WorkspaceView(QWidget):
         if document is not None:
             self._version_panel.render_history(document.version_history)
 
+    def _on_sections_summary_ready(self, sections: list[dict]) -> None:
+        self._section_anchor_map = {
+            section["id"]: (section.get("anchor_rect") or {}) for section in sections
+        }
+        self._bookmarks_panel.render_sections(sections)
+        if self._active_section_id is not None:
+            self._focus_preview_section(self._active_section_id)
+
     def _render_preview_pages(self, pages_png: list[bytes]) -> None:
         self._clear_preview_pages()
 
@@ -199,6 +214,7 @@ class WorkspaceView(QWidget):
             self._preview_pages_layout.addStretch(1)
             return
 
+        self._preview_page_items = []
         for index, page_png in enumerate(pages_png, start=1):
             page_container = QWidget()
             page_layout = QVBoxLayout(page_container)
@@ -221,8 +237,18 @@ class WorkspaceView(QWidget):
             page_layout.addWidget(page_label)
             page_layout.addWidget(image_label)
             self._preview_pages_layout.addWidget(page_container)
+            self._preview_page_items.append(
+                {
+                    "page_number": index,
+                    "container": page_container,
+                    "image_label": image_label,
+                    "base_pixmap": pixmap,
+                }
+            )
 
         self._preview_pages_layout.addStretch(1)
+        if self._active_section_id is not None:
+            self._focus_preview_section(self._active_section_id)
 
     def _clear_preview_pages(self) -> None:
         while self._preview_pages_layout.count():
@@ -230,6 +256,63 @@ class WorkspaceView(QWidget):
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
+        self._preview_page_items = []
+        self._active_preview_page = None
+        self._active_preview_anchor = None
+
+    def _focus_preview_section(self, section_id: str) -> None:
+        anchor = self._section_anchor_map.get(section_id) or {}
+        page_number = anchor.get("page")
+        if page_number is None:
+            self._active_preview_anchor = None
+            self._active_preview_page = None
+            self._apply_preview_page_highlight()
+            return
+        if page_number < 1 or page_number > len(self._preview_page_items):
+            return
+        self._active_preview_anchor = anchor
+        self._active_preview_page = page_number
+        item = self._preview_page_items[page_number - 1]
+        widget = item["container"]
+        self._preview_scroll_area.ensureWidgetVisible(widget, xMargin=24, yMargin=24)
+        self._show_anchor_overlay(item, anchor)
+        self._apply_preview_page_highlight()
+
+    def _show_anchor_overlay(self, page_item: dict, anchor: dict) -> None:
+        overlay = page_item.get("anchor_overlay")
+        if overlay is None:
+            overlay = QWidget(page_item["image_label"])
+            overlay.setObjectName("AnchorOverlay")
+            overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            overlay.setStyleSheet(f"""
+                QWidget#AnchorOverlay {{
+                    background-color: rgba(37, 74, 165, 0.06);
+                    border: 2px solid rgba(37, 74, 165, 0.90);
+                    border-radius: {SPACING.radius_md}px;
+                }}
+            """)
+            overlay.show()
+            page_item["anchor_overlay"] = overlay
+
+        zoom = self._preview_zoom
+        page_height_pt = page_item["base_pixmap"].height() / zoom
+        x = int(float(anchor.get("x", 0)) * zoom - 8)
+        y = int((page_height_pt - (float(anchor.get("y", 0)) + float(anchor.get("height", 0)))) * zoom - 8)
+        width = max(220, int(float(anchor.get("width", 0)) * zoom + 16))
+        height = max(28, int(float(anchor.get("height", 0)) * zoom + 16))
+        overlay.setGeometry(x, y, width, height)
+        overlay.raise_()
+        self._preview_scroll_area.ensureWidgetVisible(overlay, xMargin=32, yMargin=32)
+
+    def _apply_preview_page_highlight(self) -> None:
+        for item in self._preview_page_items:
+            overlay = item.get("anchor_overlay")
+            if overlay is not None:
+                overlay.setVisible(
+                    self._active_preview_page == item["page_number"]
+                    and self._active_preview_anchor is not None
+                    and self._active_preview_anchor.get("page") == item["page_number"]
+                )
 
     def _on_register_version(self) -> None:
         # Em produção, abriria um pequeno modal pedindo responsável/descrição;

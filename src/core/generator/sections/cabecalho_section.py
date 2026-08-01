@@ -4,11 +4,12 @@ from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
 from reportlab.lib.styles import ParagraphStyle
-from .base import BaseSection
+from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
 
 class CabecalhoSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
+        anchor_map = contexto_extra.get("section_anchor_map")
         data_geracao = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
         versao_sistema = contexto_extra.get("versao_relatorio", "v1.0")
 
@@ -60,7 +61,12 @@ class CabecalhoSection(BaseSection):
         dados_topo = [
             [
                 elemento_logo_zeiss,
-                Paragraph("<b>CENTRO DE EXCELÊNCIA EM METROLOGIA</b><br/>SENAI ZEISS — GOIÂNIA / GO", estilo_institucional),
+                anchored_section_title(
+                    "<b>CENTRO DE EXCELÊNCIA EM METROLOGIA</b><br/>SENAI ZEISS — GOIÂNIA / GO",
+                    estilo_institucional,
+                    "cabecalho",
+                    anchor_map,
+                ),
                 elemento_logo_senai
             ],
             [

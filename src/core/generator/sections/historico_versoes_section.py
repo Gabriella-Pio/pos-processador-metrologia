@@ -1,6 +1,6 @@
 from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
-from .base import BaseSection
+from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
 
 
@@ -17,7 +17,7 @@ class HistoricoVersoesSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
         entradas = contexto_extra.get("historico_versoes") or []
 
-        story.append(Paragraph("HISTÓRICO DE VERSÕES", styles['secao']))
+        story.append(anchored_section_title("HISTÓRICO DE VERSÕES", styles['secao'], "historico_versoes", contexto_extra.get("section_anchor_map")))
 
         if not entradas:
             story.append(Paragraph(

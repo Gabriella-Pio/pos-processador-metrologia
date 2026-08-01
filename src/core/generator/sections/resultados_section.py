@@ -1,12 +1,12 @@
 from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import ParagraphStyle
-from .base import BaseSection
+from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
 
 class ResultadosSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
-        story.append(Paragraph("2. RESULTADOS DIMENSIONAIS", styles['secao']))
+        story.append(anchored_section_title("2. RESULTADOS DIMENSIONAIS", styles['secao'], "resultados", contexto_extra.get("section_anchor_map")))
         story.append(Paragraph(
             "A tabela abaixo apresenta os resultados extraídos do relatório de medição dimensional. "
             "A classificação “Dentro” ou “Fora” foi determinada com base nos limites cadastrados no relatório ZEISS CALYPSO.",

@@ -37,6 +37,7 @@ class ReportGenerator:
         versao_relatorio: str = "v1.0",
         controle_tecnico: dict = None,
         historico_versoes: list = None,
+        section_page_map: dict | None = None,
     ):
         if opcoes_extras is None:
             opcoes_extras = {"incluir_tomografia": False}
@@ -44,10 +45,11 @@ class ReportGenerator:
         if template_config is None:
             template_config = TEMPLATE_PADRAO_OFICIAL
 
-        doc = SimpleDocTemplate(
+        doc = _TrackingDocTemplate(
             caminho_saida, pagesize=letter,
             rightMargin=36, leftMargin=36,
-            topMargin=36, bottomMargin=36
+            topMargin=36, bottomMargin=36,
+            section_page_map=section_page_map,
         )
 
         story = []
@@ -63,6 +65,7 @@ class ReportGenerator:
             "versao_relatorio": versao_relatorio,
             "controle_tecnico": controle_tecnico or {},
             "historico_versoes": historico_versoes or [],
+            "section_anchor_map": section_page_map if section_page_map is not None else {},
         }
 
         for bloco in template_config:
@@ -88,3 +91,23 @@ class ReportGenerator:
         canvas.drawString(36, 18, "CEM SENAI | ZEISS Goiânia - GO • Uso restrito ao cliente")
         canvas.drawRightString(letter[0] - 36, 18, f"Página {doc.page}")
         canvas.restoreState()
+
+
+class _TrackingDocTemplate(SimpleDocTemplate):
+    def __init__(self, *args, section_page_map: dict | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._section_page_map = section_page_map
+
+    def afterFlowable(self, flowable):
+        if self._section_page_map is None:
+            return
+        section_id = getattr(flowable, "_section_id", None)
+        if section_id:
+            self._section_page_map[section_id] = {
+                "page": self.page,
+                "x": getattr(flowable, "_anchor_x", None),
+                "y": getattr(flowable, "_anchor_y", None),
+                "width": getattr(flowable, "_anchor_width", None),
+                "height": getattr(flowable, "_anchor_height", None),
+                "text": getattr(flowable, "_anchor_text", None),
+            }

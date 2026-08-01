@@ -1,11 +1,11 @@
 from reportlab.platypus import Paragraph, Spacer
 from src.core.parser.utils import ParserUtils
-from .base import BaseSection
+from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
 
 class InterpretacaoSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
-        story.append(Paragraph("5. INTERPRETAÇÃO DOS RESULTADOS", styles['secao']))
+        story.append(anchored_section_title("5. INTERPRETAÇÃO DOS RESULTADOS", styles['secao'], "interpretacao", contexto_extra.get("section_anchor_map")))
         story.append(Paragraph(
             f"Análise detalhada das <b>{len(dados_parseados.itens_medicao)}</b> características inspecionadas no componente <b>{dados_parseados.componente}</b>:",
             styles['texto']

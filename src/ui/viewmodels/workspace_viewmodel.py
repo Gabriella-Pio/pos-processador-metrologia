@@ -80,8 +80,8 @@ class WorkspaceViewModel(QObject):
         document.evaluated_component = evaluated_component
         self._app_state.set_active_document(document)
         self.document_loaded.emit(document)
-        self.refresh_sections_summary()
         self.generate_preview()
+        self.refresh_sections_summary()
 
     def refresh_sections_summary(self) -> None:
         """Pede ao exportador a lista real de seções que vão compor o PDF
@@ -142,12 +142,14 @@ class WorkspaceViewModel(QObject):
             return
         document.images.append(ReportImage(image_path=image_path, section_id=section_id))
         self._app_state.notify_images_changed()
+        self.refresh_sections_summary()
         self.generate_preview()
 
     def add_annotation(self, image: ReportImage, annotation: Annotation) -> None:
         """Adiciona uma marcação (seta/círculo/caixa de texto/numeração) à imagem."""
         image.annotations.append(annotation)
         self._app_state.notify_images_changed()
+        self.refresh_sections_summary()
         self.generate_preview()
 
     def build_preview_text(self, document: ReportDocument) -> str:

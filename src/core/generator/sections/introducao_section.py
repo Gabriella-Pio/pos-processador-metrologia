@@ -1,14 +1,14 @@
 from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import ParagraphStyle
-from .base import BaseSection
+from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
 from ..components.image_handler import ReportImageHandler
 
 class IntroducaoSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
         # 1. Títulos Superiores da Peça
-        story.append(Paragraph("RELATÓRIO TÉCNICO — ANÁLISE DIMENSIONAL E TOMOGRÁFICA", styles['subtitulo']))
+        story.append(anchored_section_title("RELATÓRIO TÉCNICO — ANÁLISE DIMENSIONAL E TOMOGRÁFICA", styles['subtitulo'], "introducao", contexto_extra.get("section_anchor_map")))
         story.append(Paragraph(f"{dados_parseados.componente}", styles['titulo']))
         story.append(Spacer(1, 8))
 

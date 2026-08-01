@@ -44,8 +44,10 @@ class RealReportExporterAdapter:
 
     def __init__(self, template_repository: Optional[JSONTemplateRepository] = None) -> None:
         self._template_repository = template_repository
+        self._last_section_anchor_map: dict[str, dict] = {}
 
     def export(self, document: ReportDocument, output_path: Path) -> Path:
+        section_anchor_map: dict[str, dict] = {}
         ReportGenerator.gerar_relatorio_enriquecido(
             dados_parseados=document.raw_parsed_data,
             caminho_saida=str(output_path),
@@ -56,7 +58,9 @@ class RealReportExporterAdapter:
             controle_tecnico=self._montar_controle_tecnico(document),
             historico_versoes=self._montar_historico_versoes(document),
             template_config=self._resolver_blocos_template(document),
+            section_page_map=section_anchor_map,
         )
+        self._last_section_anchor_map = section_anchor_map
         document.last_export_path = output_path
         return output_path
 
@@ -66,15 +70,29 @@ class RealReportExporterAdapter:
         Workspace é sempre fiel ao que vai sair no PDF final.
         """
         blocos = self._resolver_blocos_template(document)
+        fotos_por_secao: dict[str, int] = {}
+        for imagem in document.images:
+            fotos_por_secao[imagem.section_id] = fotos_por_secao.get(imagem.section_id, 0) + 1
+
         resultado = []
         for bloco in blocos:
             tipo = bloco["tipo"]
-            if tipo == "tomografia":
+            if tipo in {"cabecalho", "tomografia"}:
                 # O engine só inclui tomografia se opcoes_extras pedir
                 # explicitamente — hoje o adapter não envia essa opção,
                 # então ela nunca aparece no PDF final (mantém coerência).
                 continue
-            resultado.append({"id": tipo, "title": SECTION_TITLES.get(tipo, tipo.title())})
+            quantidade_fotos = fotos_por_secao.get(tipo, 0)
+            resultado.append(
+                {
+                    "id": tipo,
+                    "title": SECTION_TITLES.get(tipo, tipo.title()),
+                    "image_count": quantidade_fotos,
+                    "has_images": quantidade_fotos > 0,
+                    "page_start": (self._last_section_anchor_map.get(tipo) or {}).get("page"),
+                    "anchor_rect": (self._last_section_anchor_map.get(tipo) or None),
+                }
+            )
         return resultado
 
     # ------------------------------------------------------------- helpers

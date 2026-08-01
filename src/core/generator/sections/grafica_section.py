@@ -1,10 +1,10 @@
 from reportlab.platypus import Paragraph, Spacer
-from .base import BaseSection
+from .base import BaseSection, anchored_section_title
 from ..components.image_handler import ReportImageHandler
 
 class GraficaSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
-        story.append(Paragraph("3. ANÁLISE GRÁFICA DOS RESULTADOS", styles['secao']))
+        story.append(anchored_section_title("3. ANÁLISE GRÁFICA DOS RESULTADOS", styles['secao'], "grafica", contexto_extra.get("section_anchor_map")))
         story.append(Paragraph("Espaço reservado para inserção de fotografias, diagramas ou gráficos analíticos do componente.", styles['texto']))
         
         # Exemplo opcional: renderizando fotos dinâmicas caso o usuário tenha anexado fotos nesta seção

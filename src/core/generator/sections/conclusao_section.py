@@ -1,9 +1,9 @@
 from reportlab.platypus import Paragraph
-from .base import BaseSection
+from .base import BaseSection, anchored_section_title
 
 class ConclusaoSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
-        story.append(Paragraph("6. CONCLUSÃO", styles['secao']))
+        story.append(anchored_section_title("6. CONCLUSÃO", styles['secao'], "conclusao", contexto_extra.get("section_anchor_map")))
         total_fora = sum(1 for i in dados_parseados.itens_medicao if i.status == "Fora")
         
         texto_customizado = self.config.get("texto_personalizado")

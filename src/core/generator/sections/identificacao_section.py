@@ -1,6 +1,6 @@
 from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
-from .base import BaseSection
+from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
 
 class IdentificacaoSection(BaseSection):
@@ -8,7 +8,7 @@ class IdentificacaoSection(BaseSection):
         cliente_projeto = contexto_extra.get("cliente_projeto", "Não informado")
         componente_avaliado = contexto_extra.get("componente_avaliado", "Não informado")
 
-        story.append(Paragraph("1. IDENTIFICAÇÃO E CONDIÇÕES DE MEDIÇÃO", styles['secao']))
+        story.append(anchored_section_title("1. IDENTIFICAÇÃO E CONDIÇÕES DE MEDIÇÃO", styles['secao'], "identificacao", contexto_extra.get("section_anchor_map")))
         
         dados_cab = [
             [Paragraph("<b>Cliente / Projeto</b>", styles['texto']), Paragraph(cliente_projeto, styles['texto'])],
