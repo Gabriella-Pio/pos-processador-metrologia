@@ -1,0 +1,245 @@
+"""Painel de arquivos recentes — lista, grade e busca."""
+from __future__ import annotations
+
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QSizePolicy,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from src.ui.components.cards import RecentFileCard, RecentFileRow
+from src.ui.components.icons import icon_empty_file, icon_empty_results
+from src.ui.models.dashboard import (
+    RecentFileSummary,
+    RecentFilesFilterState,
+    apply_recent_files_filters,
+    empty_results_messages,
+)
+from src.ui.styles import SPACING, apply_elevation
+from src.ui.views.home.grid_utils import grid_columns_for_width
+from src.ui.components.centered_layout import make_centered_column
+from src.ui.components.home import EmptyState, ListViewControls, TabSectionHeader
+from src.ui.views.home.layout_utils import (
+    add_filter_empty_state,
+    clear_layout,
+    make_list_card_shell,
+    set_grid_filter_empty_mode,
+)
+
+
+class RecentesPanel(QWidget):
+    opened = pyqtSignal(str)
+    import_requested = pyqtSignal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("HomeSurface")
+        self._all_files: list[RecentFileSummary] = []
+        self._filter_state = RecentFilesFilterState()
+        self._density = "comfortable"
+
+        self._controls = ListViewControls(default_view="list")
+        self._controls.view_changed.connect(self._on_view_changed)
+        self._controls.density_changed.connect(self._on_density_changed)
+
+        self._list_card, self._list_layout = make_list_card_shell()
+
+        list_page_layout = QVBoxLayout()
+        list_page_layout.setContentsMargins(0, 0, 0, 0)
+        list_page_layout.setSpacing(0)
+        list_page_layout.addWidget(self._list_card, 0, Qt.AlignmentFlag.AlignTop)
+
+        list_page = QWidget()
+        list_page.setLayout(list_page_layout)
+
+        self._grid_widget = QWidget()
+        self._grid_widget.setStyleSheet("background:transparent;")
+        self._grid = QGridLayout(self._grid_widget)
+        self._grid.setSpacing(SPACING.md)
+        self._grid.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
+        )
+        self._grid_cols = grid_columns_for_width(self._grid_widget.width())
+        self._grid_widget.installEventFilter(self)
+
+        self._stack = QStackedWidget()
+        self._stack.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
+        self._stack.addWidget(list_page)
+        self._stack.addWidget(self._wrap_grid_page())
+
+        self._section_header = TabSectionHeader(
+            "Arquivos recentes",
+            "Continue de onde parou",
+            right=self._controls,
+        )
+
+        centered_outer, column = make_centered_column()
+        column.addWidget(self._section_header)
+        column.addWidget(self._stack)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(centered_outer)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+    def refresh_appearance(self) -> None:
+        self._controls.refresh_appearance()
+        self._refresh_views()
+
+    def _wrap_grid_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, SPACING.xl)
+        layout.setSpacing(0)
+
+        self._grid_empty_card, self._grid_empty_layout = make_list_card_shell()
+        self._grid_empty_card.hide()
+        layout.addWidget(self._grid_empty_card, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self._grid_widget, stretch=1)
+        return page
+
+    def eventFilter(self, obj, event) -> bool:
+        if obj is self._grid_widget and event.type() == QEvent.Type.Resize:
+            self._update_grid_columns()
+        return super().eventFilter(obj, event)
+
+    def _update_grid_columns(self) -> None:
+        cols = grid_columns_for_width(self._grid_widget.width())
+        if cols != self._grid_cols:
+            self._grid_cols = cols
+            self._rebuild_grid(self._filtered_files())
+
+    def render(self, files: list[RecentFileSummary]) -> None:
+        self._all_files = list(files)
+        self._refresh_views()
+
+    def update_filters(self, state: RecentFilesFilterState) -> None:
+        self._filter_state = state
+        self._refresh_views()
+
+    def visible_count(self) -> int:
+        return len(self._filtered_files())
+
+    def total_count(self) -> int:
+        return len(self._all_files)
+
+    def has_visible_items(self) -> bool:
+        return self.visible_count() > 0
+
+    def _filtered_files(self) -> list[RecentFileSummary]:
+        return apply_recent_files_filters(self._all_files, self._filter_state)
+
+    def _refresh_views(self) -> None:
+        files = self._filtered_files()
+        self._update_header_subtitle()
+        self._rebuild_list(files)
+        self._rebuild_grid(files)
+
+    def _update_header_subtitle(self) -> None:
+        visible = len(self._filtered_files())
+        total = len(self._all_files)
+        if total == 0:
+            self._section_header.set_subtitle("Importe um PDF para começar")
+        elif visible == total:
+            self._section_header.set_subtitle(f"{total} relatório(s) no histórico")
+        else:
+            self._section_header.set_subtitle(f"{visible} de {total} relatório(s)")
+
+    def _empty_filter_copy(self) -> tuple[str, str]:
+        return empty_results_messages(
+            self._filter_state.query,
+            has_active_filters=not self._filter_state.is_default(),
+        )
+
+    def _rebuild_list(self, files: list[RecentFileSummary]) -> None:
+        clear_layout(self._list_layout)
+
+        if not self._all_files:
+            empty = EmptyState(
+                "Nenhum relatório recente",
+                "Importe um PDF para começar.",
+                "Importar PDF",
+                icon=icon_empty_file(),
+            )
+            empty.action_requested.connect(self.import_requested.emit)
+            self._list_layout.addWidget(empty)
+            return
+
+        if not files:
+            title, subtitle = self._empty_filter_copy()
+            empty = add_filter_empty_state(
+                self._list_layout,
+                title,
+                subtitle,
+                "Novo arquivo",
+                icon_empty_results(),
+            )
+            empty.action_requested.connect(self.import_requested.emit)
+            return
+
+        compact = self._density == "compact"
+        for summary in files:
+            row = RecentFileRow(summary, compact=compact)
+            row.opened.connect(self.opened.emit)
+            self._list_layout.addWidget(row)
+
+    def _rebuild_grid(self, files: list[RecentFileSummary]) -> None:
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not self._all_files:
+            set_grid_filter_empty_mode(
+                self._grid_empty_card, self._grid_widget, show_empty=False
+            )
+            empty = EmptyState(
+                "Nenhum relatório recente",
+                "Importe um PDF para começar.",
+                "Importar PDF",
+                icon=icon_empty_file(),
+            )
+            empty.action_requested.connect(self.import_requested.emit)
+            self._grid.addWidget(empty, 0, 0, 1, max(1, self._grid_cols))
+            return
+
+        if not files:
+            set_grid_filter_empty_mode(
+                self._grid_empty_card, self._grid_widget, show_empty=True
+            )
+            title, subtitle = self._empty_filter_copy()
+            empty = add_filter_empty_state(
+                self._grid_empty_layout,
+                title,
+                subtitle,
+                "Novo arquivo",
+                icon_empty_results(),
+            )
+            empty.action_requested.connect(self.import_requested.emit)
+            return
+
+        set_grid_filter_empty_mode(
+            self._grid_empty_card, self._grid_widget, show_empty=False
+        )
+
+        cols = max(1, self._grid_cols)
+        for index, summary in enumerate(files):
+            card = RecentFileCard(summary)
+            apply_elevation(card, blur=18, y_offset=3, alpha=80)
+            card.opened.connect(self.opened.emit)
+            self._grid.addWidget(card, index // cols, index % cols)
+
+    def _on_view_changed(self, mode: str) -> None:
+        self._stack.setCurrentIndex(0 if mode == "list" else 1)
+        if mode == "grid":
+            self._update_grid_columns()
+
+    def _on_density_changed(self, mode: str) -> None:
+        self._density = mode
+        self._rebuild_list(self._filtered_files())

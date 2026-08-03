@@ -1,0 +1,329 @@
+/* Widget-specific QSS fragments — use /* @fragment name */ markers */
+
+/* @fragment tab_bar_shell */
+QWidget {{
+    background-color: {bg_surface};
+    border-bottom: 1px solid {border};
+}}
+
+/* @fragment tab_active */
+QPushButton {{
+    color: {senai_orange};
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid {senai_orange};
+    border-radius: 0px;
+    font-size: {size_body}px;
+    font-weight: {weight_semibold};
+    padding: 0px 20px;
+}}
+
+/* @fragment tab_inactive */
+QPushButton {{
+    color: {text_muted};
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0px;
+    font-size: {size_body}px;
+    font-weight: {weight_medium};
+    padding: 0px 20px;
+}}
+QPushButton:hover {{
+    color: {text_secondary};
+    border-bottom-color: {border_strong};
+}}
+
+/* @fragment view_toggle_active */
+QPushButton {{
+    color: {senai_orange};
+    background: rgba(240, 67, 30, 0.12);
+    border: 1px solid rgba(240, 67, 30, 0.3);
+    border-radius: 6px;
+    font-size: 13px;
+}}
+
+/* @fragment view_toggle_inactive */
+QPushButton {{
+    color: {text_muted};
+    background: transparent;
+    border: 1px solid {border};
+    border-radius: 6px;
+    font-size: 13px;
+}}
+QPushButton:hover {{
+    color: {text_secondary};
+    background: {bg_surface_alt};
+}}
+
+/* @fragment action_card_idle */
+QFrame {{
+    background-color: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_lg}px;
+}}
+
+/* @fragment action_card_hover */
+QFrame {{
+    background-color: {bg_surface_alt};
+    border: 1.5px solid {accent_color};
+    border-radius: {radius_lg}px;
+}}
+
+/* @fragment action_card_title */
+color: {text_primary};
+font-size: {size_body}px;
+font-weight: {weight_semibold};
+background: transparent;
+border: none;
+
+/* @fragment action_card_subtitle */
+color: {text_muted};
+font-size: 11px;
+background: transparent;
+border: none;
+
+/* @fragment recent_file_row */
+QFrame {{
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid {border_subtle};
+    border-radius: 0px;
+}}
+QFrame:hover {{
+    background-color: {bg_surface_alt};
+    border-radius: {radius_sm}px;
+}}
+
+/* @fragment pdf_icon_pill */
+background-color: rgba(240, 67, 30, 0.15);
+color: {senai_orange};
+font-size: 9px;
+font-weight: {weight_bold};
+border-radius: {radius_sm}px;
+letter-spacing: 1px;
+border: none;
+
+/* @fragment default_template_badge */
+color: {senai_orange};
+background: rgba(240, 67, 30, 0.12);
+border-radius: {radius_pill}px;
+font-size: 9px;
+font-weight: {weight_bold};
+letter-spacing: 0.5px;
+padding: 2px 8px;
+border: none;
+
+/* @fragment form_label */
+font-size: {size_caption}px;
+font-weight: {weight_semibold};
+color: {text_secondary};
+letter-spacing: 0.6px;
+background: transparent;
+
+/* @fragment labeled_input */
+QLineEdit {{
+    background-color: {bg_surface_alt};
+    border: 1px solid {border_color};
+    border-radius: {radius_sm}px;
+    padding: 7px {sm}px;
+    color: {text_primary};
+    font-size: {size_body}px;
+}}
+QLineEdit:focus {{
+    border: 1.5px solid {focus_color};
+    background-color: {bg_surface};
+}}
+
+/* @fragment search_bar_container */
+QWidget {{
+    background-color: {background};
+    border: 1.5px solid {border_color};
+    border-radius: {radius_md}px;
+}}
+
+/* @fragment search_field_inner */
+QLineEdit {{
+    background: transparent;
+    border: none;
+    color: {text_primary};
+    font-size: 14px;
+    padding: 0px;
+}}
+
+/* @fragment search_icon */
+color: {text_muted};
+font-size: 20px;
+background: transparent;
+border: none;
+
+/* @fragment search_bar_divider */
+background: {border_subtle};
+border: none;
+max-width: 1px;
+min-width: 1px;
+
+/* @fragment filter_toggle_button */
+QPushButton#FilterToggleButton {{
+    background: transparent;
+    border: none;
+    border-radius: {radius_sm}px;
+    padding: 0px;
+}}
+QPushButton#FilterToggleButton:hover {{
+    background: {bg_surface_alt};
+}}
+QPushButton#FilterToggleButton:checked {{
+    background: rgba(240, 67, 30, 0.12);
+}}
+QPushButton#FilterToggleButton:checked:hover {{
+    background: rgba(240, 67, 30, 0.18);
+}}
+
+/* @fragment panel_scroll */
+background: {bg_base};
+
+/* @fragment empty_state_cta */
+QPushButton {{
+    color: white;
+    background: {senai_orange};
+    border: none;
+    border-radius: {radius_md}px;
+    font-size: 13px;
+    font-weight: {weight_semibold};
+    padding: 0 24px;
+}}
+QPushButton:hover {{
+    background: {senai_orange_hover};
+}}
+
+/* @fragment header_gradient */
+QWidget#AppHeader {{
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #1d0c08,
+        stop:0.40 #0D1117,
+        stop:1 #0a0e1a
+    );
+    border-bottom: 3px solid {senai_orange};
+}}
+
+/* @fragment list_card_frame */
+QFrame {{
+    background: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
+}}
+
+/* @fragment workspace_bookmark_search */
+QLineEdit {{
+    background-color: {bg_surface_alt};
+    border: 1px solid {border};
+    border-radius: {radius_pill}px;
+    padding: 5px 10px;
+    color: {text_primary};
+    font-size: {size_caption}px;
+}}
+QLineEdit:focus {{
+    border-color: {senai_blue_light};
+}}
+
+/* @fragment workspace_bookmark_tree */
+QTreeWidget {{
+    background-color: transparent;
+    border: none;
+    color: {text_primary};
+    outline: none;
+}}
+QTreeWidget::item {{
+    padding: 5px 6px;
+    border-radius: 4px;
+    color: {text_secondary};
+}}
+QTreeWidget::item:hover {{
+    background-color: {bg_surface_alt};
+    color: {text_primary};
+}}
+QTreeWidget::item:selected {{
+    background-color: rgba(74, 111, 212, 0.28);
+    color: {text_primary};
+}}
+QTreeWidget::branch {{
+    background: transparent;
+}}
+
+/* @fragment workspace_image_list */
+QListWidget {{
+    background-color: transparent;
+    border: none;
+    color: {text_primary};
+}}
+QListWidget::item {{
+    padding: 6px 8px;
+    border-radius: 4px;
+    border-bottom: 1px solid {border_subtle};
+}}
+QListWidget::item:hover {{
+    background-color: {bg_surface_alt};
+}}
+QListWidget::item:selected {{
+    background-color: rgba(74, 111, 212, 0.28);
+    color: {text_primary};
+}}
+
+/* @fragment workspace_drop_hint */
+color: {text_muted};
+font-size: {size_caption}px;
+border: 1.5px dashed {border_strong};
+border-radius: {radius_md}px;
+padding: {lg}px;
+margin: {sm}px;
+background: transparent;
+
+/* @fragment workspace_drop_hint_active */
+color: {senai_blue_light};
+font-size: {size_caption}px;
+border: 1.5px dashed {senai_blue_light};
+border-radius: {radius_md}px;
+padding: {lg}px;
+margin: {sm}px;
+background: rgba(74, 111, 212, 0.08);
+
+/* @fragment workspace_annotation_toolbar */
+QFrame {{
+    background-color: {bg_surface};
+    border-top: 1px solid {border};
+    border-bottom: 1px solid {border};
+}}
+
+/* @fragment workspace_annotation_button */
+QPushButton {{
+    background-color: {bg_surface_alt};
+    color: {text_secondary};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    font-size: 14px;
+}}
+QPushButton:hover {{
+    background-color: {bg_elevated};
+    color: {text_primary};
+    border-color: {border_strong};
+}}
+QPushButton:checked {{
+    background-color: rgba(74, 111, 212, 0.28);
+    color: {text_primary};
+    border-color: {senai_blue};
+}}
+
+/* @fragment workspace_version_entry */
+QWidget {{
+    background-color: {entry_bg};
+    border-bottom: 1px solid {border_subtle};
+}}
+
+/* @fragment inline_banner */
+QWidget {{
+    background-color: {banner_bg};
+    border-radius: {radius_sm}px;
+    border-left: 3px solid {banner_color};
+}}

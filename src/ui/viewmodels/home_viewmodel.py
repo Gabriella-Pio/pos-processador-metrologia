@@ -8,7 +8,7 @@ from datetime import datetime
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from src.core.ports import RecentFilesRepository, TemplateRepository
-from src.ui.components.cards import RecentFileSummary, TemplateSummary
+from src.ui.models.dashboard import RecentFileSummary, TemplateSummary
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class HomeViewModel(QObject):
 
     def _load_recent_files(self) -> None:
         try:
-            raw_files = self._recent_files_repo.list_recent(limit=20)
+            raw_files = self._recent_files_repo.list_recent(limit=50)
         except Exception:  # noqa: BLE001
             logger.exception("Falha ao carregar histórico de arquivos")
             self.error_occurred.emit(
@@ -81,6 +81,7 @@ class HomeViewModel(QObject):
                 client_project=item["client_project"],
                 version=item["version"],
                 updated_at=item.get("updated_at", datetime.now()),
+                evaluated_component=item.get("evaluated_component", ""),
             )
             for item in raw_files
         ]

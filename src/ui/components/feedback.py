@@ -1,16 +1,24 @@
 """
-Componentes de feedback ao usuário: alertas inline e diálogos de erro
-amigáveis. Usado para que falhas (ex.: PDF corrompido) nunca travem a
-aplicação ou exponham stack traces cruas ao operador.
+Componentes de feedback ao usuário — dark edition.
+
+InlineBanner → faixa estilo GitHub Alert (border-left colorida)
+show_friendly_error / show_info / confirm_action → diálogos padrão
 """
 from __future__ import annotations
 
 from enum import Enum, auto
 from typing import Optional
 
-from PyQt6.QtWidgets import QLabel, QMessageBox, QVBoxLayout, QWidget
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QWidget,
+)
 
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
+from src.ui.styles.helpers import inline_banner_style
 
 
 class FeedbackLevel(Enum):
@@ -20,25 +28,28 @@ class FeedbackLevel(Enum):
     DANGER = auto()
 
 
-_LEVEL_COLORS = {
-    FeedbackLevel.INFO: (PALETTE.info, PALETTE.info_bg),
-    FeedbackLevel.SUCCESS: (PALETTE.success, PALETTE.success_bg),
-    FeedbackLevel.WARNING: (PALETTE.warning, PALETTE.warning_bg),
-    FeedbackLevel.DANGER: (PALETTE.danger, PALETTE.danger_bg),
-}
+def _level_colors(level: FeedbackLevel) -> tuple[str, str]:
+    p = PALETTE
+    mapping = {
+        FeedbackLevel.INFO: (p.info, p.info_bg),
+        FeedbackLevel.SUCCESS: (p.success, p.success_bg),
+        FeedbackLevel.WARNING: (p.warning, p.warning_bg),
+        FeedbackLevel.DANGER: (p.danger, p.danger_bg),
+    }
+    return mapping[level]
+
 
 _LEVEL_ICONS = {
-    FeedbackLevel.INFO: "ℹ️",
-    FeedbackLevel.SUCCESS: "✅",
-    FeedbackLevel.WARNING: "⚠️",
-    FeedbackLevel.DANGER: "⛔",
+    FeedbackLevel.INFO: "ℹ",
+    FeedbackLevel.SUCCESS: "✓",
+    FeedbackLevel.WARNING: "⚠",
+    FeedbackLevel.DANGER: "✕",
 }
 
 
 class InlineBanner(QWidget):
-    """Faixa de aviso inline (não bloqueante), usada dentro das views
-    — por exemplo no topo do Workspace ao detectar uma seção com dados
-    faltando no relatório importado.
+    """Faixa de aviso inline estilo GitHub Alert — border-left colorida,
+    ícone circular e texto semântico. Não bloqueante.
     """
 
     def __init__(
@@ -48,16 +59,41 @@ class InlineBanner(QWidget):
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
-        color, bg = _LEVEL_COLORS[level]
-        layout = QVBoxLayout(self)
+        self._level = level
+        icon_char = _LEVEL_ICONS[level]
+
+        layout = QHBoxLayout(self)
         layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.sm)
+        layout.setSpacing(SPACING.sm)
 
-        label = QLabel(f"{_LEVEL_ICONS[level]}  {message}")
-        label.setWordWrap(True)
-        label.setStyleSheet(f"color: {color}; font-weight: {TYPOGRAPHY.weight_medium};")
-        layout.addWidget(label)
+        self._icon_label = QLabel(icon_char)
+        self._icon_label.setFixedSize(22, 22)
+        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._icon_label, 0, Qt.AlignmentFlag.AlignTop)
 
-        self.setStyleSheet(f"background-color: {bg}; border-radius: {SPACING.radius_md}px;")
+        self._message_label = QLabel(message)
+        self._message_label.setWordWrap(True)
+        layout.addWidget(self._message_label, stretch=1)
+
+        self.setMaximumHeight(56)
+        self.refresh_appearance()
+
+    def refresh_appearance(self) -> None:
+        color, bg = _level_colors(self._level)
+        self.setStyleSheet(inline_banner_style(color=color, bg=bg))
+        self._icon_label.setStyleSheet(f"""
+            color: {color};
+            background-color: transparent;
+            font-size: 13px;
+            font-weight: {TYPOGRAPHY.weight_bold};
+        """)
+        self._message_label.setStyleSheet(
+            f"color: {color}; font-size: {TYPOGRAPHY.size_caption}px; "
+            f"font-weight: {TYPOGRAPHY.weight_medium}; background: transparent;"
+        )
+
+    def set_message(self, message: str) -> None:
+        self._message_label.setText(message)
 
 
 def show_friendly_error(
@@ -66,12 +102,7 @@ def show_friendly_error(
     message: str,
     details: Optional[str] = None,
 ) -> None:
-    """Exibe um erro de forma amigável, sem travar a aplicação.
-
-    ``details`` (ex.: exceção técnica original) fica disponível apenas
-    no botão "Detalhes" do QMessageBox — o operador de metrologia não
-    precisa ver stack traces por padrão.
-    """
+    """Exibe um erro de forma amigável, sem expor stack traces ao operador."""
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(title)

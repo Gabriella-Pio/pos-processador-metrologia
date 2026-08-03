@@ -1,0 +1,387 @@
+/* Global application stylesheet — tokens from design system */
+
+/* ── Base ── */
+QWidget {{
+    font-family: {font_family};
+    font-size: {size_body}px;
+    color: {text_primary};
+    background-color: transparent;
+}}
+QMainWindow {{
+    background-color: {bg_base};
+}}
+QWidget#MainCentral {{
+    background-color: {bg_base};
+}}
+QStackedWidget#MainViewStack {{
+    background-color: {bg_base};
+}}
+
+/* ── Home surfaces (theme via global QSS, not inline Python) ── */
+QWidget#HomeSurface {{
+    background-color: {bg_base};
+}}
+QScrollArea#HomePageScroll {{
+    background: {bg_base};
+    border: none;
+}}
+QFrame#SearchBarDivider {{
+    background: {border_subtle};
+    border: none;
+    max-width: 1px;
+    min-width: 1px;
+}}
+QLabel#FilterActiveBadge {{
+    background: {senai_orange};
+    border-radius: 3px;
+    border: none;
+}}
+QWidget#HomeCenteredColumn {{
+    background-color: {bg_base};
+}}
+QScrollArea#HomePanelScroll {{
+    background: {bg_base};
+    border: none;
+}}
+QWidget#HomeScrollContent {{
+    background-color: {bg_base};
+}}
+QFrame#HomeListCard {{
+    background: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
+}}
+QWidget#HomeTabBarShell {{
+    background: {bg_base};
+    border: none;
+    border-bottom: 1px solid {border};
+}}
+QWidget#HomeTabBarShell[stuck="true"] {{
+    background: {bg_base};
+    border-bottom: 1px solid {border};
+}}
+QComboBox#FilterCombo {{
+    background-color: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    padding: 6px 28px 6px 10px;
+    color: {text_primary};
+    min-height: 20px;
+}}
+QComboBox#FilterCombo:hover {{
+    border-color: {border_strong};
+    background-color: {bg_surface_alt};
+}}
+QComboBox#FilterCombo:focus {{
+    border: 1.5px solid {senai_blue_light};
+}}
+QComboBox#FilterCombo::drop-down {{
+    border: none;
+    width: 22px;
+}}
+QListView#FilterComboPopup {{
+    background-color: {bg_elevated};
+    color: {text_primary};
+    border: 1px solid {border_strong};
+    border-radius: {radius_sm}px;
+    padding: 4px;
+    outline: none;
+}}
+QListView#FilterComboPopup::item {{
+    padding: 8px 12px;
+    border-radius: 4px;
+    min-height: 24px;
+}}
+QListView#FilterComboPopup::item:hover {{
+    background-color: {bg_surface_alt};
+}}
+QListView#FilterComboPopup::item:selected {{
+    background-color: rgba(240, 67, 30, 0.22);
+    color: {text_primary};
+}}
+QTabBar#HomeTabBar {{
+    background: transparent;
+    border: none;
+}}
+QTabBar#HomeTabBar::tab {{
+    background: transparent;
+    color: {text_muted};
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 18px;
+    font-size: {size_body}px;
+    font-weight: {weight_medium};
+    margin-right: 4px;
+}}
+QTabBar#HomeTabBar::tab:selected {{
+    color: {senai_orange};
+    border-bottom: 2px solid {senai_orange};
+    font-weight: {weight_semibold};
+}}
+QTabBar#HomeTabBar::tab:hover {{
+    color: {text_primary};
+}}
+QLabel#SectionHeaderTitle {{
+    color: {text_primary};
+    font-size: 20px;
+    font-weight: {weight_bold};
+    background: transparent;
+    border: none;
+}}
+QLabel#SectionHeaderSubtitle {{
+    color: {text_muted};
+    font-size: 13px;
+    background: transparent;
+    border: none;
+}}
+
+/* ── Workspace surfaces ── */
+QWidget#WorkspaceSurface {{
+    background-color: {bg_base};
+}}
+QWidget#WorkspaceTopBar, QWidget#WorkspaceActionBar {{
+    background-color: {bg_surface};
+    border-bottom: 1px solid {border};
+}}
+QWidget#WorkspacePreviewPanel {{
+    background-color: {bg_base};
+}}
+QScrollArea#WorkspacePreviewScroll {{
+    background: {bg_base};
+    border: none;
+}}
+QFrame#WorkspaceSidebar {{
+    background-color: {bg_sidebar};
+}}
+QTabBar#WorkspaceProjectTabs {{
+    background-color: {bg_surface};
+    border-bottom: 1px solid {border};
+}}
+QTabBar#WorkspaceProjectTabs::tab {{
+    background: transparent;
+    color: {text_muted};
+    padding: 8px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: {size_caption}px;
+    font-weight: {weight_medium};
+}}
+QTabBar#WorkspaceProjectTabs::tab:selected {{
+    color: {text_primary};
+    border-bottom: 2px solid {senai_orange};
+    font-weight: {weight_semibold};
+}}
+QTabBar#WorkspaceProjectTabs::tab:hover {{
+    color: {text_secondary};
+    background: {bg_surface_alt};
+}}
+QLabel#SidebarSectionTitle {{
+    font-size: {size_caption}px;
+    font-weight: {weight_bold};
+    color: {text_muted};
+    letter-spacing: 1px;
+    background: transparent;
+}}
+QLabel#WorkspaceDocTitle {{
+    font-size: {size_h3}px;
+    font-weight: {weight_semibold};
+    color: {text_primary};
+    background: transparent;
+}}
+QLabel#WorkspaceActiveSection {{
+    font-size: {size_caption}px;
+    color: {text_muted};
+    background: transparent;
+}}
+QLabel#WorkspacePageLabel {{
+    font-weight: {weight_semibold};
+    color: {text_muted};
+    background: transparent;
+}}
+QLabel#WorkspacePreviewPage {{
+    background: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
+    padding: {sm}px;
+}}
+
+QFrame#SidebarDivider {{
+    background-color: {border};
+    border: none;
+    max-height: 1px;
+}}
+QLabel#SidebarHint {{
+    color: {text_muted};
+    font-size: {size_caption}px;
+    background: transparent;
+    border: none;
+}}
+
+QDialog {{
+    background-color: {bg_surface};
+    border: 1px solid {border};
+}}
+
+/* ── Tooltip ── */
+QToolTip {{
+    background-color: {bg_elevated};
+    color: {text_primary};
+    border: 1px solid {border_strong};
+    padding: 6px 10px;
+    border-radius: {radius_sm}px;
+    font-size: {size_caption}px;
+}}
+
+/* ── Inputs ── */
+QLineEdit, QTextEdit {{
+    background-color: {bg_surface_alt};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    padding: 8px 12px;
+    color: {text_primary};
+    selection-background-color: {senai_blue};
+    selection-color: {text_on_primary};
+}}
+QLineEdit:focus, QTextEdit:focus {{
+    border: 1.5px solid {senai_blue_light};
+    background-color: {bg_surface};
+}}
+QLineEdit:disabled, QTextEdit:disabled {{
+    color: {text_disabled};
+    border-color: {border_subtle};
+}}
+
+/* ── ComboBox ── */
+QComboBox {{
+    background-color: {bg_surface_alt};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    padding: 6px 12px;
+    color: {text_primary};
+}}
+QComboBox:focus {{
+    border: 1.5px solid {senai_blue_light};
+}}
+QComboBox QAbstractItemView {{
+    background-color: {bg_elevated};
+    border: 1px solid {border_strong};
+    color: {text_primary};
+    selection-background-color: rgba(74, 111, 212, 60);
+}}
+
+/* ── Listas e Árvores ── */
+QListWidget, QTreeWidget {{
+    background-color: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    color: {text_primary};
+    outline: none;
+}}
+QListWidget::item, QTreeWidget::item {{
+    padding: 5px 6px;
+    border-radius: 4px;
+}}
+QListWidget::item:hover, QTreeWidget::item:hover {{
+    background-color: {bg_surface_alt};
+}}
+QListWidget::item:selected, QTreeWidget::item:selected {{
+    background-color: rgba(74, 111, 212, 50);
+    color: {senai_blue_light};
+}}
+QHeaderView::section {{
+    background-color: {bg_surface};
+    color: {text_secondary};
+    border: none;
+    border-bottom: 1px solid {border};
+    padding: 4px 8px;
+    font-size: {size_caption}px;
+    font-weight: {weight_semibold};
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}}
+
+/* ── Scrollbars ── */
+QScrollBar:vertical {{
+    background: transparent;
+    width: 6px;
+    margin: 2px;
+}}
+QScrollBar::handle:vertical {{
+    background: {border_strong};
+    border-radius: 3px;
+    min-height: 30px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background: {senai_blue_light};
+}}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+    height: 0px;
+}}
+QScrollBar:horizontal {{
+    background: transparent;
+    height: 6px;
+    margin: 2px;
+}}
+QScrollBar::handle:horizontal {{
+    background: {border_strong};
+    border-radius: 3px;
+    min-width: 30px;
+}}
+QScrollBar::handle:horizontal:hover {{
+    background: {senai_blue_light};
+}}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+    width: 0px;
+}}
+
+/* ── Splitter ── */
+QSplitter::handle {{
+    background-color: {border};
+}}
+QSplitter::handle:horizontal {{
+    width: 1px;
+}}
+QSplitter::handle:vertical {{
+    height: 1px;
+}}
+
+/* ── CheckBox ── */
+QCheckBox {{
+    color: {text_primary};
+    spacing: 8px;
+}}
+QCheckBox::indicator {{
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid {border_strong};
+    border-radius: 4px;
+    background-color: {bg_surface_alt};
+}}
+QCheckBox::indicator:checked {{
+    background-color: {senai_blue};
+    border-color: {senai_blue};
+}}
+QCheckBox::indicator:hover {{
+    border-color: {senai_blue_light};
+}}
+
+/* ── MessageBox ── */
+QMessageBox {{
+    background-color: {bg_surface};
+}}
+QMessageBox QLabel {{
+    color: {text_primary};
+}}
+
+/* ── QPushButton padrão (fallback) ── */
+QPushButton {{
+    color: {text_primary};
+    background-color: {bg_surface_alt};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    padding: 6px 14px;
+}}
+QPushButton:hover {{
+    background-color: {bg_elevated};
+    border-color: {border_strong};
+}}

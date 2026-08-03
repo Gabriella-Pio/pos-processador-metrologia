@@ -1,146 +1,277 @@
 """
-Dashboard inicial (estilo Google Docs Home): ações rápidas, grade de
-templates e histórico de arquivos recentes.
+HomeView — orquestrador da tela inicial (Arquivos | Templates).
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import (
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QSizePolicy, QVBoxLayout, QWidget
 
-from src.ui.components.buttons import PrimaryButton, SecondaryButton
-from src.ui.components.cards import RecentFileRow, RecentFileSummary, TemplateCard, TemplateSummary
+from src.ui.styles import SPACING
+
+
+class _HomeStack(QStackedWidget):
+    """Stack que só considera a aba visível no minimumSizeHint — evita comprimir o hero."""
+
+    def minimumSizeHint(self):
+        current = self.currentWidget()
+        if current is not None:
+            return current.minimumSizeHint()
+        return super().minimumSizeHint()
+
+
+class _StickyTabScrollHost(QWidget):
+    """Scroll da Home com tab bar que gruda abaixo do AppHeader ao rolar."""
+
+    TAB_BAR_HEIGHT = 44
+    TAB_HERO_GAP = SPACING.lg
+
+    def __init__(self, hero: QWidget, tab_bar: QWidget, stack: QWidget, parent=None) -> None:
+        super().__init__(parent)
+        self._hero = hero
+        self._tab_bar = tab_bar
+        self._tab_bar.setParent(self)
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(0)
+        scroll_layout.addWidget(hero)
+
+        self._tab_anchor = QWidget()
+        self._tab_anchor.setFixedHeight(self.TAB_BAR_HEIGHT + self.TAB_HERO_GAP)
+        scroll_layout.addWidget(self._tab_anchor)
+        scroll_layout.addWidget(stack)
+
+        self._page_scroll = QScrollArea()
+        self._page_scroll.setObjectName("HomePageScroll")
+        self._page_scroll.setWidgetResizable(True)
+        self._page_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._page_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._page_scroll.setWidget(scroll_content)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(self._page_scroll, stretch=1)
+
+        self._hero.installEventFilter(self)
+        self._page_scroll.verticalScrollBar().valueChanged.connect(self._position_tab_bar)
+        self._position_tab_bar(0)
+
+    @property
+    def page_scroll(self) -> QScrollArea:
+        return self._page_scroll
+
+    def eventFilter(self, obj, event) -> bool:
+        if obj is self._hero and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.LayoutRequest,
+        ):
+            self._position_tab_bar(self._page_scroll.verticalScrollBar().value())
+        return super().eventFilter(obj, event)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._position_tab_bar(self._page_scroll.verticalScrollBar().value())
+
+    def _position_tab_bar(self, scroll_y: int) -> None:
+        anchor_y = self._hero.height() + self.TAB_HERO_GAP
+        y = max(0, anchor_y - scroll_y)
+        stuck = y == 0 and scroll_y > 0
+        self._tab_bar.setGeometry(0, y, self.width(), self.TAB_BAR_HEIGHT)
+        self._tab_bar.raise_()
+        if hasattr(self._tab_bar, "set_stuck"):
+            self._tab_bar.set_stuck(stuck)
+
+
 from src.ui.components.feedback import show_friendly_error
-from src.ui.components.header import AppHeader
-from src.ui.components.inputs import SearchBar
-from src.ui.styles import PALETTE, SPACING, apply_elevation, heading_style
+from src.ui.components.hero import HeroCommandBar
+from src.ui.components.tab_bar import TabBar
+from src.ui.models.dashboard import (
+    RecentFileSummary,
+    RecentFilesFilterState,
+    TemplateSummary,
+    distinct_components,
+    distinct_projects,
+)
 from src.ui.viewmodels.home_viewmodel import HomeViewModel
+from src.ui.views.home import RecentesPanel, TemplatesPanel
 
 
 class HomeView(QWidget):
-    """Tela inicial. Comunica intenções do usuário para fora via sinais
-    (``new_document_requested``, ``template_manager_requested``,
-    ``recent_file_opened``) — quem decide o que fazer com isso é o
-    ``MainWindow``/coordenador de navegação, não esta view.
-    """
-
     new_document_requested = pyqtSignal()
     template_manager_requested = pyqtSignal()
-    recent_file_opened = pyqtSignal(str)  # file_id
+    template_editor_requested = pyqtSignal(str)
+    recent_file_opened = pyqtSignal(str)
+
+    TAB_ARQUIVOS = 0
+    TAB_TEMPLATES = 1
 
     def __init__(self, view_model: HomeViewModel, parent=None) -> None:
         super().__init__(parent)
         self._vm = view_model
-        self._recent_files_container: QVBoxLayout | None = None
-        self._templates_grid: QGridLayout | None = None
+        self._search_query = ""
+        self._recent_files: list[RecentFileSummary] = []
+        self._templates: list[TemplateSummary] = []
         self._build_ui()
         self._connect_view_model()
         self._vm.load_dashboard()
 
-    # ------------------------------------------------------------------ UI
+    def focus_search(self) -> None:
+        self._hero.focus_search()
+
+    def clear_search_and_filters(self) -> None:
+        self._clear_search_and_filters()
+
     def _build_ui(self) -> None:
+        self.setObjectName("HomeSurface")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        outer.addWidget(AppHeader(subtitle="Relatórios de Metrologia", show_back_button=False))
 
-        content = QWidget()
-        content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(SPACING.xl, SPACING.xl, SPACING.xl, SPACING.xl)
-        content_layout.setSpacing(SPACING.lg)
+        self._hero = HeroCommandBar()
+        self._hero.search_changed.connect(self._on_search_changed)
+        self._hero.filters_changed.connect(self._on_structured_filters_changed)
+        self._hero.new_report_requested.connect(self.new_document_requested.emit)
+        self._hero.new_template_requested.connect(self._on_create_template)
+        self._hero.continue_last_requested.connect(self.recent_file_opened.emit)
 
-        content_layout.addLayout(self._build_page_toolbar())
-        content_layout.addLayout(self._build_quick_actions())
-        content_layout.addWidget(self._build_section_label("Templates"))
-        content_layout.addWidget(self._build_templates_grid())
-        content_layout.addWidget(self._build_section_label("Arquivos recentes"))
-        content_layout.addWidget(self._build_recent_files_list(), stretch=1)
+        self._tab_bar = TabBar(["Arquivos", "Templates"])
+        self._tab_bar.tab_changed.connect(self._on_tab_changed)
 
-        outer.addWidget(content, stretch=1)
+        self._arquivos = RecentesPanel()
+        self._arquivos.opened.connect(self.recent_file_opened.emit)
+        self._arquivos.import_requested.connect(self.new_document_requested.emit)
 
-    def _build_page_toolbar(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        title = QLabel("Meus relatórios")
-        title.setStyleSheet(heading_style(1))
-        search = SearchBar("Buscar arquivos ou templates...")
-        search.setFixedWidth(320)
-        row.addWidget(title)
-        row.addStretch(1)
-        row.addWidget(search)
-        return row
+        self._templates_panel = TemplatesPanel()
+        self._templates_panel.template_selected.connect(self._on_template_selected)
+        self._templates_panel.create_requested.connect(self._on_create_template)
 
-    def _build_quick_actions(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setSpacing(SPACING.md)
+        self._stack = _HomeStack()
+        self._stack.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
+        self._stack.addWidget(self._arquivos)
+        self._stack.addWidget(self._templates_panel)
+        self._stack.setCurrentIndex(self.TAB_ARQUIVOS)
 
-        new_pdf_btn = PrimaryButton("＋  Novo PDF / Processar Lote")
-        new_pdf_btn.clicked.connect(self.new_document_requested.emit)
+        self._scroll_host = _StickyTabScrollHost(self._hero, self._tab_bar, self._stack)
+        self._page_scroll = self._scroll_host.page_scroll
 
-        new_template_btn = SecondaryButton("Criar Novo Template")
-        new_template_btn.clicked.connect(self.template_manager_requested.emit)
+        outer.addWidget(self._scroll_host, stretch=1)
 
-        row.addWidget(new_pdf_btn)
-        row.addWidget(new_template_btn)
-        row.addStretch(1)
-        return row
-
-    def _build_section_label(self, text: str) -> QLabel:
-        label = QLabel(text)
-        label.setStyleSheet(heading_style(3))
-        return label
-
-    def _build_templates_grid(self) -> QWidget:
-        container = QFrame()
-        self._templates_grid = QGridLayout(container)
-        self._templates_grid.setSpacing(SPACING.md)
-        self._templates_grid.setContentsMargins(0, 0, 0, 0)
-        return container
-
-    def _build_recent_files_list(self) -> QScrollArea:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-
-        content = QWidget()
-        self._recent_files_container = QVBoxLayout(content)
-        self._recent_files_container.setContentsMargins(0, 0, 0, 0)
-        self._recent_files_container.setSpacing(0)
-        self._recent_files_container.addStretch(1)
-
-        scroll.setWidget(content)
-        return scroll
-
-    # ------------------------------------------------------- ViewModel glue
     def _connect_view_model(self) -> None:
-        self._vm.templates_loaded.connect(self._render_templates)
-        self._vm.recent_files_loaded.connect(self._render_recent_files)
+        self._vm.templates_loaded.connect(self._on_templates_loaded)
+        self._vm.recent_files_loaded.connect(self._on_arquivos_loaded)
         self._vm.error_occurred.connect(
             lambda title, msg, details: show_friendly_error(self, title, msg, details)
         )
 
-    def _render_templates(self, templates: list[TemplateSummary]) -> None:
-        assert self._templates_grid is not None
-        columns = 4
-        for index, summary in enumerate(templates):
-            card = TemplateCard(summary)
-            apply_elevation(card, blur=16, y_offset=2, alpha=30)
-            card.selected.connect(self.template_manager_requested.emit)
-            self._templates_grid.addWidget(card, index // columns, index % columns)
+    def _on_template_selected(self, template_id: str) -> None:
+        self.template_editor_requested.emit(template_id)
 
-    def _render_recent_files(self, files: list[RecentFileSummary]) -> None:
-        assert self._recent_files_container is not None
-        # Remove placeholder stretch, insere linhas, reinsere o stretch.
-        while self._recent_files_container.count():
-            self._recent_files_container.takeAt(0)
-        for summary in files:
-            row = RecentFileRow(summary)
-            row.opened.connect(self.recent_file_opened.emit)
-            self._recent_files_container.addWidget(row)
-        self._recent_files_container.addStretch(1)
+    def _on_create_template(self) -> None:
+        self.template_editor_requested.emit("new")
+
+    def _on_templates_loaded(self, templates: list[TemplateSummary]) -> None:
+        self._templates = list(templates)
+        self._templates_panel.render(templates)
+        self._tab_bar.update_count(self.TAB_TEMPLATES, len(templates))
+        self._refresh_hero_stats()
+        if self._search_query:
+            self._templates_panel.apply_filter(self._search_query)
+            self._update_search_hint()
+
+    def _on_arquivos_loaded(self, files: list[RecentFileSummary]) -> None:
+        self._recent_files = list(files)
+        self._arquivos.render(files)
+        self._hero.filter_bar.set_project_options(distinct_projects(files))
+        self._hero.filter_bar.set_component_options(distinct_components(files))
+        self._tab_bar.update_count(self.TAB_ARQUIVOS, len(files))
+        self._refresh_hero_stats()
+        self._apply_arquivos_filters()
+
+    def _merged_arquivos_filter_state(self) -> RecentFilesFilterState:
+        bar = self._hero.filter_bar.current_state()
+        return RecentFilesFilterState(
+            query=self._search_query,
+            period=bar.period,
+            project=bar.project,
+            component=bar.component,
+            sort=bar.sort,
+        )
+
+    def _apply_arquivos_filters(self) -> None:
+        self._arquivos.update_filters(self._merged_arquivos_filter_state())
+        self._update_search_hint()
+
+    def _clear_search_and_filters(self) -> None:
+        self._search_query = ""
+        self._hero.search_bar.clear()
+        self._hero.filter_bar.clear_all_including_query()
+        self._templates_panel.apply_filter("")
+        self._apply_arquivos_filters()
+
+    def _refresh_hero_stats(self) -> None:
+        last = self._recent_files[0] if self._recent_files else None
+        self._hero.update_stats(len(self._recent_files), len(self._templates), last)
+
+    def _on_search_changed(self, query: str) -> None:
+        self._search_query = query
+        self._hero.filter_bar.set_query(query)
+        self._apply_arquivos_filters()
+        self._templates_panel.apply_filter(query)
+
+        if not query.strip():
+            return
+
+        current_index = self._stack.currentIndex()
+        current_has_results = (
+            self._arquivos.has_visible_items()
+            if current_index == self.TAB_ARQUIVOS
+            else self._templates_panel.has_visible_items()
+        )
+        if current_has_results:
+            return
+
+        if self._arquivos.has_visible_items():
+            self.switch_to_tab(self.TAB_ARQUIVOS)
+        elif self._templates_panel.has_visible_items():
+            self.switch_to_tab(self.TAB_TEMPLATES)
+
+    def _on_structured_filters_changed(self, _state: RecentFilesFilterState) -> None:
+        self._apply_arquivos_filters()
+
+    def _update_search_hint(self) -> None:
+        query = self._search_query.strip()
+        if not query:
+            self._hero.set_search_result_hint("")
+            return
+        file_count = self._arquivos.visible_count()
+        template_count = self._templates_panel.visible_count()
+        total = file_count + template_count
+        if total == 0:
+            self._hero.set_search_result_hint(f'Nenhum resultado para "{query}"')
+        else:
+            self._hero.set_search_result_hint(
+                f"{total} resultado(s) — {file_count} arquivo(s), {template_count} template(s)"
+            )
+
+    def _on_tab_changed(self, index: int) -> None:
+        self._stack.setCurrentIndex(index)
+        self._hero.set_filters_visible(index == self.TAB_ARQUIVOS)
+
+    def switch_to_tab(self, index: int) -> None:
+        self._tab_bar.set_active(index)
+        self._stack.setCurrentIndex(index)
+        self._hero.set_filters_visible(index == self.TAB_ARQUIVOS)
+
+    def refresh_appearance(self) -> None:
+        """Reaplica estilos dinâmicos após mudança de tema/contraste/fonte."""
+        self._tab_bar.refresh_appearance()
+        self._hero.refresh_appearance()
+        self._arquivos.refresh_appearance()
+        self._templates_panel.refresh_appearance()
