@@ -35,7 +35,7 @@ SHORTCUT_GROUPS: tuple[tuple[str, tuple[ShortcutRow, ...]], ...] = (
     (
         "Início",
         (
-            ("Ctrl+N", "Novo arquivo", "Abre o assistente de importação de PDFs"),
+            ("Ctrl+N", "Novo arquivo", "Abre a criação de novo projeto"),
             ("Ctrl+T", "Novo template", "Cria um template de relatório"),
             ("Ctrl+K", "Buscar", "Foca o campo de busca na Home"),
             ("Esc", "Limpar busca", "Limpa busca e filtros ativos"),

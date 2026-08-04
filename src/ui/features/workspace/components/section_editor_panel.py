@@ -1,42 +1,29 @@
-"""Sidebar esquerda do workspace — sumário compacto + edição sob demanda."""
+"""Sidebar esquerda do workspace — sumário, dados globais e histórico."""
 from __future__ import annotations
 
 from pathlib import Path
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QFrame, QStackedWidget, QTabWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QTabWidget, QVBoxLayout
 
 from src.core.domain.ports import ReportDocument, ReportImage
-from src.ui.components.buttons import SecondaryButton
 from src.ui.components.panels import VersionHistoryPanel
-from src.ui.styles import SPACING
 from src.ui.features.workspace.components.dados_relatorio_panel import DadosRelatorioPanel
 from src.ui.features.workspace.components.section_edit_view import SectionEditView
 from src.ui.features.workspace.components.sections_panel import SectionsPanel
 
-_INDEX_SUMARIO = 0
-_INDEX_DADOS = 1
-
 
 class SectionEditorPanel(QFrame):
-    """Sumário enxuto; edição aparece abaixo da lista sem trocar de tela."""
+    """Navegação lateral; edição de seção fica na coluna central do workspace."""
 
     section_selected = pyqtSignal(str)
     section_delete_requested = pyqtSignal(str)
     add_custom_section_requested = pyqtSignal()
     sections_reordered = pyqtSignal(list)
-    section_field_changed = pyqtSignal(str, str, str)
-    section_field_restore_requested = pyqtSignal(str, str)
-    section_block_restore_requested = pyqtSignal(str, str, str)
-    table_rows_changed = pyqtSignal(str, list)
-    table_rows_restore_requested = pyqtSignal(str)
-    parsed_field_changed = pyqtSignal(str, str)
-    parsed_field_restore_requested = pyqtSignal(str)
-    itens_medicao_changed = pyqtSignal(list)
-    itens_medicao_restore_requested = pyqtSignal()
     new_version_requested = pyqtSignal()
     image_dropped = pyqtSignal(Path)
     tool_selected = pyqtSignal(str)
+    edit_visibility_changed = pyqtSignal(bool)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -44,11 +31,8 @@ class SectionEditorPanel(QFrame):
         self._vm = None
         self._sections_map: dict[str, dict] = {}
         self._active_section_id: str | None = None
-        self._global_values: dict[str, str] = {}
         self._itens_medicao: list[dict[str, str]] = []
-
-        self._nav_dados_btn = SecondaryButton("Dados do relatório")
-        self._nav_dados_btn.clicked.connect(self._show_dados)
+        self._edit_open = False
 
         self._sections_panel = SectionsPanel()
         self._sections_panel.section_navigated.connect(self._on_section_navigated)
@@ -62,40 +46,30 @@ class SectionEditorPanel(QFrame):
         self._edit_view = SectionEditView()
         self._edit_view.back_requested.connect(self._close_edit)
         self._edit_view.delete_requested.connect(self.section_delete_requested.emit)
-        self._edit_view.setVisible(False)
-
-        self._sumario_work = QWidget()
-        sumario_work_layout = QVBoxLayout(self._sumario_work)
-        sumario_work_layout.setContentsMargins(0, 0, 0, 0)
-        sumario_work_layout.setSpacing(SPACING.sm)
-        sumario_work_layout.addWidget(self._sections_panel, stretch=2)
-        sumario_work_layout.addWidget(self._edit_view, stretch=3)
 
         self._dados_panel = DadosRelatorioPanel()
-        self._dados_panel.back_requested.connect(self._show_sumario)
-
-        self._sumario_stack = QStackedWidget()
-        self._sumario_stack.addWidget(self._sumario_work)
-        self._sumario_stack.addWidget(self._dados_panel)
-
-        sumario_container = QFrame()
-        sumario_layout = QVBoxLayout(sumario_container)
-        sumario_layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, 0)
-        sumario_layout.setSpacing(SPACING.sm)
-        sumario_layout.addWidget(self._nav_dados_btn)
-        sumario_layout.addWidget(self._sumario_stack, stretch=1)
 
         self._version_panel = VersionHistoryPanel()
         self._version_panel.new_version_requested.connect(self.new_version_requested.emit)
 
         self._sidebar_tabs = QTabWidget()
         self._sidebar_tabs.setObjectName("WorkspaceSidebarTabs")
-        self._sidebar_tabs.addTab(sumario_container, "Sumário")
+        self._sidebar_tabs.addTab(self._sections_panel, "Sumário")
+        self._sidebar_tabs.addTab(self._dados_panel, "Dados")
         self._sidebar_tabs.addTab(self._version_panel, "Histórico")
+        self._sidebar_tabs.currentChanged.connect(self._on_sidebar_tab_changed)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(self._sidebar_tabs)
+
+    @property
+    def edit_view(self) -> SectionEditView:
+        return self._edit_view
+
+    @property
+    def is_editing(self) -> bool:
+        return self._edit_open
 
     def bind_view_model(self, view_model) -> None:
         self._vm = view_model
@@ -112,33 +86,30 @@ class SectionEditorPanel(QFrame):
         self._dados_panel.restore_field_requested.connect(view_model.restore_parsed_field)
 
     def refresh_appearance(self) -> None:
-        self._nav_dados_btn.refresh_appearance()
         self._sections_panel.refresh_appearance()
         self._edit_view.refresh_appearance()
-        if hasattr(self._dados_panel, "refresh_appearance"):
-            self._dados_panel.refresh_appearance()
+        self._dados_panel.refresh_appearance()
         self._version_panel.refresh_appearance()
 
     def render_sections(self, sections: list[dict]) -> None:
         self._sections_map = {s["id"]: s for s in sections}
         self._sections_panel.render_sections(sections)
-        if self._edit_view.isVisible() and self._active_section_id:
+        if self._edit_open and self._active_section_id:
             if self._active_section_id in self._sections_map:
                 self._refresh_edit_if_open()
             else:
                 self._close_edit()
 
     def render_global_fields(self, values: dict[str, str], overridden: set[str]) -> None:
-        self._global_values = values
         self._dados_panel.render_fields(values, overridden)
-        if self._edit_view.isVisible() and self._active_section_id:
+        if self._edit_open and self._active_section_id:
             if self._edit_view.has_pending_textarea():
                 return
             self._refresh_edit_if_open()
 
     def set_itens_medicao(self, rows: list[dict[str, str]]) -> None:
         self._itens_medicao = rows
-        if self._edit_view.isVisible():
+        if self._edit_open:
             self._edit_view.set_itens_medicao(rows)
 
     def set_active_section(self, section_id: str) -> None:
@@ -146,52 +117,63 @@ class SectionEditorPanel(QFrame):
         self._sections_panel.set_active_section(section_id)
 
     def _on_section_navigated(self, section_id: str) -> None:
+        self._close_edit()
         self._active_section_id = section_id
         self._sections_panel.set_active_section(section_id)
         self.section_selected.emit(section_id)
 
     def _on_section_edit_requested(self, section_id: str) -> None:
+        if self._sidebar_tabs.currentIndex() != 0:
+            self._sidebar_tabs.setCurrentIndex(0)
         self._active_section_id = section_id
         self._sections_panel.set_active_section(section_id)
         section = self._sections_map.get(section_id, {"id": section_id, "title": section_id})
-        overrides = self._collect_overrides(section)
-        table_rows = section.get("table_rows")
+        overrides = dict(section.get("fields") or {})
         self._edit_view.open_section(
-            section_id, section, overrides, table_rows, self._itens_medicao
+            section_id,
+            section,
+            overrides,
+            section.get("table_rows"),
+            self._itens_medicao,
         )
-        self._edit_view.setVisible(True)
-        self._show_sumario()
+        self._edit_open = True
+        self._show_sumario_tab()
+        self.edit_visibility_changed.emit(True)
         self.section_selected.emit(section_id)
 
-    def _collect_overrides(self, section: dict) -> dict[str, str]:
-        return dict(section.get("fields") or {})
-
     def _refresh_edit_if_open(self) -> None:
-        if not self._edit_view.isVisible() or self._active_section_id is None:
+        if not self._edit_open or self._active_section_id is None:
             return
         if self._edit_view.has_pending_textarea():
             return
         section = self._sections_map.get(self._active_section_id, {})
         self._edit_view.patch_section(
-            self._collect_overrides(section),
+            dict(section.get("fields") or {}),
             section.get("table_rows"),
             self._itens_medicao,
             section,
         )
 
+    def navigate_to_section(self, section_id: str) -> None:
+        """Seleção no preview — navega sem abrir o editor."""
+        self._on_section_navigated(section_id)
+
     def open_edit_for_section(self, section_id: str) -> None:
         self._on_section_edit_requested(section_id)
 
     def _close_edit(self) -> None:
-        self._edit_view.setVisible(False)
+        if not self._edit_open:
+            return
+        self._edit_open = False
         self._edit_view.reset_breadcrumb()
+        self.edit_visibility_changed.emit(False)
 
-    def _show_sumario(self) -> None:
-        self._sumario_stack.setCurrentIndex(_INDEX_SUMARIO)
+    def _show_sumario_tab(self) -> None:
+        self._sidebar_tabs.setCurrentIndex(0)
 
-    def _show_dados(self) -> None:
-        self._close_edit()
-        self._sumario_stack.setCurrentIndex(_INDEX_DADOS)
+    def _on_sidebar_tab_changed(self, index: int) -> None:
+        if index != 0:
+            self._close_edit()
 
     def render_images(self, images: list[ReportImage]) -> None:
         self._sections_panel.set_section_images(images)
@@ -205,5 +187,4 @@ class SectionEditorPanel(QFrame):
 
     def update_document_context(self, document: ReportDocument | None) -> None:
         self._close_edit()
-        if self._sumario_stack.currentIndex() == _INDEX_DADOS:
-            self._show_sumario()
+        self._show_sumario_tab()

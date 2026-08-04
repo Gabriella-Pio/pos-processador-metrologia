@@ -27,6 +27,19 @@ class DatabaseManager:
             """)
             conn.commit()
             self._migrar_colunas_legadas(cursor, conn)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS versoes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_pdf_path TEXT NOT NULL,
+                    client_project TEXT NOT NULL,
+                    componente TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    data_hora TEXT NOT NULL,
+                    responsavel TEXT NOT NULL,
+                    descricao TEXT NOT NULL
+                )
+            """)
+            conn.commit()
 
     def _migrar_colunas_legadas(self, cursor, conn):
         """Adiciona nome_arquivo/cliente_projeto a bancos criados antes
@@ -66,3 +79,57 @@ class DatabaseManager:
                 FROM documentos ORDER BY id DESC LIMIT ?
             """, (limite,))
             return cursor.fetchall()
+
+    def salvar_versao(
+        self,
+        source_pdf_path: str,
+        client_project: str,
+        componente: str,
+        version_number: int,
+        data_hora: str,
+        responsavel: str,
+        descricao: str,
+    ) -> int:
+        with self._conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO versoes (
+                    source_pdf_path, client_project, componente,
+                    version_number, data_hora, responsavel, descricao
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                source_pdf_path,
+                client_project,
+                componente,
+                version_number,
+                data_hora,
+                responsavel,
+                descricao,
+            ))
+            conn.commit()
+            return cursor.lastrowid
+
+    def listar_versoes(
+        self,
+        source_pdf_path: str,
+        client_project: str,
+        componente: str,
+    ) -> list[tuple]:
+        with self._conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT version_number, data_hora, responsavel, descricao
+                FROM versoes
+                WHERE source_pdf_path = ? AND client_project = ? AND componente = ?
+                ORDER BY version_number ASC
+            """, (source_pdf_path, client_project, componente))
+            return cursor.fetchall()
+
+    def buscar_por_id(self, doc_id: int) -> tuple | None:
+        with self._conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho_arquivo
+                FROM documentos WHERE id = ?
+            """, (doc_id,))
+            return cursor.fetchone()

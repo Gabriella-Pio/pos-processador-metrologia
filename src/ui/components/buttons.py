@@ -141,3 +141,19 @@ class IconButton(_BaseButton):
                 border: 1px solid {p.senai_blue};
             }}
         """)
+
+
+class ChromeIconButton(_BaseButton):
+    """Ícone com borda — mesmo visual do FilterCombo (toolbars do workspace)."""
+
+    def __init__(self, icon: QIcon, tooltip: str = "", parent=None) -> None:
+        super().__init__("", icon, parent)
+        self.setObjectName("WorkspaceChromeButton")
+        self.setFixedSize(34, 34)
+        self.setMinimumHeight(34)
+        if tooltip:
+            self.setToolTip(tooltip)
+        self.refresh_appearance()
+
+    def refresh_appearance(self) -> None:
+        self.setStyleSheet("")

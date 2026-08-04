@@ -2,6 +2,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate
 from .styles import ReportStyles
 from .constants import ReportTheme, TEMPLATE_PADRAO_OFICIAL
+from src.core.domain.section_numbering import build_section_number_map
 from .sections import (
     CabecalhoSection, IntroducaoSection, IdentificacaoSection, ControleTecnicoSection,
     ResultadosSection, GraficaSection, TomografiaSection, InterpretacaoSection,
@@ -38,6 +39,9 @@ class ReportGenerator:
         controle_tecnico: dict = None,
         historico_versoes: list = None,
         section_page_map: dict | None = None,
+        section_prose: dict | None = None,
+        placeholder_context: dict | None = None,
+        table_rows: dict | None = None,
     ):
         if opcoes_extras is None:
             opcoes_extras = {"incluir_tomografia": False}
@@ -66,6 +70,10 @@ class ReportGenerator:
             "controle_tecnico": controle_tecnico or {},
             "historico_versoes": historico_versoes or [],
             "section_anchor_map": section_page_map if section_page_map is not None else {},
+            "section_prose": section_prose or {},
+            "placeholder_context": placeholder_context or {},
+            "table_rows": table_rows or {},
+            "section_number_map": build_section_number_map(template_config),
         }
 
         for bloco in template_config:
@@ -79,6 +87,11 @@ class ReportGenerator:
                 secao_classe = cls.REGISTRY_SECOES[tipo]
                 instancia_secao = secao_classe(config)
                 instancia_secao.render(story, styles, dados_parseados, contexto_extra)
+            elif tipo.startswith("custom_"):
+                from .sections.custom_section import CustomSection
+                CustomSection({**config, "section_id": tipo}).render(
+                    story, styles, dados_parseados, contexto_extra
+                )
 
         doc.build(story, onFirstPage=cls._adicionar_rodape, onLaterPages=cls._adicionar_rodape)
         print(f"[Engine] Relatório modular gerado com sucesso em: {caminho_saida}")

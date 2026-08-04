@@ -2,25 +2,31 @@ from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
+from ..prose_helpers import get_section_heading
+from src.core.domain.placeholder_utils import resolve_placeholders
+from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 
 class IdentificacaoSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
-        cliente_projeto = contexto_extra.get("cliente_projeto", "Não informado")
-        componente_avaliado = contexto_extra.get("componente_avaliado", "Não informado")
+        heading = get_section_heading(
+            contexto_extra,
+            "identificacao",
+            SECTION_HEADING_DEFAULTS["identificacao"],
+        )
+        story.append(anchored_section_title(heading, styles['secao'], "identificacao", contexto_extra.get("section_anchor_map")))
 
-        story.append(anchored_section_title("1. IDENTIFICAÇÃO E CONDIÇÕES DE MEDIÇÃO", styles['secao'], "identificacao", contexto_extra.get("section_anchor_map")))
-        
-        dados_cab = [
-            [Paragraph("<b>Cliente / Projeto</b>", styles['texto']), Paragraph(cliente_projeto, styles['texto'])],
-            [Paragraph("<b>Componente Avaliado</b>", styles['texto']), Paragraph(componente_avaliado, styles['texto'])],
-            [Paragraph("<b>Identificação no Relatório CALYPSO</b>", styles['texto']), Paragraph(dados_parseados.componente, styles['texto'])],
-            [Paragraph("<b>Máquina de Medição</b>", styles['texto']), Paragraph(dados_parseados.maquina_mmc, styles['texto'])],
-            [Paragraph("<b>Número da MMC</b>", styles['texto']), Paragraph(f"<b>{dados_parseados.numero_mmc}</b>", styles['texto'])],
-            [Paragraph("<b>Software</b>", styles['texto']), Paragraph(f"{dados_parseados.software} {dados_parseados.versao_software}", styles['texto'])],
-            [Paragraph("<b>Operador</b>", styles['texto']), Paragraph(f"{dados_parseados.operador}", styles['texto'])],
-            [Paragraph("<b>Data/Hora da Medição</b>", styles['texto']), Paragraph(f"{dados_parseados.data_hora}", styles['texto'])],
-            [Paragraph("<b>Quantidade de características</b>", styles['texto']), Paragraph(f"{dados_parseados.numero_medicoes_cabecalho} valore(s) medido(s)", styles['texto'])]
-        ]
+        ctx = contexto_extra.get("placeholder_context", {})
+        table_rows = (contexto_extra.get("table_rows") or {}).get("identificacao", [])
+
+        dados_cab = []
+        for row in table_rows:
+            label = resolve_placeholders(str(row.get("label", "")), ctx)
+            value = resolve_placeholders(str(row.get("value", "")), ctx)
+            value_html = f"<b>{value}</b>" if row.get("id") == "numero_mmc" else value
+            dados_cab.append([
+                Paragraph(f"<b>{label}</b>", styles['texto']),
+                Paragraph(value_html, styles['texto']),
+            ])
 
         tabela_cab = Table(dados_cab, colWidths=[200, 340])
         tabela_cab.setStyle(TableStyle([
@@ -30,6 +36,6 @@ class IdentificacaoSection(BaseSection):
             ('INNERGRID', (0,0), (-1,-1), 0.5, ReportTheme.COR_LINHA),
             ('PADDING', (0,0), (-1,-1), 5),
         ]))
-        
+
         story.append(tabela_cab)
         story.append(Spacer(1, 10))

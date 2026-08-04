@@ -140,8 +140,62 @@ QWidget#WorkspaceSurface {{
     background-color: {bg_base};
 }}
 QWidget#WorkspaceTopBar, QWidget#WorkspaceActionBar {{
+    background-color: transparent;
+    border: none;
+}}
+QWidget#WorkspacePreviewHeader {{
     background-color: {bg_surface};
     border-bottom: 1px solid {border};
+    min-height: 48px;
+}}
+QWidget#WorkspaceProjectTabsStrip {{
+    background-color: {bg_surface};
+    border-bottom: 1px solid {border};
+}}
+QPushButton#WorkspaceAddPdfTab {{
+    background: transparent;
+    color: {senai_orange};
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 6px 12px;
+    font-size: {size_caption}px;
+    font-weight: {weight_medium};
+    min-height: 28px;
+}}
+QPushButton#WorkspaceAddPdfTab:hover {{
+    color: {text_primary};
+    background: {bg_surface_alt};
+    border-bottom: 2px solid rgba(240, 67, 30, 0.45);
+}}
+QPushButton#WorkspaceAddPdfTab:pressed {{
+    background: {bg_surface_alt};
+}}
+QPushButton#WorkspaceChromeButton {{
+    background-color: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    min-width: 34px;
+    max-width: 34px;
+    min-height: 34px;
+    max-height: 34px;
+    padding: 0;
+}}
+QPushButton#WorkspaceChromeButton:hover {{
+    border-color: {border_strong};
+    background-color: {bg_surface_alt};
+}}
+QPushButton#WorkspaceChromeButton:pressed {{
+    background-color: {bg_elevated};
+}}
+QWidget#WorkspacePreviewContext {{
+    background: transparent;
+    min-height: 32px;
+}}
+QWidget#LayoutTemplateSelector {{
+    background: transparent;
+}}
+QWidget#WorkspaceTabsRow {{
+    background: transparent;
 }}
 QWidget#WorkspacePreviewPanel {{
     background-color: {bg_base};
@@ -152,19 +206,242 @@ QScrollArea#WorkspacePreviewScroll {{
 }}
 QFrame#WorkspaceSidebar {{
     background-color: {bg_sidebar};
+    border-right: 1px solid {border};
 }}
-QTabBar#WorkspaceProjectTabs {{
-    background-color: {bg_surface};
-    border-bottom: 1px solid {border};
+QTabWidget#WorkspaceSidebarTabs::pane {{
+    border: none;
+    background: transparent;
+    top: -1px;
 }}
-QTabBar#WorkspaceProjectTabs::tab {{
+QTabWidget#WorkspaceSidebarTabs QTabBar::tab {{
     background: transparent;
     color: {text_muted};
-    padding: 8px 16px;
+    padding: 10px 14px;
     border: none;
     border-bottom: 2px solid transparent;
     font-size: {size_caption}px;
     font-weight: {weight_medium};
+}}
+QTabWidget#WorkspaceSidebarTabs QTabBar::tab:selected {{
+    color: {text_primary};
+    border-bottom: 2px solid {senai_orange};
+}}
+QTabWidget#WorkspaceSidebarTabs QTabBar::tab:hover {{
+    color: {text_secondary};
+    background: {bg_surface_alt};
+}}
+
+QFrame#WorkspaceEditorView {{
+    background-color: {bg_sidebar};
+    border-right: 1px solid {border};
+}}
+QTabWidget#SectionEditorTabs::pane {{
+    border: none;
+    background: transparent;
+    top: -1px;
+}}
+QTabWidget#SectionEditorTabs QTabBar::tab {{
+    background: transparent;
+    color: {text_muted};
+    padding: 10px 14px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: {size_caption}px;
+    font-weight: {weight_medium};
+}}
+QTabWidget#SectionEditorTabs QTabBar::tab:selected {{
+    color: {text_primary};
+    border-bottom: 2px solid {senai_orange};
+}}
+QTabWidget#SectionEditorTabs QTabBar::tab:hover {{
+    color: {text_secondary};
+    background: {bg_surface_alt};
+}}
+QScrollArea#SectionEditorScroll {{
+    background: transparent;
+    border: none;
+}}
+QWidget#EditorPanelHeader {{
+    background: transparent;
+}}
+QFrame#WorkspaceEditorPanel {{
+    background-color: {bg_surface};
+    border-right: 1px solid {border};
+}}
+QLabel#WorkspaceEditorPlaceholder {{
+    color: {text_muted};
+    font-size: {size_body}px;
+    padding: {xl}px;
+    background: transparent;
+}}
+
+QScrollArea#GlobalFieldsScroll {{
+    background: transparent;
+    border: none;
+}}
+QFrame#GlobalFieldsPanel {{
+    background: transparent;
+    border: none;
+}}
+QFrame#GlobalFieldCard {{
+    background: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+}}
+QFrame#GlobalFieldCard:hover {{
+    border-color: {border_strong};
+}}
+QLabel#GlobalFieldLabel {{
+    color: {text_primary};
+    font-size: {size_caption}px;
+    font-weight: {weight_semibold};
+    background: transparent;
+}}
+QLabel#GlobalFieldMeta {{
+    color: {text_muted};
+    font-size: {size_caption}px;
+    background: transparent;
+}}
+QLineEdit#GlobalFieldInput {{
+    background-color: {bg_surface_alt};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    padding: 8px 10px;
+    color: {text_primary};
+    font-size: {size_body}px;
+    min-height: 36px;
+}}
+QLineEdit#GlobalFieldInput:focus {{
+    border: 1.5px solid {senai_blue_light};
+    background-color: {bg_surface};
+}}
+QLabel#FieldRestoreLink {{
+    color: {senai_blue_light};
+    font-size: {size_caption}px;
+    background: transparent;
+}}
+QLabel#FieldRestoreLink:hover {{
+    color: {text_primary};
+}}
+QWidget#SidebarTabHeader {{
+    background: transparent;
+}}
+QListWidget#SectionSummaryList {{
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0 {sm}px;
+}}
+QListWidget#SectionSummaryList::item {{
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0 0 2px 0;
+}}
+QListWidget#SectionSummaryList::item:selected {{
+    background: transparent;
+}}
+QListWidget#SectionSummaryList::item:hover {{
+    background: transparent;
+}}
+QFrame#SectionSummaryRow {{
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: {radius_sm}px;
+    min-height: 48px;
+}}
+QFrame#SectionSummaryRow:hover {{
+    background: {bg_surface_alt};
+    border-color: {border_subtle};
+}}
+QFrame#SectionSummaryRow[active="true"] {{
+    background: rgba(74, 111, 212, 0.14);
+    border-color: rgba(74, 111, 212, 0.45);
+}}
+QFrame#SectionSummaryAccent {{
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    margin: 8px 0 8px 0;
+}}
+QFrame#SectionSummaryAccent[active="true"] {{
+    background: {senai_orange};
+}}
+QLabel#SectionSummaryNumber {{
+    color: {text_muted};
+    font-size: {size_caption}px;
+    font-weight: {weight_semibold};
+    background: transparent;
+}}
+QLabel#SectionSummaryTitle {{
+    color: {text_primary};
+    font-size: {size_body}px;
+    font-weight: {weight_medium};
+    background: transparent;
+}}
+QLabel#SectionSummaryMeta {{
+    color: {text_muted};
+    font-size: {size_caption}px;
+    background: transparent;
+}}
+QLabel#SectionSummaryModified {{
+    color: {senai_orange};
+    font-size: 9px;
+    background: transparent;
+}}
+QLabel#SectionSummaryBadge {{
+    color: {senai_blue_light};
+    background: rgba(74, 111, 212, 0.15);
+    border-radius: 10px;
+    padding: 2px 7px;
+    font-size: {size_caption}px;
+    font-weight: {weight_semibold};
+}}
+QFrame#SectionSummaryAddRow {{
+    background: transparent;
+    border: 1px dashed {border_subtle};
+    border-radius: {radius_sm}px;
+}}
+QFrame#SectionSummaryAddRow:hover {{
+    border-color: {senai_blue_light};
+    background: {bg_surface_alt};
+}}
+QLabel#SectionSummaryAddLabel {{
+    color: {text_secondary};
+    font-size: {size_body}px;
+    background: transparent;
+}}
+QToolButton#SectionSummaryAction {{
+    background: transparent;
+    border: none;
+    padding: 4px;
+    border-radius: {radius_sm}px;
+}}
+QToolButton#SectionSummaryAction:hover {{
+    background: rgba(74, 111, 212, 0.15);
+}}
+QToolButton#SectionSummaryActionDanger {{
+    background: transparent;
+    border: none;
+    padding: 4px;
+    border-radius: {radius_sm}px;
+}}
+QToolButton#SectionSummaryActionDanger:hover {{
+    background: {danger_bg};
+}}
+QTabBar#WorkspaceProjectTabs {{
+    background: transparent;
+    border: none;
+}}
+QTabBar#WorkspaceProjectTabs::tab {{
+    background: transparent;
+    color: {text_muted};
+    padding: 6px 12px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: {size_caption}px;
+    font-weight: {weight_medium};
+    min-height: 18px;
 }}
 QTabBar#WorkspaceProjectTabs::tab:selected {{
     color: {text_primary};
@@ -175,11 +452,30 @@ QTabBar#WorkspaceProjectTabs::tab:hover {{
     color: {text_secondary};
     background: {bg_surface_alt};
 }}
-QLabel#SidebarSectionTitle {{
+QLabel#WorkspaceMetaLabel {{
     font-size: {size_caption}px;
-    font-weight: {weight_bold};
     color: {text_muted};
-    letter-spacing: 1px;
+    background: transparent;
+}}
+QLabel#WorkspaceMetaSeparator {{
+    font-size: {size_caption}px;
+    color: {text_disabled};
+    background: transparent;
+    padding: 0 2px;
+}}
+QLabel#WorkspaceLayoutDirty {{
+    font-size: 10px;
+    color: {senai_orange};
+    background: transparent;
+}}
+QLabel#WorkspaceDataDirty {{
+    font-size: {size_caption}px;
+    color: {senai_orange};
+    background: transparent;
+}}
+QLabel#WorkspacePreviewStatus {{
+    font-size: {size_caption}px;
+    color: {text_muted};
     background: transparent;
 }}
 QLabel#WorkspaceDocTitle {{
@@ -188,9 +484,22 @@ QLabel#WorkspaceDocTitle {{
     color: {text_primary};
     background: transparent;
 }}
+QLabel#WorkspaceDocTitleCompact {{
+    font-size: {size_body}px;
+    font-weight: {weight_semibold};
+    color: {text_primary};
+    background: transparent;
+}}
 QLabel#WorkspaceActiveSection {{
     font-size: {size_caption}px;
     color: {text_muted};
+    background: transparent;
+}}
+QLabel#SidebarSectionTitle {{
+    font-size: {size_caption}px;
+    font-weight: {weight_bold};
+    color: {text_muted};
+    letter-spacing: 1px;
     background: transparent;
 }}
 QLabel#WorkspacePageLabel {{

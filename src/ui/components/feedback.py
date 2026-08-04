@@ -95,6 +95,20 @@ class InlineBanner(QWidget):
     def set_message(self, message: str) -> None:
         self._message_label.setText(message)
 
+    def set_level(self, level: FeedbackLevel) -> None:
+        self._level = level
+        self._icon_label.setText(_LEVEL_ICONS[level])
+        self.refresh_appearance()
+        self.sync_visibility()
+
+    @property
+    def level(self) -> FeedbackLevel:
+        return self._level
+
+    def sync_visibility(self) -> None:
+        """Visível apenas para avisos e erros — INFO/SUCCESS não ocupam espaço na preview."""
+        self.setVisible(self._level in (FeedbackLevel.WARNING, FeedbackLevel.DANGER))
+
 
 def show_friendly_error(
     parent: Optional[QWidget],

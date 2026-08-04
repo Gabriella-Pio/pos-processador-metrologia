@@ -2,77 +2,64 @@
 
 Aplicação desktop desenvolvida para o desafio técnico do SENAI ZEISS. O objetivo da ferramenta é converter relatórios PDF brutos gerados por equipamentos ZEISS (como o software CALYPSO) em um documento enriquecido, claro, rastreável, versionado e com padrão profissional.
 
-## Tecnologias Utilizadas
+## Tecnologias
 
-- **Python 3.11+**
-- **PyQt6** (Interface Gráfica)
-- **PyMuPDF / fitz** (Extração de dados e leitura de PDFs)
-- **ReportLab** (Geração e estilização de novos PDFs)
+- Python 3.11+
+- PyQt6 (interface desktop)
+- QtAwesome (ícones corporativos)
+- PyMuPDF (leitura / preview)
+- ReportLab (geração de PDF)
 
----
-
-## Estrutura do Projeto
+## Estrutura do projeto
 
 ```text
 pos-processador-metrologia/
-│
-├── venv/                # Ambiente virtual Python
-├── assets/              # Recursos visuais (logos, imagens, ícones)
-├── input_pdfs/          # Relatórios PDF brutos de origem (ex: CALYPSO)
-├── output_pdfs/         # Relatórios PDF finais enriquecidos
-├── parser_teste.py      # Script de teste para leitura e extração de texto
-├── main.py              # Aplicação principal (Interface Gráfica PyQt6)
-└── requirements.txt     # Dependências do projeto
+├── main.py                 # Entry point
+├── assets/                 # Logos SENAI
+├── input_pdfs/             # PDFs de teste (origem)
+├── output_pdfs/            # PDFs exportados, templates.json, histórico SQLite
+├── src/
+│   ├── app/                # Composition root (bootstrap / DI)
+│   ├── core/
+│   │   ├── domain/         # Ports, entidades, schemas, registries
+│   │   ├── application/    # Casos de uso
+│   │   ├── infrastructure/ # Adapters, repos, SQLite/JSON
+│   │   ├── parser/         # Extração de PDFs ZEISS
+│   │   └── generator/      # Geração ReportLab
+│   └── ui/
+│       ├── accessibility/  # Tema / escala de fonte (global)
+│       ├── components/     # Widgets compartilhados
+│       ├── controllers/    # AppState, navegação (app-wide)
+│       ├── dialogs/        # Dialogs realmente compartilhados
+│       ├── features/
+│       │   ├── home/       # components, models, dialogs, viewmodels
+│       │   ├── workspace/  # components, dialogs, services, viewmodels
+│       │   └── templates/  # editor / gestão de templates
+│       └── styles/
+└── tests/
 ```
 
----
-
-## Como Configurar e Executar o Projeto (Linux / Debian)
-
-Siga os passos abaixo no terminal para configurar o ambiente de desenvolvimento na máquina:
-
-### 1. Clonar ou abrir a pasta do projeto
-
-Certifique-se de estar na pasta raiz `pos-processador-metrologia`.
-
-### 2. Criar e Ativar o Ambiente Virtual
+## Executar
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-
-```
-
-### 3. Instalar as Dependências
-
-Com o ambiente virtual ativado (`(venv)` visível no terminal), instale os pacotes necessários:
-
-```bash
 pip install -r requirements.txt
-
+python3 main.py
 ```
 
-*(Caso ainda não tenha o arquivo de dependências, rode: `pip install PyMuPDF reportlab PyQt6` e depois `pip freeze > requirements.txt`)*
+## Fluxo principal
 
-### 4. Executar o Teste de Leitura (Núcleo Funcional)
+1. **Home** — abas **Arquivos** (recentes + novo relatório) e **Templates**
+2. **Novo projeto** — wizard em 3 passos (projeto → PDFs → template)
+3. **Workspace** — preview à esquerda, editor de seções à direita, abas por PDF do projeto
+4. **Exportar** — PDF individual ou lote
 
-Para validar se o parser está lendo corretamente um relatório bruto (coloque um PDF de teste dentro da pasta `input_pdfs/`):
+## Testes UI
 
 ```bash
-python3 parser_teste.py
-
+python -m pytest tests/test_ui_imports.py -v
 ```
-
-### 5. Executar a Aplicação Principal (Interface Gráfica)
-
-Para iniciar o software desktop:
-
-```bash
-python3 -m src.main
-
-```
-
----
 
 ## Cronograma
 
@@ -80,3 +67,4 @@ python3 -m src.main
 * **Checkpoint 1 (Dia 5):** Arquitetura, protótipos de tela e núcleo funcional de leitura de PDF.
 * **Checkpoint 2 (Dia 10):** Demonstração completa (Fim do desenvolvimento de novas funcionalidades).
 * **Entrega Final (Dia 15):** Correção de bugs, testes, documentação e apresentação prática de 10 minutos.
+

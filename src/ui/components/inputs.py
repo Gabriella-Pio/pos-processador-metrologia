@@ -5,11 +5,13 @@ from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -43,6 +45,7 @@ class LabeledLineEdit(QWidget):
     ) -> None:
         super().__init__(parent)
         self._required = required
+        self._error_message: str | None = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
@@ -54,15 +57,28 @@ class LabeledLineEdit(QWidget):
         self._field = QLineEdit()
         self._field.setPlaceholderText(placeholder)
         self._field.setMinimumHeight(38)
-        self._apply_style()
-        self._field.textChanged.connect(self._apply_style)
+
+        self._error_label = QLabel("")
+        self._error_label.hide()
+        self._error_label.setStyleSheet(
+            f"color: {PALETTE.danger}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
+        )
+
+        self._update_validation_ui()
+        self._field.textChanged.connect(self._update_validation_ui)
 
         layout.addWidget(self._label)
         layout.addWidget(self._field)
+        layout.addWidget(self._error_label)
 
-    def _apply_style(self) -> None:
+    def _update_validation_ui(self) -> None:
         is_invalid = self._required and not self._field.text().strip() and self._touched()
         self._field.setStyleSheet(labeled_input_style(invalid=is_invalid))
+        if is_invalid:
+            self._error_label.setText(self._error_message or "Campo obrigatório.")
+            self._error_label.show()
+        else:
+            self._error_label.hide()
 
     def _touched(self) -> bool:
         return self._field.property("touched") is True
@@ -78,7 +94,17 @@ class LabeledLineEdit(QWidget):
 
     def mark_touched(self) -> None:
         self._field.setProperty("touched", True)
-        self._apply_style()
+        self._update_validation_ui()
+
+    def show_validation_error(self, message: str | None = None) -> None:
+        if message is not None:
+            self._error_message = message
+        self.mark_touched()
+
+    def clear_validation_error(self) -> None:
+        self._field.setProperty("touched", False)
+        self._error_message = None
+        self._update_validation_ui()
 
     @property
     def field(self) -> QLineEdit:
@@ -322,3 +348,46 @@ class SearchBar(QWidget):
     @property
     def field(self) -> QLineEdit:
         return self._field
+
+
+class LayoutTemplateSelector(QWidget):
+    """Seletor compacto de layout/template — meta row do header da preview."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("LayoutTemplateSelector")
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(SPACING.xs)
+        row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        self._label = QLabel("Layout")
+        self._label.setObjectName("WorkspaceMetaLabel")
+
+        self._dirty_dot = QLabel("●")
+        self._dirty_dot.setObjectName("WorkspaceLayoutDirty")
+        self._dirty_dot.setToolTip("Layout alterado — salve pelo menu ⋯")
+        self._dirty_dot.hide()
+
+        self._combo = QComboBox()
+        self._combo.setObjectName("FilterCombo")
+        self._combo.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self._combo.setMinimumWidth(200)
+        self._combo.setMaximumWidth(280)
+        self._combo.setToolTip("Layout aplicado ao relatório")
+        popup = self._combo.view()
+        popup.setObjectName("FilterComboPopup")
+
+        row.addWidget(self._label)
+        row.addWidget(self._dirty_dot)
+        row.addWidget(self._combo)
+
+    @property
+    def combo(self) -> QComboBox:
+        return self._combo
+
+    def set_layout_dirty(self, dirty: bool) -> None:
+        self._dirty_dot.setVisible(dirty)
+        tip = "Layout alterado — use ⋯ → Salvar layout…" if dirty else "Layout aplicado ao relatório"
+        self._combo.setToolTip(tip)

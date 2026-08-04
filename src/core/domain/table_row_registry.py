@@ -24,7 +24,14 @@ SECTION_HEADING_DEFAULTS: dict[str, str] = {
 }
 
 NUMBERED_SECTION_IDS: frozenset[str] = frozenset({
-    "identificacao", "resultados", "grafica", "tomografia", "interpretacao", "conclusao",
+    "identificacao",
+    "resultados",
+    "grafica",
+    "tomografia",
+    "interpretacao",
+    "conclusao",
+    "controle_tecnico",
+    "historico_versoes",
 })
 
 _FIXED_SECTION_IDS: frozenset[str] = frozenset({"cabecalho", "historico_versoes"})

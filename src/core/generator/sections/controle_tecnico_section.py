@@ -2,6 +2,8 @@ from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
+from ..prose_helpers import get_section_heading
+from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 
 
 class ControleTecnicoSection(BaseSection):
@@ -17,7 +19,10 @@ class ControleTecnicoSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
         info = contexto_extra.get("controle_tecnico") or {}
 
-        story.append(anchored_section_title("CONTROLE TÉCNICO", styles['secao'], "controle_tecnico", contexto_extra.get("section_anchor_map")))
+        heading = get_section_heading(
+            contexto_extra, "controle_tecnico", SECTION_HEADING_DEFAULTS["controle_tecnico"],
+        )
+        story.append(anchored_section_title(heading, styles['secao'], "controle_tecnico", contexto_extra.get("section_anchor_map")))
         story.append(Paragraph(
             "Registro dos responsáveis técnicos pela medição, revisão e, quando "
             "aplicável, aprovação deste relatório.",

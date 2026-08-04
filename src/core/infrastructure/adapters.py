@@ -1,6 +1,6 @@
 """
 Adapters que traduzem entre o parser/gerador reais (``src/core/parser``,
-``src/core/generator``) e as portas (``src/core/ports.py``) consumidas
+``src/core/generator``) e as portas (``src/core/domain/ports.py``) consumidas
 pela UI. Único lugar onde ``PDFParserService`` e ``ReportGenerator`` são
 importados diretamente.
 """
@@ -11,9 +11,16 @@ from typing import Optional
 
 from src.core.generator.constants import SECTION_TITLES, TEMPLATE_PADRAO_OFICIAL
 from src.core.generator.engine import ReportGenerator
+from src.core.domain.parsed_overrides import build_effective_dto, build_prose_context
 from src.core.parser.parser import PDFParserService
-from src.core.ports import ReportDocument, TechnicalControlInfo
-from src.core.template_repository import JSONTemplateRepository
+from src.core.domain.placeholder_utils import build_placeholder_context
+from src.core.domain.report_field_registry import merge_section_prose, PROSE_TEMPLATES
+from src.core.domain.table_row_registry import INTRODUCAO_BLOCK_TITLES, SECTION_HEADING_DEFAULTS, merge_table_rows
+from src.core.domain.ports import ReportDocument, TechnicalControlInfo
+from src.core.domain.section_schema import is_navigable_section, sections_config_to_blocks
+from src.core.domain.section_numbering import build_section_number_map
+from src.core.domain.table_row_registry import _FIXED_SECTION_IDS
+from src.core.infrastructure.template_repository import JSONTemplateRepository
 
 
 class RealReportParserAdapter:
@@ -48,8 +55,13 @@ class RealReportExporterAdapter:
 
     def export(self, document: ReportDocument, output_path: Path) -> Path:
         section_anchor_map: dict[str, dict] = {}
+        effective_dto = build_effective_dto(document.raw_parsed_data, document.parsed_overrides)
+        section_prose = self._montar_section_prose(document, effective_dto)
+        placeholder_context = build_placeholder_context(effective_dto, document)
+        table_rows = self._montar_table_rows(document)
+        template_config = self._resolver_blocos_template(document)
         ReportGenerator.gerar_relatorio_enriquecido(
-            dados_parseados=document.raw_parsed_data,
+            dados_parseados=effective_dto,
             caminho_saida=str(output_path),
             cliente_projeto=document.client_project,
             componente_avaliado=document.evaluated_component,
@@ -57,8 +69,11 @@ class RealReportExporterAdapter:
             versao_relatorio=self._versao_atual(document),
             controle_tecnico=self._montar_controle_tecnico(document),
             historico_versoes=self._montar_historico_versoes(document),
-            template_config=self._resolver_blocos_template(document),
+            template_config=template_config,
             section_page_map=section_anchor_map,
+            section_prose=section_prose,
+            placeholder_context=placeholder_context,
+            table_rows=table_rows,
         )
         self._last_section_anchor_map = section_anchor_map
         document.last_export_path = output_path
@@ -70,6 +85,7 @@ class RealReportExporterAdapter:
         Workspace é sempre fiel ao que vai sair no PDF final.
         """
         blocos = self._resolver_blocos_template(document)
+        number_map = build_section_number_map(blocos)
         fotos_por_secao: dict[str, int] = {}
         for imagem in document.images:
             fotos_por_secao[imagem.section_id] = fotos_por_secao.get(imagem.section_id, 0) + 1
@@ -77,44 +93,76 @@ class RealReportExporterAdapter:
         resultado = []
         for bloco in blocos:
             tipo = bloco["tipo"]
-            if tipo in {"cabecalho", "tomografia"}:
-                # O engine só inclui tomografia se opcoes_extras pedir
-                # explicitamente — hoje o adapter não envia essa opção,
-                # então ela nunca aparece no PDF final (mantém coerência).
+            if not is_navigable_section(tipo) and not tipo.startswith("custom_"):
+                continue
+            if tipo == "tomografia":
                 continue
             quantidade_fotos = fotos_por_secao.get(tipo, 0)
             resultado.append(
                 {
                     "id": tipo,
-                    "title": SECTION_TITLES.get(tipo, tipo.title()),
+                    "title": SECTION_TITLES.get(tipo, tipo.replace("_", " ").title()),
+                    "section_number": number_map.get(tipo),
                     "image_count": quantidade_fotos,
                     "has_images": quantidade_fotos > 0,
                     "page_start": (self._last_section_anchor_map.get(tipo) or {}).get("page"),
                     "anchor_rect": (self._last_section_anchor_map.get(tipo) or None),
+                    "custom": tipo.startswith("custom_"),
                 }
             )
         return resultado
 
     # ------------------------------------------------------------- helpers
     def _resolver_blocos_template(self, document: ReportDocument) -> list[dict]:
-        """Resolve a lista de blocos ``[{"tipo", "config"}, ...]`` deste
-        documento: usa o template padrão oficial, a menos que o documento
-        aponte pra um template customizado com configuração salva.
-        """
         if document.template_id == "default" or self._template_repository is None:
-            return TEMPLATE_PADRAO_OFICIAL
+            blocos = list(TEMPLATE_PADRAO_OFICIAL)
+        else:
+            config_salva = self._template_repository.get_template_config(document.template_id)
+            blocos = (
+                list(TEMPLATE_PADRAO_OFICIAL)
+                if not config_salva
+                else sections_config_to_blocks(config_salva)
+            )
+        return self._apply_section_order(blocos, document)
 
-        config_salva = self._template_repository.get_template_config(document.template_id)
-        if not config_salva:
-            return TEMPLATE_PADRAO_OFICIAL
+    def get_export_blocks(self, document: ReportDocument) -> list[dict]:
+        return self._resolver_blocos_template(document)
 
-        secoes_ativas = [
-            (secao_id, dados["order"])
-            for secao_id, dados in config_salva.items()
-            if dados.get("enabled")
+    @staticmethod
+    def _apply_section_order(blocos: list[dict], document: ReportDocument) -> list[dict]:
+        if not document.section_order:
+            ordered = list(blocos)
+        else:
+            order_index = {sid: idx for idx, sid in enumerate(document.section_order)}
+            start = [b for b in blocos if b["tipo"] == "cabecalho"]
+            end = [b for b in blocos if b["tipo"] == "historico_versoes"]
+            middle = [b for b in blocos if b["tipo"] not in _FIXED_SECTION_IDS]
+            middle.sort(key=lambda b: order_index.get(b["tipo"], 10_000))
+            ordered = start + middle + end
+        return RealReportExporterAdapter._inject_custom_sections(ordered, document)
+
+    @staticmethod
+    def _inject_custom_sections(blocos: list[dict], document: ReportDocument) -> list[dict]:
+        if not document.custom_sections:
+            return blocos
+        deleted = set(document.deleted_section_ids)
+        custom_blocks = [
+            {"tipo": section["id"], "config": {"section_id": section["id"]}}
+            for section in document.custom_sections
+            if section.get("id") not in deleted
         ]
-        secoes_ativas.sort(key=lambda item: item[1])
-        return [{"tipo": secao_id, "config": {}} for secao_id, _ in secoes_ativas]
+        if not custom_blocks:
+            return blocos
+        result: list[dict] = []
+        inserted = False
+        for bloco in blocos:
+            if bloco["tipo"] == "historico_versoes" and not inserted:
+                result.extend(custom_blocks)
+                inserted = True
+            result.append(bloco)
+        if not inserted:
+            result.extend(custom_blocks)
+        return result
 
     def _montar_fotos_secoes(self, document: ReportDocument) -> dict:
         """Agrupa as ``ReportImage`` (já associadas a uma seção pela UI,
@@ -154,3 +202,23 @@ class RealReportExporterAdapter:
             }
             for entrada in document.version_history
         ]
+
+    def _montar_section_prose(self, document: ReportDocument, effective_dto) -> dict[str, dict]:
+        ctx = build_prose_context(effective_dto, document)
+        result: dict[str, dict] = {}
+        section_ids = set(PROSE_TEMPLATES.keys()) | set(document.section_overrides.keys()) | set(SECTION_HEADING_DEFAULTS.keys())
+        for section_id in section_ids:
+            overrides = dict(document.section_overrides.get(section_id, {}))
+            merged = merge_section_prose(section_id, overrides, ctx)
+            merged["section_title"] = overrides.get(
+                "section_title", SECTION_HEADING_DEFAULTS.get(section_id, merged.get("section_title", ""))
+            )
+            if section_id == "introducao":
+                for key, default in INTRODUCAO_BLOCK_TITLES.items():
+                    merged.setdefault(key, overrides.get(key, default))
+            result[section_id] = merged
+        return result
+
+    def _montar_table_rows(self, document: ReportDocument) -> dict[str, list]:
+        stored = document.section_overrides.get("identificacao", {}).get("table_rows")
+        return {"identificacao": merge_table_rows("identificacao", stored)}

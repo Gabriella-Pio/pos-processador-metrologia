@@ -13,27 +13,39 @@ def test_ui_module_imports() -> None:
         "src.ui.styles.tokens",
         "src.ui.styles.helpers",
         "src.ui.components.icons",
-        "src.ui.components.section_editor_panel",
-        "src.ui.dialogs.project_setup_dialog",
-        "src.ui.views.template_editor_view",
-        "src.core.section_schema",
+        "src.ui.features.workspace",
+        "src.ui.features.workspace.components",
+        "src.ui.features.workspace.components.workspace_view",
+        "src.ui.features.workspace.components.section_editor_panel",
+        "src.ui.features.workspace.components.section_edit_view",
+        "src.core.application",
+        "src.core.application.document_editing",
+        "src.ui.shared.report_editor",
+        "src.ui.shared.report_editor.sections_list_panel",
+        "src.ui.shared.report_editor.global_fields_panel",
+        "src.ui.features.workspace.components.medicoes_table_editor",
+        "src.ui.features.workspace.dialogs.custom_section_dialog",
+        "src.ui.features.workspace.dialogs.version_register_dialog",
+        "src.ui.features.home.dialogs.project_setup_dialog",
+        "src.ui.features.templates.components.template_editor_view",
+        "src.core.domain.section_schema",
         "src.ui.components.inputs",
         "src.ui.components.centered_layout",
-        "src.ui.components.hero",
+        "src.ui.features.home.components.hero",
         "src.ui.components.cards",
         "src.ui.components.header",
         "src.ui.components.tab_bar",
-        "src.ui.components.home",
-        "src.ui.components.home.files_filter_bar",
-        "src.ui.views.home.layout_utils",
-        "src.ui.views.home.recentes_panel",
-        "src.ui.views.home.templates_panel",
-        "src.ui.views.home",
-        "src.ui.views.home_view",
-        "src.ui.models.dashboard",
-        "src.ui.viewmodels.home_viewmodel",
-        "src.ui.viewmodels.navigation_controller",
-        "src.ui.dialogs.import_dialog",
+        "src.ui.features.home.components",
+        "src.ui.features.home.components.files_filter_bar",
+        "src.ui.features.home.components.layout_utils",
+        "src.ui.features.home.components.recentes_panel",
+        "src.ui.features.home.components.templates_panel",
+        "src.ui.features.home.components.home_view",
+        "src.ui.features.home.models.dashboard",
+        "src.ui.features.home.viewmodels.home_viewmodel",
+        "src.ui.features.home",
+        "src.ui.controllers.navigation_controller",
+        "src.ui.features.home.dialogs.import_dialog",
         "src.ui.dialogs.help_accessibility_dialog",
         "src.ui.accessibility",
         "src.ui.accessibility.appearance",
@@ -44,7 +56,7 @@ def test_ui_module_imports() -> None:
 
 
 def test_filter_recent_files_matches_name_and_project() -> None:
-    from src.ui.models.dashboard import RecentFileSummary, filter_recent_files
+    from src.ui.features.home.models.dashboard import RecentFileSummary, filter_recent_files
 
     files = [
         RecentFileSummary(
@@ -71,7 +83,7 @@ def test_filter_recent_files_matches_name_and_project() -> None:
 
 
 def test_apply_recent_files_filters_by_period_and_project() -> None:
-    from src.ui.models.dashboard import (
+    from src.ui.features.home.models.dashboard import (
         PERIOD_7D,
         RecentFileSummary,
         RecentFilesFilterState,
@@ -113,7 +125,7 @@ def test_apply_recent_files_filters_by_period_and_project() -> None:
 
 
 def test_filter_templates_matches_name() -> None:
-    from src.ui.models.dashboard import TemplateSummary, filter_templates
+    from src.ui.features.home.models.dashboard import TemplateSummary, filter_templates
 
     templates = [
         TemplateSummary(template_id="a", name="Relatório Padrão"),
@@ -200,8 +212,8 @@ def test_hero_command_bar_instantiates() -> None:
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    from src.ui.components.hero import HeroCommandBar
-    from src.ui.models.dashboard import RecentFileSummary
+    from src.ui.features.home.components.hero import HeroCommandBar
+    from src.ui.features.home.models.dashboard import RecentFileSummary
 
     hero = HeroCommandBar()
     assert not hero._new_file_card.isHidden()
@@ -228,7 +240,7 @@ def test_files_filter_bar_expands() -> None:
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    from src.ui.components.home import FilesFilterBar
+    from src.ui.features.home.components import FilesFilterBar
 
     bar = FilesFilterBar()
     assert bar.is_expanded() is False
@@ -241,8 +253,8 @@ def test_home_view_has_page_scroll() -> None:
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    from src.ui.viewmodels.home_viewmodel import HomeViewModel
-    from src.ui.views.home_view import HomeView
+    from src.ui.features.home.viewmodels.home_viewmodel import HomeViewModel
+    from src.ui.features.home.components.home_view import HomeView
 
     class _RepoStub:
         def list_recent_files(self):
@@ -263,8 +275,8 @@ def test_hero_uses_inline_metrics() -> None:
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    from src.ui.components.hero import HeroCommandBar
-    from src.ui.models.dashboard import RecentFileSummary
+    from src.ui.features.home.components.hero import HeroCommandBar
+    from src.ui.features.home.models.dashboard import RecentFileSummary
 
     hero = HeroCommandBar()
     assert hasattr(hero, "_inline_metrics")
@@ -288,7 +300,7 @@ def test_filter_combo_uses_themed_popup() -> None:
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    from src.ui.components.home import FilesFilterBar
+    from src.ui.features.home.components import FilesFilterBar
 
     bar = FilesFilterBar()
     combo = bar._period
@@ -302,7 +314,7 @@ def test_recentes_panel_has_density_controls() -> None:
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    from src.ui.views.home.recentes_panel import RecentesPanel
+    from src.ui.features.home.components.recentes_panel import RecentesPanel
 
     panel = RecentesPanel()
     assert hasattr(panel, "_controls")
@@ -310,7 +322,7 @@ def test_recentes_panel_has_density_controls() -> None:
 
 
 def test_empty_results_messages() -> None:
-    from src.ui.models.dashboard import empty_results_messages
+    from src.ui.features.home.models.dashboard import empty_results_messages
 
     title, subtitle = empty_results_messages("hskgag")
     assert title == "Nenhum resultado encontrado"
@@ -333,7 +345,7 @@ def test_app_header_breadcrumb() -> None:
 
 
 def test_grid_columns_for_width() -> None:
-    from src.ui.views.home.grid_utils import grid_columns_for_width
+    from src.ui.features.home.components.grid_utils import grid_columns_for_width
 
     # Margens padrão = 64px (xl * 2); card 168 + gap 16
     assert grid_columns_for_width(400) == 1
@@ -370,7 +382,7 @@ def test_workspace_panels_refresh_appearance() -> None:
         ImageManagerPanel,
         VersionHistoryPanel,
     )
-    from src.ui.components.section_editor_panel import SectionEditorPanel
+    from src.ui.features.workspace.components.section_editor_panel import SectionEditorPanel
     from src.ui.styles import PALETTE
 
     bookmarks = BookmarksPanel()
@@ -398,7 +410,7 @@ def test_home_surface_object_names() -> None:
 
     app = QApplication.instance() or QApplication([])
     from src.ui.components.centered_layout import make_centered_column
-    from src.ui.views.home.layout_utils import make_scroll
+    from src.ui.features.home.components.layout_utils import make_scroll
 
     outer, _ = make_centered_column()
     assert outer.objectName() == "HomeCenteredColumn"
@@ -475,3 +487,134 @@ def test_help_accessibility_dialog_instantiates() -> None:
 
     dialog = HelpAccessibilityDialog()
     assert dialog.windowTitle() == "Ajuda e Acessibilidade"
+
+
+def test_project_setup_dialog_single_screen() -> None:
+    pytest.importorskip("PyQt6")
+    from PyQt6.QtWidgets import QApplication, QStackedWidget, QTableWidget
+
+    app = QApplication.instance() or QApplication([])
+    from src.ui.features.home.dialogs.project_setup_dialog import ProjectSetupDialog
+
+    class _FakeParser:
+        def parse(self, pdf_path):  # noqa: ANN001
+            raise NotImplementedError
+
+    class _FakeTemplateRepo:
+        def list_templates(self) -> list[dict]:
+            return [{"id": "default", "name": "Padrão"}]
+
+    dialog = ProjectSetupDialog(_FakeParser(), _FakeTemplateRepo())
+    assert dialog.findChild(QStackedWidget) is None
+    assert dialog.findChild(QTableWidget) is None
+    assert dialog._confirm_btn.text() == "Abrir workspace"
+    assert dialog._component_field is not None
+    assert dialog._files_error.isHidden()
+
+
+def test_labeled_line_edit_shows_required_message() -> None:
+    pytest.importorskip("PyQt6")
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    from src.ui.components.inputs import LabeledLineEdit
+
+    field = LabeledLineEdit("Cliente / Projeto", required=True)
+    field.show_validation_error()
+    assert not field._error_label.isHidden()
+    assert field._error_label.text() == "Campo obrigatório."
+
+    field.set_text("Cargill")
+    assert field._error_label.isHidden()
+
+
+def test_drop_zone_accepts_drag_move() -> None:
+    pytest.importorskip("PyQt6")
+    from PyQt6.QtCore import QMimeData, Qt, QUrl
+    from PyQt6.QtGui import QDragMoveEvent
+    from PyQt6.QtWidgets import QApplication, QLabel
+
+    app = QApplication.instance() or QApplication([])
+    from src.ui.features.home.dialogs.import_dialog import DropZone
+
+    counter = QLabel()
+    zone = DropZone(counter)
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile("/tmp/sample.pdf")])
+    event = QDragMoveEvent(
+        zone.rect().center(),
+        Qt.DropAction.CopyAction,
+        mime,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    zone.dragMoveEvent(event)
+    assert event.isAccepted()
+
+
+def test_workspace_layout_editor_left_preview_right() -> None:
+    pytest.importorskip("PyQt6")
+    from PyQt6.QtWidgets import QApplication, QSplitter
+
+    app = QApplication.instance() or QApplication([])
+    from src.core.infrastructure.adapters import RealReportExporterAdapter, RealReportParserAdapter
+    from src.ui.controllers.app_state import AppState
+    from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
+    from src.ui.features.workspace.components.workspace_view import WorkspaceView
+
+    vm = WorkspaceViewModel(AppState(), RealReportParserAdapter(), RealReportExporterAdapter())
+    view = WorkspaceView(AppState(), vm)
+    splitter = view.findChild(QSplitter)
+    assert splitter is not None
+    assert splitter.widget(0).objectName() == "WorkspaceSidebar"
+    assert splitter.widget(1).objectName() == "WorkspaceEditorPanel"
+    assert splitter.widget(2).objectName() == "WorkspacePreviewPanel"
+    assert not hasattr(view, "back_requested")
+
+
+def test_inline_banner_hides_info_level() -> None:
+    pytest.importorskip("PyQt6")
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    from src.ui.components.feedback import FeedbackLevel, InlineBanner
+
+    banner = InlineBanner("", FeedbackLevel.INFO)
+    banner.sync_visibility()
+    assert banner.isHidden()
+
+    banner.set_level(FeedbackLevel.WARNING)
+    assert banner.isVisible()
+
+    banner.set_level(FeedbackLevel.DANGER)
+    assert banner.isVisible()
+
+
+def test_workspace_export_shortcut_and_hidden_banner() -> None:
+    pytest.importorskip("PyQt6")
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    from src.core.infrastructure.adapters import RealReportExporterAdapter, RealReportParserAdapter
+    from src.ui.controllers.app_state import AppState
+    from src.ui.features.workspace.components.workspace_view import WorkspaceView
+    from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
+
+    vm = WorkspaceViewModel(AppState(), RealReportParserAdapter(), RealReportExporterAdapter())
+    view = WorkspaceView(AppState(), vm)
+
+    assert view._banner.isHidden()
+    assert view._export_btn.toolTip() == "Exportar PDF (Ctrl+E)"
+    assert view._preview_menu is not None
+    assert view._save_layout_action is not None
+    assert view._template_selector is not None
+    assert view._template_combo.objectName() == "FilterCombo"
+    assert view._project_tabs_strip.objectName() == "WorkspaceProjectTabsStrip"
+    from PyQt6.QtWidgets import QSplitter
+
+    splitter = view.findChild(QSplitter)
+    assert splitter is not None
+    preview_panel = splitter.widget(2)
+    assert preview_panel.objectName() == "WorkspacePreviewPanel"
+    assert preview_panel.findChild(view._action_bar.__class__, "WorkspacePreviewContext") is not None
+    assert view._project_tabs_strip.parentWidget() is view

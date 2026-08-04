@@ -73,7 +73,12 @@ class ReportDocument:
     control_info: TechnicalControlInfo | None = None
     version_history: list[VersionEntry] = field(default_factory=list)
     template_id: str = "default"
-    # Payload opaco devolvido pelo parser real (ex.: RelatorioCalypsoDto).
+    section_overrides: dict[str, dict] = field(default_factory=dict)
+    parsed_overrides: dict[str, Any] = field(default_factory=dict)
+    custom_sections: list[dict] = field(default_factory=list)
+    deleted_section_ids: list[str] = field(default_factory=list)
+    section_order: list[str] | None = None
+    # Payload opaco devolvido pelo parser real
     # A UI nunca lê o conteúdo disto — apenas o carrega de volta para o
     # ReportExporter na hora de gerar o PDF final. Mantém a UI desacoplada
     # do formato interno usado pelo parser/gerador.
@@ -116,6 +121,33 @@ class RecentFilesRepository(ABC):
     def save(self, document: ReportDocument, file_name: str) -> str:
         """Persiste o documento e retorna o ``file_id`` gerado."""
 
+    @abstractmethod
+    def get_by_id(self, file_id: str) -> dict | None:
+        """Retorna metadados de um registro recente ou ``None``."""
+
+
+class VersionHistoryRepository(ABC):
+    """Porta de persistência do histórico de versões por documento."""
+
+    @abstractmethod
+    def list_for_document(
+        self,
+        source_pdf_path: str,
+        client_project: str,
+        componente: str,
+    ) -> list[VersionEntry]:
+        ...
+
+    @abstractmethod
+    def append(
+        self,
+        source_pdf_path: str,
+        client_project: str,
+        componente: str,
+        entry: VersionEntry,
+    ) -> None:
+        ...
+
 
 class TemplateRepository(ABC):
     """Porta de persistência de templates customizados (implementada com JSON)."""
@@ -126,4 +158,44 @@ class TemplateRepository(ABC):
 
     @abstractmethod
     def save_template(self, template_id: str, sections_config: dict) -> None:
+        ...
+
+    @abstractmethod
+    def get_template_config(self, template_id: str) -> dict:
+        """Retorna config {section_id: {enabled, order}} ou dict vazio."""
+
+    @abstractmethod
+    def update_template_name(self, template_id: str, name: str) -> None:
+        """Atualiza o nome exibido de um template."""
+
+    def get_content_defaults(self, template_id: str) -> dict:
+        """Defaults de conteúdo por seção — override em implementações JSON."""
+        return {}
+
+    def save_content_defaults(self, template_id: str, content: dict) -> None:
+        """Persiste defaults de conteúdo (implementação opcional)."""
+        pass
+
+    def save_full_template(
+        self,
+        template_id: str,
+        sections_config: dict,
+        content_defaults: dict,
+        name: str,
+    ) -> None:
+        """Salva estrutura + conteúdo + nome atomicamente."""
+        self.save_template(template_id, sections_config)
+        self.save_content_defaults(template_id, content_defaults)
+        self.update_template_name(template_id, name)
+
+
+class WorkspaceSessionPort(ABC):
+    """Porta de persistência da sessão de edição do workspace."""
+
+    @abstractmethod
+    def save(self, document: ReportDocument) -> None:
+        ...
+
+    @abstractmethod
+    def load(self, document: ReportDocument) -> bool:
         ...

@@ -1,102 +1,243 @@
 """
-Janela principal: coordena a navegação entre Dashboard e Workspace
-(via ``QStackedWidget``) e monta a árvore de injeção de dependências
-da camada de UI.
-
-Esta classe é o único ponto onde implementações concretas do ``core``
-(parser real, exportador ReportLab, repositórios SQLite/JSON) são
-conectadas às interfaces (``ports``) usadas pelos ViewModels — as views
-e ViewModels em si nunca importam essas implementações diretamente.
+Janela principal: coordena navegação Home ↔ Workspace e modais de projeto/template.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtWidgets import QMainWindow, QStackedWidget
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtWidgets import QDialog, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
-from src.core.ports import (
+from src.core.domain.ports import (
     RecentFilesRepository,
     ReportExporter,
     ReportParser,
     TemplateRepository,
+    VersionHistoryRepository,
 )
-from src.ui.dialogs.import_dialog import ImportDialog
+from src.ui.accessibility import AppearanceManager
+from src.ui.components.feedback import show_friendly_error
+from src.ui.components.header import AppHeader
+from src.ui.components.modal_overlay import ModalOverlay
+from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog
+from src.ui.features.home.dialogs.project_setup_dialog import ProjectSetupDialog
 from src.ui.styles import base_stylesheet
-from src.ui.viewmodels.app_state import AppState
-from src.ui.viewmodels.home_viewmodel import HomeViewModel
-from src.ui.viewmodels.workspace_viewmodel import WorkspaceViewModel
-from src.ui.views.home_view import HomeView
-from src.ui.views.template_view import TemplateView
-from src.ui.views.workspace_view import WorkspaceView
+from src.ui.controllers.app_state import AppState
+from src.ui.features.home.viewmodels.home_viewmodel import HomeViewModel
+from src.ui.controllers.navigation_controller import NavigationController
+from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
+from src.ui.features.home.components.home_view import HomeView
+from src.ui.features.templates.components.template_editor_view import TemplateEditorView
+from src.ui.features.workspace.components.workspace_view import WorkspaceView
 
 
 class MainWindow(QMainWindow):
-    """Janela principal da aplicação.
-
-    Dependências concretas do ``core`` (parser, exportador, repositórios)
-    são recebidas prontas via injeção — este arquivo apenas as conecta
-    às portas esperadas pelos ViewModels, sem conhecer os detalhes de
-    parsing de PDF ou geração via ReportLab.
-    """
-
     def __init__(
         self,
         report_parser: ReportParser,
         report_exporter: ReportExporter,
         recent_files_repo: RecentFilesRepository,
         template_repo: TemplateRepository,
+        version_history_repo: VersionHistoryRepository | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Pós-processamento de Relatórios de Metrologia — SENAI × ZEISS")
-        self.resize(1280, 800)
+        self.setMinimumSize(960, 600)
         self.setStyleSheet(base_stylesheet())
 
+        self._parser = report_parser
         self._template_repo = template_repo
         self._app_state = AppState()
 
         self._home_vm = HomeViewModel(recent_files_repo, template_repo)
         self._workspace_vm = WorkspaceViewModel(
-            self._app_state, report_parser, report_exporter, recent_files_repo
+            self._app_state,
+            report_parser,
+            report_exporter,
+            recent_files_repo,
+            version_history_repo,
+            template_repo,
         )
+        self._nav_controller = NavigationController()
+        self._project_setup_dialog: ProjectSetupDialog | None = None
+        self._template_editor_dialog: TemplateEditorView | None = None
+
+        central_widget = QWidget()
+        central_widget.setObjectName("MainCentral")
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        self._header = AppHeader(parent=self)
+        main_layout.addWidget(self._header)
 
         self._stack = QStackedWidget()
-        self.setCentralWidget(self._stack)
-
+        self._stack.setObjectName("MainViewStack")
         self._home_view = HomeView(self._home_vm)
         self._workspace_view = WorkspaceView(self._app_state, self._workspace_vm)
-
         self._stack.addWidget(self._home_view)
         self._stack.addWidget(self._workspace_view)
+        main_layout.addWidget(self._stack)
+        self.setCentralWidget(central_widget)
 
-        self._connect_navigation()
+        self._connect_signals()
+        self._setup_shortcuts()
+        AppearanceManager.instance().register_refresh(self._refresh_appearance)
+        self._nav_controller.navigate_to(0)
 
-    def _connect_navigation(self) -> None:
-        self._home_view.new_document_requested.connect(self._open_import_flow)
-        self._home_view.template_manager_requested.connect(self._open_template_manager)
+    def _connect_signals(self) -> None:
+        self._header.back_requested.connect(self._nav_controller.back)
+        self._header.forward_requested.connect(self._nav_controller.forward)
+        self._header.home_requested.connect(self._go_home)
+        self._header.help_requested.connect(self._open_help)
+        self._nav_controller.changed.connect(self._on_navigation_changed)
+
+        self._home_view.new_document_requested.connect(self._open_project_setup)
+        self._home_view.template_editor_requested.connect(self._open_template_editor)
         self._home_view.recent_file_opened.connect(self._open_recent_file)
 
-    # ------------------------------------------------------------ Rotas
-    def _open_import_flow(self) -> None:
-        dialog = ImportDialog(self)
-        if dialog.exec():
-            result = dialog.get_result()
-            pdf_paths: list[Path] = result["pdf_paths"]
-            if not pdf_paths:
-                return
-            # Processamento em lote: a primeira peça abre imediatamente
-            # no Workspace; as demais seguem a mesma chamada em sequência
-            # (poderia evoluir para uma fila com barra de progresso).
-            first_pdf = pdf_paths[0]
-            self._workspace_vm.load_from_pdf(
-                first_pdf, result["client_project"], result["evaluated_component"]
-            )
-            self._stack.setCurrentWidget(self._workspace_view)
+    def _setup_shortcuts(self) -> None:
+        back = QShortcut(QKeySequence("Alt+Left"), self)
+        back.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        back.activated.connect(self._nav_controller.back)
 
-    def _open_template_manager(self) -> None:
-        dialog = TemplateView(self._template_repo, parent=self)
-        dialog.exec()
+        forward = QShortcut(QKeySequence("Alt+Right"), self)
+        forward.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        forward.activated.connect(self._nav_controller.forward)
+
+        fullscreen = QShortcut(QKeySequence("F11"), self)
+        fullscreen.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        fullscreen.activated.connect(self._toggle_fullscreen)
+
+        help_shortcut = QShortcut(QKeySequence("F1"), self)
+        help_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        help_shortcut.activated.connect(self._open_help)
+
+        new_report = QShortcut(QKeySequence("Ctrl+N"), self)
+        new_report.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        new_report.activated.connect(self._open_project_setup)
+
+        new_template = QShortcut(QKeySequence("Ctrl+T"), self)
+        new_template.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        new_template.activated.connect(lambda: self._open_template_editor("new"))
+
+        focus_search = QShortcut(QKeySequence("Ctrl+K"), self)
+        focus_search.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        focus_search.activated.connect(self._home_view.focus_search)
+
+        clear_search = QShortcut(QKeySequence("Escape"), self)
+        clear_search.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        clear_search.activated.connect(self._home_view.clear_search_and_filters)
+
+    def _open_help(self) -> None:
+        HelpAccessibilityDialog(self).exec()
+
+    def _refresh_appearance(self) -> None:
+        self.setStyleSheet(base_stylesheet())
+        self._header.refresh_appearance()
+        self._home_view.refresh_appearance()
+        self._workspace_view.refresh_appearance()
+
+    def _toggle_fullscreen(self) -> None:
+        if self.isFullScreen():
+            self.showMaximized()
+        else:
+            self.showFullScreen()
+
+    def _go_home(self) -> None:
+        self._nav_controller.navigate_to(0)
+
+    def _on_navigation_changed(self, index: int, can_back: bool, can_forward: bool) -> None:
+        self._stack.setCurrentIndex(index)
+        self._header.set_navigation_state(can_back, can_forward)
+
+        if index == 0:
+            self._header.set_breadcrumb([("Início", None)])
+            self._header.set_badge_text("Pós-processador de Relatórios")
+            self._home_vm.load_dashboard()
+        elif index == 1:
+            doc = self._app_state.active_document
+            comp_name = doc.evaluated_component if doc else "Workspace de Análise"
+            session = self._app_state.project_session
+            project_name = session.client_project if session else comp_name
+
+            self._header.set_breadcrumb([
+                ("Início", self._go_home),
+                ("Workspace", None),
+                (comp_name, None),
+            ])
+            self._header.set_badge_text(project_name)
+
+    def _open_project_setup(self) -> None:
+        if self._project_setup_dialog is not None:
+            self._project_setup_dialog.raise_()
+            self._project_setup_dialog.activateWindow()
+            return
+
+        dialog = ProjectSetupDialog(self._parser, self._template_repo, parent=self)
+        host = self.centralWidget() or self
+        overlay = ModalOverlay(host, dialog)
+        dialog.set_overlay(overlay)
+
+        def on_finished(result: int) -> None:
+            overlay.deleteLater()
+            self._project_setup_dialog = None
+            if result != QDialog.DialogCode.Accepted:
+                return
+            data = dialog.get_result()
+            entries = data["pdf_entries"]
+            if not entries:
+                return
+            self._workspace_vm.load_project(
+                data["client_project"],
+                entries,
+                template_id=data["template_id"],
+            )
+            self._nav_controller.navigate_to(1)
+
+        self._project_setup_dialog = dialog
+        overlay.show()
+        overlay.raise_()
+        dialog.finished.connect(on_finished)
+        dialog.setWindowModality(Qt.WindowModality.NonModal)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def _open_template_editor(self, template_id: str) -> None:
+        if self._template_editor_dialog is not None:
+            self._template_editor_dialog.raise_()
+            self._template_editor_dialog.activateWindow()
+            return
+
+        dialog = TemplateEditorView(self._template_repo, template_id=template_id, parent=self)
+        dialog.saved.connect(lambda _tid: self._home_vm.load_dashboard())
+
+        host = self.centralWidget() or self
+        overlay = ModalOverlay(host, dialog)
+
+        def on_finished(_result: int) -> None:
+            overlay.deleteLater()
+            self._template_editor_dialog = None
+
+        self._template_editor_dialog = dialog
+        overlay.show()
+        overlay.raise_()
+        dialog.finished.connect(on_finished)
+        dialog.setWindowModality(Qt.WindowModality.NonModal)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _open_recent_file(self, file_id: str) -> None:
-        # A resolução do file_id -> ReportDocument fica a cargo do
-        # RecentFilesRepository/parser real, fora do escopo desta UI.
-        self._stack.setCurrentWidget(self._workspace_view)
+        try:
+            self._workspace_vm.load_from_recent(file_id)
+            self._nav_controller.navigate_to(1)
+        except Exception as exc:
+            show_friendly_error(
+                self,
+                "Erro ao abrir arquivo recente",
+                "Não foi possível carregar os dados históricos deste relatório.",
+                str(exc),
+            )

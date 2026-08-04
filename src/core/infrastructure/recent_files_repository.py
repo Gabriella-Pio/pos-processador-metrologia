@@ -9,8 +9,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from src.core.database import DatabaseManager
-from src.core.ports import RecentFilesRepository, ReportDocument
+from src.core.infrastructure.database import DatabaseManager
+from src.core.domain.ports import RecentFilesRepository, ReportDocument
 
 
 class SQLiteRecentFilesAdapter(RecentFilesRepository):
@@ -33,6 +33,7 @@ class SQLiteRecentFilesAdapter(RecentFilesRepository):
                 "id": str(id_),
                 "file_name": nome_arquivo or Path(caminho).name,
                 "client_project": cliente_projeto or componente,
+                "evaluated_component": componente or "",
                 "version": versao,
                 "updated_at": self._parse_data(data_hora),
             })
@@ -64,6 +65,26 @@ class SQLiteRecentFilesAdapter(RecentFilesRepository):
             caminho=str(output_path),
         )
         return str(novo_id)
+
+    def get_by_id(self, file_id: str) -> dict | None:
+        try:
+            doc_id = int(file_id)
+        except (TypeError, ValueError):
+            return None
+        linha = self._db.buscar_por_id(doc_id)
+        if linha is None:
+            return None
+        id_, nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho = linha
+        return {
+            "id": str(id_),
+            "file_name": nome_arquivo or Path(caminho).name,
+            "client_project": cliente_projeto or componente,
+            "evaluated_component": componente,
+            "version": versao,
+            "updated_at": self._parse_data(data_hora),
+            "file_path": caminho,
+            "responsible": responsavel,
+        }
 
     def _parse_data(self, data_hora: str) -> datetime:
         try:

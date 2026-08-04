@@ -24,6 +24,10 @@ def icon_file_upload() -> QIcon:
     return app_icon("file-upload", color=PALETTE.senai_orange)
 
 
+def icon_export() -> QIcon:
+    return app_icon("file-export", color=PALETTE.text_on_primary, scale=0.9)
+
+
 def icon_filter() -> QIcon:
     return app_icon("sliders-h", color=PALETTE.text_muted)
 
@@ -83,3 +87,43 @@ def icon_empty_results() -> QIcon:
 
 def icon_empty_file() -> QIcon:
     return app_icon("file-alt", color=PALETTE.text_muted, scale=1.0)
+
+
+def icon_image() -> QIcon:
+    return app_icon("image", color=PALETTE.text_muted, scale=0.9)
+
+
+def icon_chart() -> QIcon:
+    return app_icon("chart-bar", color=PALETTE.text_muted, scale=0.9)
+
+
+def icon_table() -> QIcon:
+    return app_icon("table", color=PALETTE.text_muted, scale=0.9)
+
+
+def icon_edit() -> QIcon:
+    return app_icon("pen", color=PALETTE.senai_blue_light, scale=0.85)
+
+
+def icon_chevron_down() -> QIcon:
+    return app_icon("chevron-down", color=PALETTE.text_muted, scale=0.85)
+
+
+def icon_trash() -> QIcon:
+    return app_icon("trash-alt", color=PALETTE.danger, scale=0.85)
+
+
+def icon_grip() -> QIcon:
+    return app_icon("grip-vertical", color=PALETTE.text_muted, scale=0.8)
+
+
+def icon_close() -> QIcon:
+    return app_icon("times", color=PALETTE.text_muted, scale=0.9)
+
+
+def icon_ellipsis() -> QIcon:
+    return app_icon("ellipsis-h", color=PALETTE.text_muted, scale=0.9)
+
+
+def icon_chevron_up() -> QIcon:
+    return app_icon("chevron-up", color=PALETTE.text_muted, scale=0.85)

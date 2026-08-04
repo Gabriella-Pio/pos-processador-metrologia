@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.ui.models.dashboard import RecentFileSummary, TemplateSummary
+from src.ui.features.home.models.dashboard import RecentFileSummary, TemplateSummary
 from src.ui.styles import (
     PALETTE,
     SPACING,
