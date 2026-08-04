@@ -188,18 +188,50 @@ MEDICAO_COLUMNS: tuple[tuple[str, str], ...] = (
 )
 
 
-def get_edit_fields(section_id: str) -> tuple[SectionFieldDef, ...]:
+_MEDIA_KIND_LABELS: dict[str, str] = {
+    "photos": "Fotografias",
+    "graphics": "Gráficos",
+    "tables": "Tabela",
+}
+
+
+def get_edit_fields(section_id: str, *, defaults_mode: bool = False) -> tuple[SectionFieldDef, ...]:
     if section_id.startswith("custom_"):
         return _CUSTOM_DEFAULT_FIELDS
-    return _SECTION_FIELDS.get(
+    fields = _SECTION_FIELDS.get(
         section_id, (SectionFieldDef("intro", "Texto introdutório", "textarea"),)
     )
+    if not defaults_mode:
+        return fields
+    editable: list[SectionFieldDef] = []
+    for field in fields:
+        if field.editable or (defaults_mode and section_id == "interpretacao" and field.key == "intro"):
+            editable.append(
+                field if field.editable else SectionFieldDef(field.key, field.label, field.field_type, editable=True)
+            )
+    return tuple(editable)
 
 
-def get_media_blocks(section_id: str) -> tuple[SectionMediaDef, ...]:
+def get_media_blocks(
+    section_id: str,
+    media_kinds: list[str] | None = None,
+) -> tuple[SectionMediaDef, ...]:
+    if media_kinds is not None:
+        return tuple(
+            SectionMediaDef(kind, _MEDIA_KIND_LABELS[kind])
+            for kind in media_kinds
+            if kind in _MEDIA_KIND_LABELS
+        )
     if section_id.startswith("custom_"):
         return _CUSTOM_DEFAULT_MEDIA
     return _SECTION_MEDIA.get(section_id, ())
+
+
+def effective_media_kinds(section_id: str, overrides: dict | None = None) -> list[str]:
+    stored = (overrides or {}).get("media_kinds")
+    if isinstance(stored, list):
+        return [k for k in stored if k in _MEDIA_KIND_LABELS]
+    return [block.kind for block in get_media_blocks(section_id)]
 
 
 def get_global_fields_for_section(section_id: str) -> tuple[GlobalFieldDef, ...]:
@@ -217,7 +249,16 @@ def merge_section_prose(
     context: dict[str, str] | None = None,
 ) -> dict[str, str]:
     defaults = default_prose_values(section_id, context)
-    merged = {**defaults, **{k: v for k, v in overrides.items() if v is not None and not k.startswith("title_") and k != "section_title" and k != "table_rows"}}
+    merged = {
+        **defaults,
+        **{
+            k: v
+            for k, v in overrides.items()
+            if v is not None
+            and not k.startswith("title_")
+            and k not in {"section_title", "table_rows", "media_kinds"}
+        },
+    }
     return merged
 
 

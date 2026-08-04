@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -17,11 +18,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.core.domain.ports import ReportImage
 from src.core.domain.report_field_registry import (
     INTRODUCAO_CONTENT_BLOCKS,
     INTRODUCAO_HEADER_ONLY_BLOCKS,
+    effective_media_kinds,
+    get_edit_fields,
+    get_media_blocks,
 )
+from src.core.domain.ports import ReportImage
 from src.core.domain.table_row_registry import INTRODUCAO_BLOCK_TITLES, SECTION_HEADING_DEFAULTS
 from src.ui.components.buttons import IconButton, SecondaryButton
 from src.ui.components.icons import icon_chart, icon_close, icon_edit, icon_help, icon_image, icon_table
@@ -34,8 +38,6 @@ from src.ui.features.workspace.components.edit_help import build_help_text
 from src.ui.features.workspace.components.medicoes_table_editor import MedicoesTableEditor
 from src.ui.features.workspace.components.section_field_schema import (
     default_field_values,
-    get_edit_fields,
-    get_media_blocks,
 )
 
 
@@ -49,6 +51,7 @@ class _IntroBlockCard(QFrame):
         body_key: str | None,
         title_value: str,
         body_value: str,
+        show_restore: bool = True,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -61,14 +64,15 @@ class _IntroBlockCard(QFrame):
 
         header = QHBoxLayout()
         header.addWidget(title_lbl, stretch=1)
-        restore = QLabel('<a href="restore">Restaurar</a>')
-        restore.setObjectName("FieldRestoreLink")
-        restore.setTextFormat(Qt.TextFormat.RichText)
-        restore.setOpenExternalLinks(False)
-        restore.linkActivated.connect(
-            lambda _href: self.restore_requested.emit(self.title_key, self.body_key or "")
-        )
-        header.addWidget(restore, alignment=Qt.AlignmentFlag.AlignRight)
+        if show_restore:
+            restore = QLabel('<a href="restore">Restaurar</a>')
+            restore.setObjectName("FieldRestoreLink")
+            restore.setTextFormat(Qt.TextFormat.RichText)
+            restore.setOpenExternalLinks(False)
+            restore.linkActivated.connect(
+                lambda _href: self.restore_requested.emit(self.title_key, self.body_key or "")
+            )
+            header.addWidget(restore, alignment=Qt.AlignmentFlag.AlignRight)
 
         self._title_edit = PlaceholderTextEdit(multiline=False)
         self._title_edit.set_text(title_value)
@@ -91,6 +95,80 @@ class _IntroBlockCard(QFrame):
             self._body_edit.text_changed.connect(on_body)
 
 
+class _TemplateLayoutPanel(QFrame):
+    """Configuração de layout — fotos, gráficos e tabelas no template."""
+
+    kinds_changed = pyqtSignal(list)
+
+    _OPTIONS = (
+        ("photos", "Fotografias", "Reserva espaço para imagens nesta seção do PDF."),
+        ("graphics", "Gráficos", "Reserva espaço para gráficos analíticos."),
+        ("tables", "Tabela", "Inclui bloco de tabela nesta seção."),
+    )
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._checkboxes: dict[str, QCheckBox] = {}
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
+        layout.setSpacing(SPACING.sm)
+
+        hint = QLabel(
+            "Marque os blocos que esta seção deve reservar no relatório. "
+            "No workspace, o usuário preenche fotos, gráficos e dados reais."
+        )
+        hint.setWordWrap(True)
+        hint.setObjectName("SidebarHint")
+        hint.setStyleSheet(caption_style())
+        layout.addWidget(hint)
+
+        for kind, label, tooltip in self._OPTIONS:
+            card = QFrame()
+            card.setObjectName("GlobalFieldCard")
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, SPACING.sm)
+            card_layout.setSpacing(SPACING.xs)
+            cb = QCheckBox(label)
+            cb.setToolTip(tooltip)
+            cb.stateChanged.connect(self._emit_kinds)
+            card_layout.addWidget(cb)
+            self._checkboxes[kind] = cb
+            layout.addWidget(card)
+
+        self._tables_host = QWidget()
+        self._tables_host_layout = QVBoxLayout(self._tables_host)
+        self._tables_host_layout.setContentsMargins(0, 0, 0, 0)
+        self._tables_host_layout.setSpacing(SPACING.sm)
+        self._tables_host.setVisible(False)
+        layout.addWidget(self._tables_host)
+        layout.addStretch(1)
+
+    def set_table_widget(self, widget: QWidget | None) -> None:
+        while self._tables_host_layout.count():
+            item = self._tables_host_layout.takeAt(0)
+            child = item.widget()
+            if child is not None:
+                child.setParent(None)
+        if widget is not None:
+            self._tables_host_layout.addWidget(widget)
+            self._tables_host.setVisible(True)
+        else:
+            self._tables_host.setVisible(False)
+
+    def set_kinds(self, kinds: list[str]) -> None:
+        active = set(kinds)
+        for kind, cb in self._checkboxes.items():
+            cb.blockSignals(True)
+            cb.setChecked(kind in active)
+            cb.blockSignals(False)
+
+    def current_kinds(self) -> list[str]:
+        return [kind for kind, cb in self._checkboxes.items() if cb.isChecked()]
+
+    def _emit_kinds(self, *_args) -> None:
+        self.kinds_changed.emit(self.current_kinds())
+
+
 class SectionEditView(QFrame):
     back_requested = pyqtSignal()
     section_field_changed = pyqtSignal(str, str, str)
@@ -104,12 +182,15 @@ class SectionEditView(QFrame):
     tool_selected = pyqtSignal(str)
     delete_requested = pyqtSignal(str)
     section_restore_requested = pyqtSignal(str)
+    media_kinds_changed = pyqtSignal(str, list)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("WorkspaceEditorView")
         self._section_id: str | None = None
         self._loading = False
+        self._defaults_mode = False
+        self._section_overrides: dict = {}
         self._field_widgets: dict[str, PlaceholderTextEdit | QLineEdit] = {}
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -188,6 +269,9 @@ class SectionEditView(QFrame):
         self._tables_layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
         self._tables_layout.setSpacing(SPACING.sm)
 
+        self._layout_panel = _TemplateLayoutPanel()
+        self._layout_panel.kinds_changed.connect(self._on_template_media_kinds_changed)
+
         self._delete_btn = SecondaryButton("Excluir seção")
         self._delete_btn.clicked.connect(self._on_delete)
         self._restore_section_btn = SecondaryButton("Restaurar seção inteira")
@@ -220,6 +304,12 @@ class SectionEditView(QFrame):
         outer.addWidget(header)
         outer.addWidget(self._tabs, stretch=1)
 
+    def set_defaults_mode(self, enabled: bool) -> None:
+        self._defaults_mode = enabled
+        self._delete_btn.setVisible(not enabled)
+        self._restore_section_btn.setVisible(not enabled)
+        self._close_btn.setToolTip("Fechar edição" if not enabled else "Voltar ao sumário")
+
     def reset_breadcrumb(self) -> None:
         self._header_title.setText("EDITAR SEÇÃO")
 
@@ -249,9 +339,10 @@ class SectionEditView(QFrame):
         self._loading = True
         scroll_pos = self._content_scroll.verticalScrollBar().value()
         self._section_id = section_id
+        self._section_overrides = dict(overrides)
         is_custom = section.get("custom", False) or section_id.startswith("custom_")
-        self._delete_btn.setVisible(is_custom)
-        self._restore_section_btn.setVisible(not is_custom)
+        self._delete_btn.setVisible(is_custom and not self._defaults_mode)
+        self._restore_section_btn.setVisible(not is_custom and not self._defaults_mode)
 
         self._rebuild_section_title(section_id, overrides)
         self._rebuild_intro_blocks(section_id, overrides)
@@ -277,6 +368,7 @@ class SectionEditView(QFrame):
         self._loading = True
         scroll_pos = self._content_scroll.verticalScrollBar().value()
         section_id = self._section_id
+        self._section_overrides = dict(overrides)
 
         default = SECTION_HEADING_DEFAULTS.get(section_id, overrides.get("title", section_id))
         self._section_title_edit.set_text(overrides.get("section_title", default))
@@ -348,8 +440,10 @@ class SectionEditView(QFrame):
                 block.body_key,
                 overrides.get(block.title_key, title_default),
                 overrides.get(block.body_key, body_default) if block.body_key else "",
+                show_restore=not self._defaults_mode,
             )
-            card.restore_requested.connect(self._on_block_restore)
+            if not self._defaults_mode:
+                card.restore_requested.connect(self._on_block_restore)
             body_key = block.body_key
             card.connect_signals(
                 lambda text, k=block.title_key: self._on_field_changed(k, text),
@@ -376,7 +470,9 @@ class SectionEditView(QFrame):
             self._fields_host.setVisible(False)
             return
 
-        fields = [f for f in get_edit_fields(section_id) if f.editable]
+        fields = list(get_edit_fields(section_id, defaults_mode=self._defaults_mode))
+        if not self._defaults_mode:
+            fields = [f for f in fields if f.editable]
         if not fields:
             self._fields_host.setVisible(False)
             return
@@ -398,15 +494,16 @@ class SectionEditView(QFrame):
             label = QLabel(field_def.label)
             label.setObjectName("GlobalFieldLabel")
             header.addWidget(label, stretch=1)
-            restore = QLabel('<a href="restore">Restaurar</a>')
-            restore.setObjectName("FieldRestoreLink")
-            restore.setTextFormat(Qt.TextFormat.RichText)
-            restore.setOpenExternalLinks(False)
-            fkey = field_def.key
-            restore.linkActivated.connect(
-                lambda _href, sid=section_id, k=fkey: self.section_field_restore_requested.emit(sid, k)
-            )
-            header.addWidget(restore, alignment=Qt.AlignmentFlag.AlignRight)
+            if not self._defaults_mode:
+                restore = QLabel('<a href="restore">Restaurar</a>')
+                restore.setObjectName("FieldRestoreLink")
+                restore.setTextFormat(Qt.TextFormat.RichText)
+                restore.setOpenExternalLinks(False)
+                fkey = field_def.key
+                restore.linkActivated.connect(
+                    lambda _href, sid=section_id, k=fkey: self.section_field_restore_requested.emit(sid, k)
+                )
+                header.addWidget(restore, alignment=Qt.AlignmentFlag.AlignRight)
             row_layout.addLayout(header)
 
             value = overrides.get(field_def.key, defaults.get(field_def.key, ""))
@@ -441,8 +538,25 @@ class SectionEditView(QFrame):
         self._tabs.addTab(self._content_scroll, "Conteúdo")
         self._tabs.setTabIcon(0, icon_edit())
 
+        if self._defaults_mode:
+            self._layout_panel.set_kinds(
+                effective_media_kinds(section_id, self._section_overrides)
+            )
+            if section_id == "identificacao" and "tables" in self._layout_panel.current_kinds():
+                self._layout_panel.set_table_widget(self._table_rows_editor)
+            else:
+                self._layout_panel.set_table_widget(None)
+            layout_index = self._tabs.addTab(self._layout_panel, "Layout")
+            self._tabs.setTabIcon(layout_index, icon_image())
+            self._tabs.tabBar().setVisible(True)
+            return
+
+        media_blocks = get_media_blocks(
+            section_id,
+            effective_media_kinds(section_id, self._section_overrides),
+        )
         tab_defs: list[tuple[str, str, QWidget]] = []
-        for media in get_media_blocks(section_id):
+        for media in media_blocks:
             if media.kind == "photos":
                 tab_defs.append(("photos", "Fotografias", self._photos_page))
             elif media.kind == "graphics":
@@ -469,9 +583,33 @@ class SectionEditView(QFrame):
             index = self._tabs.addTab(page, labels.get(kind, kind))
             self._tabs.setTabIcon(index, icons[kind]())
 
-        has_photos = any(b.kind == "photos" for b in get_media_blocks(section_id))
+        has_photos = any(b.kind == "photos" for b in media_blocks)
         self._annotation_toolbar.setVisible(has_photos)
         self._tabs.tabBar().setVisible(self._tabs.count() > 1)
+
+    def _current_overrides(self) -> dict:
+        if self._section_id is None:
+            return {}
+        values: dict = {}
+        if self._section_id:
+            default = SECTION_HEADING_DEFAULTS.get(self._section_id, "")
+            values["section_title"] = self._section_title_edit.get_text()
+        for key, widget in self._field_widgets.items():
+            if isinstance(widget, PlaceholderTextEdit):
+                values[key] = widget.get_text()
+            elif isinstance(widget, QLineEdit):
+                values[key] = widget.text()
+        return values
+
+    def _on_template_media_kinds_changed(self, kinds: list[str]) -> None:
+        if self._section_id is None:
+            return
+        if self._section_id == "identificacao":
+            if "tables" in kinds:
+                self._layout_panel.set_table_widget(self._table_rows_editor)
+            else:
+                self._layout_panel.set_table_widget(None)
+        self.media_kinds_changed.emit(self._section_id, kinds)
 
     def _on_insert_photo(self) -> None:
         from PyQt6.QtWidgets import QFileDialog

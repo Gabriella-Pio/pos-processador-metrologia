@@ -4,6 +4,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QFontMetrics
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -25,6 +26,148 @@ _PROTECTED_IDS = frozenset(s.id for s in SECTION_DEFINITIONS)
 _ROW_HEIGHT = 52
 _ACCENT_WIDTH = 3
 _ACTIONS_WIDTH = 76
+
+
+_PROTECTED_TEMPLATE_IDS = frozenset({"cabecalho", "historico_versoes"})
+
+
+class TemplateSectionRow(QFrame):
+    """Linha do sumário no modo template — toggle enabled + seleção para editar."""
+
+    click_requested = pyqtSignal(str)
+    enabled_changed = pyqtSignal(str, bool)
+    delete_requested = pyqtSignal(str)
+
+    def __init__(self, section: dict, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("SectionSummaryRow")
+        self.setMinimumWidth(0)
+        self.section_id = section["id"]
+        self._full_title = section.get("display_title") or section.get("title", section["id"])
+        self._protected = bool(section.get("protected")) or self.section_id in _PROTECTED_TEMPLATE_IDS
+        self._is_custom = bool(section.get("custom")) or (
+            self.section_id.startswith("custom_") and self.section_id not in _PROTECTED_TEMPLATE_IDS
+        )
+        enabled = section.get("enabled", True)
+
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, SPACING.sm, 0)
+        root.setSpacing(0)
+
+        self._accent = QFrame()
+        self._accent.setObjectName("SectionSummaryAccent")
+        self._accent.setFixedWidth(_ACCENT_WIDTH)
+
+        body = QWidget()
+        body.setMinimumWidth(0)
+        body.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        body_layout = QHBoxLayout(body)
+        body_layout.setContentsMargins(SPACING.sm, SPACING.xs, SPACING.xs, SPACING.xs)
+        body_layout.setSpacing(SPACING.sm)
+
+        self._enabled_cb = QCheckBox()
+        self._enabled_cb.setObjectName("SectionSummaryEnabled")
+        self._enabled_cb.setChecked(enabled)
+        self._enabled_cb.setEnabled(not self._protected)
+        self._enabled_cb.setToolTip(
+            "Seção fixa do relatório" if self._protected else "Incluir seção no template"
+        )
+        self._enabled_cb.stateChanged.connect(self._on_enabled_changed)
+
+        self._title_label = QLabel(self._full_title)
+        self._title_label.setToolTip(self._full_title)
+        self._title_label.setObjectName("SectionSummaryTitle")
+        self._title_label.setWordWrap(False)
+        self._title_label.setMinimumWidth(0)
+        self._title_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+        text_col = QWidget()
+        text_col.setMinimumWidth(0)
+        text_col.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        text_layout = QVBoxLayout(text_col)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(SPACING.xs)
+        title_row.addWidget(self._title_label, stretch=1)
+        text_layout.addLayout(title_row)
+        if not enabled and not self._protected:
+            meta = QLabel("Desativada")
+            meta.setObjectName("SectionSummaryMeta")
+            text_layout.addWidget(meta)
+
+        body_layout.addWidget(self._enabled_cb)
+        body_layout.addWidget(text_col, stretch=1)
+
+        if self._is_custom:
+            self._delete_btn = QToolButton()
+            self._delete_btn.setObjectName("SectionSummaryActionDanger")
+            self._delete_btn.setAutoRaise(True)
+            self._delete_btn.setFixedSize(28, 28)
+            self._delete_btn.setIcon(icon_trash())
+            self._delete_btn.setToolTip("Excluir seção personalizada")
+            self._delete_btn.clicked.connect(lambda: self.delete_requested.emit(self.section_id))
+            body_layout.addWidget(self._delete_btn)
+
+        root.addWidget(self._accent)
+        root.addWidget(body, stretch=1)
+
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_active(False)
+        self._elide_title()
+
+    def _on_enabled_changed(self, _state: int) -> None:
+        self.enabled_changed.emit(self.section_id, self._enabled_cb.isChecked())
+
+    def set_enabled(self, enabled: bool) -> None:
+        self._enabled_cb.blockSignals(True)
+        self._enabled_cb.setChecked(enabled)
+        self._enabled_cb.blockSignals(False)
+
+    def _elide_title(self) -> None:
+        checkbox_w = 28
+        margins = SPACING.sm * 3 + _ACCENT_WIDTH + checkbox_w
+        available = max(48, self.width() - margins)
+        metrics = QFontMetrics(self._title_label.font())
+        self._title_label.setText(
+            metrics.elidedText(self._full_title, Qt.TextElideMode.ElideRight, available)
+        )
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._elide_title()
+
+    def set_active(self, active: bool) -> None:
+        self._apply_active(active)
+
+    def _apply_active(self, active: bool) -> None:
+        state = "true" if active else "false"
+        self.setProperty("active", state)
+        self._accent.setProperty("active", state)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self._accent.style().unpolish(self._accent)
+        self._accent.style().polish(self._accent)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            child = self.childAt(event.position().toPoint())
+            widget = child
+            while widget is not None and widget is not self:
+                if isinstance(widget, QCheckBox):
+                    super().mousePressEvent(event)
+                    return
+                if isinstance(widget, QToolButton):
+                    super().mousePressEvent(event)
+                    return
+                widget = widget.parentWidget()
+            self.click_requested.emit(self.section_id)
+        super().mousePressEvent(event)
+
+    def sizeHint(self) -> QSize:
+        return QSize(super().sizeHint().width(), _ROW_HEIGHT)
 
 
 class SectionSummaryRow(QFrame):
@@ -227,13 +370,15 @@ class SectionsListPanel(QFrame):
     section_navigated = pyqtSignal(str)
     section_edit_requested = pyqtSignal(str)
     section_delete_requested = pyqtSignal(str)
+    section_enabled_changed = pyqtSignal(str, bool)
     sections_reordered = pyqtSignal(list)
     add_custom_section_requested = pyqtSignal()
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, mode: str = "workspace", parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("SectionSummaryPanel")
         self.setMinimumWidth(0)
+        self._mode = mode
         self._sections: list[dict] = []
         self._images_by_section: dict[str, list[ReportImage]] = {}
         self._active_section_id: str | None = None
@@ -245,7 +390,11 @@ class SectionsListPanel(QFrame):
         self._click_timer.setInterval(280)
         self._click_timer.timeout.connect(self._emit_single_click)
 
-        self._hint = QLabel("Clique para ir ao preview · duplo-clique para editar")
+        self._hint = QLabel(
+            "Marque as seções e clique para editar defaults"
+            if self._mode == "template"
+            else "Clique para ir ao preview · duplo-clique para editar"
+        )
         self._hint.setObjectName("SidebarHint")
         self._hint.setWordWrap(True)
 
@@ -260,6 +409,8 @@ class SectionsListPanel(QFrame):
 
         self._add_row = _AddSectionRow()
         self._add_row.clicked.connect(self.add_custom_section_requested.emit)
+        if self._mode == "template":
+            self._add_row.setToolTip("Adicionar seção personalizada ao template")
 
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
@@ -292,18 +443,26 @@ class SectionsListPanel(QFrame):
     def render_sections(self, sections: list[dict]) -> None:
         self._sections = sections
         count = len(sections)
-        self._hint.setText(
-            f"{count} seção{'ões' if count != 1 else ''} · "
-            "clique para ir ao preview · duplo-clique para editar"
-        )
+        if self._mode == "template":
+            enabled_count = sum(1 for s in sections if s.get("enabled", True))
+            self._hint.setText(
+                f"{enabled_count} de {count} seção{'ões' if count != 1 else ''} ativas · "
+                "marque e clique para editar defaults"
+            )
+        else:
+            self._hint.setText(
+                f"{count} seção{'ões' if count != 1 else ''} · "
+                "clique para ir ao preview · duplo-clique para editar"
+            )
         self._rebuild_rows()
 
     def set_active_section(self, section_id: str | None) -> None:
         self._active_section_id = section_id
+        row_types = (SectionSummaryRow, TemplateSectionRow)
         for index in range(self._list.count()):
             item = self._list.item(index)
             widget = self._list.itemWidget(item)
-            if isinstance(widget, SectionSummaryRow):
+            if isinstance(widget, row_types):
                 widget.set_active(widget.section_id == section_id)
 
     def _rebuild_rows(self) -> None:
@@ -311,11 +470,17 @@ class SectionsListPanel(QFrame):
         self._list.clear()
         for section in self._sections:
             section_id = section["id"]
-            photos = len(self._images_by_section.get(section_id, []))
-            row = SectionSummaryRow(section, photos)
-            row.click_requested.connect(self._on_row_clicked)
-            row.edit_requested.connect(self._on_row_edit_requested)
-            row.delete_requested.connect(self.section_delete_requested.emit)
+            if self._mode == "template":
+                row = TemplateSectionRow(section)
+                row.click_requested.connect(self.section_edit_requested.emit)
+                row.enabled_changed.connect(self.section_enabled_changed.emit)
+                row.delete_requested.connect(self.section_delete_requested.emit)
+            else:
+                photos = len(self._images_by_section.get(section_id, []))
+                row = SectionSummaryRow(section, photos)
+                row.click_requested.connect(self._on_row_clicked)
+                row.edit_requested.connect(self._on_row_edit_requested)
+                row.delete_requested.connect(self.section_delete_requested.emit)
             row.set_active(section_id == self._active_section_id)
             item = QListWidgetItem()
             item.setFlags(
@@ -351,17 +516,19 @@ class SectionsListPanel(QFrame):
     def _emit_reorder(self, *_args) -> None:
         if self._loading:
             return
+        row_type = TemplateSectionRow if self._mode == "template" else SectionSummaryRow
         ordered = [
             self._list.itemWidget(self._list.item(i)).section_id  # type: ignore[union-attr]
             for i in range(self._list.count())
-            if isinstance(self._list.itemWidget(self._list.item(i)), SectionSummaryRow)
+            if isinstance(self._list.itemWidget(self._list.item(i)), row_type)
         ]
         if ordered:
             self.sections_reordered.emit(ordered)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
+        row_type = TemplateSectionRow if self._mode == "template" else SectionSummaryRow
         for index in range(self._list.count()):
             widget = self._list.itemWidget(self._list.item(index))
-            if isinstance(widget, SectionSummaryRow):
+            if isinstance(widget, row_type):
                 widget.resize(self._list.viewport().width() - 4, widget.height())

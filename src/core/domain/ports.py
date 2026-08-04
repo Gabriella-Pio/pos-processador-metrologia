@@ -78,6 +78,8 @@ class ReportDocument:
     custom_sections: list[dict] = field(default_factory=list)
     deleted_section_ids: list[str] = field(default_factory=list)
     section_order: list[str] | None = None
+    # Snapshot in-memory de sections_config (preview de template antes de salvar)
+    template_layout_override: dict[str, dict] | None = None
     # Payload opaco devolvido pelo parser real
     # A UI nunca lê o conteúdo disto — apenas o carrega de volta para o
     # ReportExporter na hora de gerar o PDF final. Mantém a UI desacoplada

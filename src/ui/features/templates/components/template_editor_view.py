@@ -1,253 +1,263 @@
 """
-Editor de templates — estrutura, placeholders [VARIABLE] e textos padrão por seção.
+Editor de templates full-page — shell espelhando o workspace.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
+    QLineEdit,
+    QMenu,
     QSplitter,
-    QTextEdit,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from src.core.domain.ports import TemplateRepository
-from src.core.domain.section_schema import (
-    TEMPLATE_VARIABLES,
-    merge_saved_template_config,
-)
-from src.ui.components.buttons import PrimaryButton, SecondaryButton
-from src.ui.components.feedback import show_friendly_error, show_info
-from src.ui.components.inputs import LabeledLineEdit
-from src.ui.components.placeholder_field import PlaceholderTextEdit
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, caption_style, heading_style
-
-_DEFAULT_PROSE_KEY = "default_prose"
+from src.ui.components.buttons import ChromeIconButton, PrimaryButton
+from src.ui.components.feedback import confirm_action, show_friendly_error, show_info
+from src.ui.components.icons import icon_ellipsis, icon_edit
+from src.ui.features.workspace.dialogs.custom_section_dialog import CustomSectionDialog
+from src.ui.features.templates.components.template_sidebar_panel import TemplateSidebarPanel
+from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
+from src.ui.shared.report_editor.preview_panel import PreviewPanel
+from src.ui.styles import SPACING, caption_style
 
 
-class TemplateEditorView(QDialog):
-    """Editor visual de template com placeholders institucionais."""
+class TemplateEditorView(QWidget):
+    """Tela full-page para editar estrutura e defaults de templates."""
 
     saved = pyqtSignal(str)
 
-    def __init__(
-        self,
-        template_repo: TemplateRepository,
-        template_id: str = "new",
-        parent=None,
-    ) -> None:
+    def __init__(self, view_model: TemplateEditorViewModel, parent=None) -> None:
         super().__init__(parent)
-        self._repo = template_repo
-        self._template_id = template_id if template_id != "new" else self._new_template_id()
-        self._is_new = template_id == "new"
-        self._content_defaults: dict[str, dict] = {}
+        self.setObjectName("TemplateEditorSurface")
+        self._vm = view_model
         self._active_section_id: str | None = None
-        self._loading_defaults = False
+        self._section_anchor_map: dict[str, dict] = {}
 
-        self.setWindowTitle("Editor de Template")
-        self.setMinimumSize(1100, 700)
+        self._sidebar = TemplateSidebarPanel()
+        self._preview_panel = PreviewPanel()
 
-        self._name_field = LabeledLineEdit("Nome do template", required=True)
-        if not self._is_new:
-            for t in self._repo.list_templates():
-                if t["id"] == self._template_id:
-                    self._name_field.set_text(t["name"])
-                    break
+        self._name_field = QLineEdit()
+        self._name_field.setObjectName("TemplateNameInput")
+        self._name_field.setPlaceholderText("Nome do template")
+        self._dirty_label = QLabel("")
+        self._dirty_label.setObjectName("WorkspaceDataDirty")
 
-        self._sections_list = QListWidget()
-        self._sections_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
-        self._sections_list.currentItemChanged.connect(self._on_section_selected)
+        self._edit_placeholder = QLabel("Selecione uma seção no sumário para editar os defaults.")
+        self._edit_placeholder.setObjectName("SidebarHint")
+        self._edit_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._edit_placeholder.setWordWrap(True)
 
-        self._defaults_label = QLabel("Texto padrão da seção")
-        self._defaults_label.setStyleSheet(heading_style(4))
-        self._defaults_hint = QLabel(
-            "Use placeholders como {componente} e {operador}. Salvo junto com o template."
-        )
-        self._defaults_hint.setWordWrap(True)
-        self._defaults_hint.setStyleSheet(caption_style())
-        self._defaults_editor = PlaceholderTextEdit(multiline=True)
-        self._defaults_editor.text_changed.connect(self._on_default_text_changed)
-
-        self._preview = QTextEdit()
-        self._preview.setReadOnly(True)
+        self._section_title_label = QLabel("")
+        self._section_title_label.setObjectName("WorkspaceActiveSection")
 
         self._build_ui()
-        saved_cfg = self._repo.get_template_config(self._template_id)
-        self._content_defaults = {
-            section_id: dict(values)
-            for section_id, values in self._repo.get_content_defaults(self._template_id).items()
-            if isinstance(values, dict)
-        }
-        self._load_sections(merge_saved_template_config(saved_cfg))
-        self._refresh_preview()
+        self._sidebar.bind_view_model(self._vm)
+        self._connect_signals()
 
-    def _new_template_id(self) -> str:
-        existing = {t["id"] for t in self._repo.list_templates()}
-        index = 1
-        while f"custom_{index}" in existing:
-            index += 1
-        return f"custom_{index}"
+    def refresh_appearance(self) -> None:
+        self._sidebar.refresh_appearance()
+        self._preview_panel.refresh_appearance()
+        if hasattr(self, "_more_btn"):
+            self._more_btn.refresh_appearance()
+        if hasattr(self, "_save_btn"):
+            self._save_btn.refresh_appearance()
+        self._edit_placeholder.setStyleSheet(caption_style())
+
+    def load_template(self, template_id: str) -> None:
+        self._vm.load(template_id)
 
     def _build_ui(self) -> None:
-        p = PALETTE
-        self.setStyleSheet(f"QDialog {{ background-color: {p.bg_surface}; }}")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.xl, SPACING.xl, SPACING.xl, SPACING.lg)
-        layout.setSpacing(SPACING.md)
-
-        title = QLabel("Estrutura do template")
-        title.setStyleSheet(heading_style(2))
-        layout.addWidget(title)
-        layout.addWidget(self._name_field)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(self._build_global_strip())
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_hint = QLabel("Seções — marque, reordene e selecione para editar o texto padrão")
-        left_hint.setStyleSheet(caption_style())
-        left_layout.addWidget(left_hint)
-        left_layout.addWidget(self._sections_list)
+        splitter.addWidget(self._sidebar)
+        splitter.addWidget(self._build_editor_column())
+        splitter.addWidget(self._build_preview_column())
+        splitter.setSizes([260, 420, 680])
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(2, 3)
+        self._main_splitter = splitter
+        outer.addWidget(splitter, stretch=1)
 
-        var_row = QHBoxLayout()
-        for var in TEMPLATE_VARIABLES:
-            chip = QLabel(f"[{var['key']}]")
-            chip.setStyleSheet(
-                f"color: {p.senai_blue_light}; background: rgba(74,111,212,0.15); "
-                f"border-radius: 6px; padding: 4px 8px; font-size: 11px;"
+    def _build_global_strip(self) -> QWidget:
+        strip = QWidget()
+        strip.setObjectName("WorkspaceGlobalStrip")
+        layout = QHBoxLayout(strip)
+        layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
+        layout.setSpacing(SPACING.md)
+
+        name_icon = QLabel()
+        name_icon.setPixmap(icon_edit().pixmap(16, 16))
+        layout.addWidget(name_icon)
+        layout.addWidget(self._name_field, stretch=1)
+        layout.addWidget(self._dirty_label)
+        layout.addStretch(1)
+
+        self._more_btn = ChromeIconButton(icon_ellipsis(), "Mais opções")
+        self._more_btn.clicked.connect(self._show_menu)
+        self._save_btn = PrimaryButton("Salvar")
+        self._save_btn.clicked.connect(self._on_save)
+        layout.addWidget(self._more_btn)
+        layout.addWidget(self._save_btn)
+        self._build_menu()
+        return strip
+
+    def _build_menu(self) -> None:
+        self._menu = QMenu(self)
+        self._discard_action = self._menu.addAction("Descartar alterações")
+        self._discard_action.triggered.connect(self._on_discard)
+
+    def _show_menu(self) -> None:
+        self._discard_action.setEnabled(self._vm.is_dirty())
+        self._menu.popup(self._more_btn.mapToGlobal(QPoint(0, self._more_btn.height())))
+
+    def _build_editor_column(self) -> QWidget:
+        container = QWidget()
+        container.setObjectName("WorkspaceEditorColumn")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        context = QWidget()
+        context.setObjectName("WorkspacePreviewContextBar")
+        context_layout = QHBoxLayout(context)
+        context_layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
+        context_layout.addWidget(self._section_title_label)
+        context_layout.addStretch(1)
+        layout.addWidget(context)
+
+        self._edit_stack = QStackedWidget()
+        self._edit_stack.setObjectName("WorkspaceEditorStack")
+        self._edit_stack.addWidget(self._edit_placeholder)
+        self._edit_stack.addWidget(self._sidebar.edit_view)
+        layout.addWidget(self._edit_stack)
+        self._edit_container = container
+        self._edit_container.setVisible(False)
+        return container
+
+    def _build_preview_column(self) -> QWidget:
+        container = QWidget()
+        container.setObjectName("WorkspacePreviewPanel")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        header = QFrame()
+        header.setObjectName("WorkspacePreviewHeader")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
+        title = QLabel("Preview do template")
+        title.setObjectName("WorkspaceDocTitleCompact")
+        header_layout.addWidget(title)
+        layout.addWidget(header)
+        layout.addWidget(self._preview_panel, stretch=1)
+        return container
+
+    def _connect_signals(self) -> None:
+        self._name_field.editingFinished.connect(
+            lambda: self._vm.set_template_name(self._name_field.text())
+        )
+        self._sidebar.edit_visibility_changed.connect(self._on_edit_visibility_changed)
+        self._sidebar.section_edit_requested.connect(self._on_section_selected)
+        self._sidebar.section_enabled_changed.connect(self._vm.set_section_enabled)
+        self._sidebar.add_custom_section_requested.connect(self._on_add_custom_section)
+        self._sidebar.section_delete_requested.connect(self._on_delete_custom_section)
+        self._sidebar.sections_reordered.connect(self._vm.reorder_sections)
+        self._preview_panel.page_clicked.connect(self._on_preview_page_clicked)
+
+        self._vm.template_name_changed.connect(self._name_field.setText)
+        self._vm.dirty_changed.connect(self._on_dirty_changed)
+        self._vm.sections_summary_ready.connect(self._on_sections_summary)
+        self._vm.global_fields_ready.connect(self._sidebar.render_global_fields)
+        self._vm.preview_ready.connect(self._preview_panel.render_pages)
+        self._vm.preview_generating.connect(
+            lambda generating: self._preview_panel.set_status_text(
+                "Atualizando preview…" if generating else ""
             )
-            chip.setToolTip(var["label"])
-            var_row.addWidget(chip)
-        var_row.addStretch(1)
-        left_layout.addLayout(var_row)
+        )
+        self._vm.preview_metadata_ready.connect(self._preview_panel.update_anchor_map)
+        self._vm.saved.connect(self.saved.emit)
+        self._vm.error_occurred.connect(
+            lambda title, msg, details: show_friendly_error(self, title, msg, details)
+        )
 
-        center = QWidget()
-        center_layout = QVBoxLayout(center)
-        center_layout.setContentsMargins(SPACING.md, 0, 0, 0)
-        center_layout.setSpacing(SPACING.sm)
-        center_layout.addWidget(self._defaults_label)
-        center_layout.addWidget(self._defaults_hint)
-        center_layout.addWidget(self._defaults_editor, stretch=1)
+    def _on_edit_visibility_changed(self, visible: bool) -> None:
+        self._edit_stack.setCurrentIndex(1 if visible else 0)
+        self._edit_container.setVisible(visible)
+        if visible:
+            self._main_splitter.setSizes([260, 420, 680])
+        else:
+            self._main_splitter.setSizes([260, 0, 1100])
+            self._section_title_label.setText("")
 
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(SPACING.md, 0, 0, 0)
-        preview_label = QLabel("Preview esqueleto")
-        preview_label.setStyleSheet(caption_style())
-        right_layout.addWidget(preview_label)
-        right_layout.addWidget(self._preview)
-
-        splitter.addWidget(left)
-        splitter.addWidget(center)
-        splitter.addWidget(right)
-        splitter.setSizes([320, 420, 360])
-        layout.addWidget(splitter, stretch=1)
-
-        footer = QHBoxLayout()
-        cancel = SecondaryButton("Cancelar")
-        cancel.clicked.connect(self.reject)
-        save = PrimaryButton("Salvar template")
-        save.clicked.connect(self._on_save)
-        footer.addStretch(1)
-        footer.addWidget(cancel)
-        footer.addWidget(save)
-        layout.addLayout(footer)
-
-        self._sections_list.itemChanged.connect(lambda: self._refresh_preview())
-
-    def _load_sections(self, sections: list[dict]) -> None:
-        self._sections_list.blockSignals(True)
-        self._sections_list.clear()
-        for section in sections:
-            item = QListWidgetItem(section["label"])
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsDragEnabled)
-            item.setCheckState(
-                Qt.CheckState.Checked if section["enabled"] else Qt.CheckState.Unchecked
-            )
-            item.setData(Qt.ItemDataRole.UserRole, section["id"])
-            self._sections_list.addItem(item)
-        self._sections_list.blockSignals(False)
-        if self._sections_list.count() > 0:
-            self._sections_list.setCurrentRow(0)
-
-    def _on_section_selected(self, current: QListWidgetItem | None, _previous: QListWidgetItem | None) -> None:
-        if current is None:
-            self._active_section_id = None
-            self._defaults_editor.setEnabled(False)
-            self._defaults_editor.set_text("")
-            self._defaults_label.setText("Texto padrão da seção")
-            return
-        section_id = current.data(Qt.ItemDataRole.UserRole)
+    def _on_section_selected(self, section_id: str) -> None:
         self._active_section_id = section_id
-        self._defaults_editor.setEnabled(True)
-        self._defaults_label.setText(f"Texto padrão — {current.text()}")
-        self._loading_defaults = True
-        section_defaults = self._content_defaults.setdefault(section_id, {})
-        prose = section_defaults.get(_DEFAULT_PROSE_KEY, "")
-        if not prose and section_defaults:
-            prose = "\n".join(
-                f"{key}: {value}" for key, value in section_defaults.items() if key != _DEFAULT_PROSE_KEY
-            )
-        self._defaults_editor.set_text(prose)
-        self._loading_defaults = False
+        self._vm.set_active_section(section_id)
+        section = self._section_anchor_map.get(section_id, {})
+        title = section.get("display_title") or section.get("title", section_id)
+        self._section_title_label.setText(f"Seção: {title}")
 
-    def _on_default_text_changed(self, text: str) -> None:
-        if self._loading_defaults or not self._active_section_id:
+    def _on_add_custom_section(self) -> None:
+        dialog = CustomSectionDialog(self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
             return
-        section_defaults = self._content_defaults.setdefault(self._active_section_id, {})
-        section_defaults[_DEFAULT_PROSE_KEY] = text
-        self._refresh_preview()
+        section_id = self._vm.add_custom_section(dialog.get_title())
+        if section_id:
+            self._sidebar.open_edit_for_section(section_id)
+            self._on_section_selected(section_id)
 
-    def _collect_config(self) -> dict:
-        config = {}
-        for index in range(self._sections_list.count()):
-            item = self._sections_list.item(index)
-            section_id = item.data(Qt.ItemDataRole.UserRole)
-            config[section_id] = {
-                "enabled": item.checkState() == Qt.CheckState.Checked,
-                "order": index,
-            }
-        return config
+    def _on_delete_custom_section(self, section_id: str) -> None:
+        if not confirm_action(
+            self,
+            "Excluir seção",
+            "Deseja remover esta seção personalizada do template?",
+        ):
+            return
+        if self._vm.delete_custom_section(section_id):
+            if self._active_section_id == section_id:
+                self._active_section_id = None
+                self._section_title_label.setText("")
+                self._sidebar.close_edit()
 
-    def _refresh_preview(self) -> None:
-        lines = ["# Preview do template\n"]
-        for index in range(self._sections_list.count()):
-            item = self._sections_list.item(index)
-            if item.checkState() != Qt.CheckState.Checked:
-                continue
-            title = item.text()
-            section_id = item.data(Qt.ItemDataRole.UserRole)
-            lines.append(f"\n## {title}")
-            prose = self._content_defaults.get(section_id, {}).get(_DEFAULT_PROSE_KEY, "").strip()
-            if prose:
-                lines.append(prose)
-            else:
-                lines.append("Texto com placeholders: [CLIENTE] — [COMPONENTE]")
-                lines.append("Responsável: [RESPONSAVEL] | Data: [DATA] | Versão: [VERSAO]")
-        self._preview.setPlainText("\n".join(lines))
+    def _on_sections_summary(self, sections: list[dict]) -> None:
+        self._section_anchor_map = {s["id"]: s for s in sections}
+        self._sidebar.render_sections(sections)
+        if self._active_section_id:
+            self._sidebar.set_active_section(self._active_section_id)
+            section = self._section_anchor_map.get(self._active_section_id, {})
+            title = section.get("display_title") or section.get("title", self._active_section_id)
+            self._section_title_label.setText(f"Seção: {title}")
+
+    def _on_dirty_changed(self, dirty: bool) -> None:
+        self._dirty_label.setText("● não salvo" if dirty else "")
 
     def _on_save(self) -> None:
-        self._name_field.mark_touched()
-        if not self._name_field.is_valid():
+        if self._vm.save():
+            show_info(self, "Template salvo", "Estrutura e defaults atualizados com sucesso.")
+
+    def _on_discard(self) -> None:
+        if not self._vm.is_dirty():
             return
-        config = self._collect_config()
-        name = self._name_field.text()
-        try:
-            self._repo.save_full_template(
-                self._template_id,
-                config,
-                self._content_defaults,
-                name.strip(),
-            )
-        except Exception:
-            show_friendly_error(self, "Erro", "Não foi possível salvar o template.")
+        if not confirm_action(
+            self,
+            "Descartar alterações?",
+            "As mudanças não salvas serão perdidas.",
+        ):
             return
-        show_info(self, "Template salvo", "Estrutura e textos padrão atualizados com sucesso.")
-        self.saved.emit(self._template_id)
-        self.accept()
+        self._vm.load(self._vm.template_id)
+
+    def _on_preview_page_clicked(self, page_number: int) -> None:
+        section_id = self._preview_panel.section_id_for_page(page_number)
+        if section_id:
+            self._active_section_id = section_id
+            self._vm.set_active_section(section_id)
+            self._sidebar.open_edit_for_section(section_id)

@@ -28,6 +28,7 @@ class _GlobalFieldRow(QFrame):
         value: str,
         used_count: int,
         overridden: bool,
+        show_restore: bool = True,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -56,7 +57,7 @@ class _GlobalFieldRow(QFrame):
         meta.setObjectName("GlobalFieldMeta")
         meta.setWordWrap(True)
         meta_row.addWidget(meta, stretch=1)
-        if overridden:
+        if overridden and show_restore:
             restore = QLabel('<a href="restore">Restaurar</a>')
             restore.setObjectName("FieldRestoreLink")
             restore.setTextFormat(Qt.TextFormat.RichText)
@@ -134,6 +135,8 @@ class GlobalFieldsPanel(QFrame):
         self,
         values: dict[str, str],
         overridden_keys: set[str],
+        *,
+        show_restore: bool = True,
     ) -> None:
         while self._fields_layout.count():
             item = self._fields_layout.takeAt(0)
@@ -146,7 +149,11 @@ class GlobalFieldsPanel(QFrame):
             value = values.get(field_def.key, "")
             used_count = len(field_def.used_in_sections)
             row = _GlobalFieldRow(
-                field_def, value, used_count, field_def.key in overridden_keys
+                field_def,
+                value,
+                used_count,
+                field_def.key in overridden_keys,
+                show_restore=show_restore,
             )
             row.value_changed.connect(self.field_changed.emit)
             row.restore_requested.connect(self.restore_field_requested.emit)

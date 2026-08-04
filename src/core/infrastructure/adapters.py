@@ -114,7 +114,9 @@ class RealReportExporterAdapter:
 
     # ------------------------------------------------------------- helpers
     def _resolver_blocos_template(self, document: ReportDocument) -> list[dict]:
-        if document.template_id == "default" or self._template_repository is None:
+        if document.template_layout_override:
+            blocos = sections_config_to_blocks(document.template_layout_override)
+        elif document.template_id == "default" or self._template_repository is None:
             blocos = list(TEMPLATE_PADRAO_OFICIAL)
         else:
             config_salva = self._template_repository.get_template_config(document.template_id)

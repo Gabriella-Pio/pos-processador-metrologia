@@ -120,6 +120,82 @@ def test_template_content_defaults_round_trip(tmp_path) -> None:
     assert repo.get_content_defaults("custom_1")["introducao"]["objetivo"] == "Texto {componente}"
 
 
+def test_build_template_preview_document() -> None:
+    from src.core.application.template_preview import (
+        build_template_preview_document,
+        build_template_sections_summary,
+        split_template_content_defaults,
+    )
+
+    sections_config = {
+        "introducao": {"enabled": True, "order": 0},
+        "identificacao": {"enabled": True, "order": 1},
+        "resultados": {"enabled": False, "order": 2},
+    }
+    content = {
+        "introducao": {"objetivo": "Objetivo {componente}"},
+        "_global": {"client_project": "ACME", "evaluated_component": "Peça A"},
+    }
+    section_defaults, global_defaults = split_template_content_defaults(content)
+    assert global_defaults["client_project"] == "ACME"
+    assert "introducao" in section_defaults
+
+    doc = build_template_preview_document("custom_1", sections_config, content)
+    assert doc.client_project == "ACME"
+    assert doc.template_layout_override == sections_config
+    assert doc.section_overrides["introducao"]["objetivo"] == "Objetivo {componente}"
+    assert "resultados" in doc.deleted_section_ids
+
+    summary = build_template_sections_summary(sections_config, content)
+    assert any(s["id"] == "introducao" for s in summary)
+    assert summary[0]["enabled"] is True
+
+
+def test_sections_list_panel_template_mode() -> None:
+    from PyQt6.QtWidgets import QApplication
+
+    from src.ui.shared.report_editor.sections_list_panel import SectionsListPanel
+
+    app = QApplication.instance() or QApplication([])
+    panel = SectionsListPanel(mode="template")
+    panel.render_sections([
+        {"id": "introducao", "title": "Introdução", "enabled": True},
+        {"id": "resultados", "title": "Resultados", "enabled": False},
+    ])
+    assert panel._mode == "template"
+    assert panel._list.count() == 2
+    assert panel._add_row.parentWidget() is not None
+
+
+def test_template_custom_section_in_config() -> None:
+    from src.core.domain.section_schema import merge_saved_template_config
+
+    config = {
+        "introducao": {"enabled": True, "order": 0},
+        "custom_1": {"enabled": True, "order": 5, "title": "Observações extras"},
+    }
+    merged = merge_saved_template_config(config)
+    custom = [s for s in merged if s.get("custom")]
+    assert len(custom) == 1
+    assert custom[0]["label"] == "Observações extras"
+
+
+def test_interpretacao_editable_in_template_mode() -> None:
+    from src.core.domain.report_field_registry import get_edit_fields
+
+    fields = get_edit_fields("interpretacao", defaults_mode=True)
+    assert any(f.key == "intro" for f in fields)
+
+
+def test_effective_media_kinds_override() -> None:
+    from src.core.domain.report_field_registry import effective_media_kinds, get_media_blocks
+
+    kinds = effective_media_kinds("introducao", {"media_kinds": ["photos", "graphics"]})
+    assert kinds == ["photos", "graphics"]
+    blocks = get_media_blocks("introducao", kinds)
+    assert len(blocks) == 2
+
+
 def test_layout_dirty_vs_data_dirty_split(tmp_path) -> None:
     repo = JSONTemplateRepository(storage_path=str(tmp_path / "templates.json"))
     doc = ReportDocument(

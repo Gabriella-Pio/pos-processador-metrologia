@@ -5,6 +5,7 @@ import logging
 import traceback
 from pathlib import Path
 
+from src.core.application.template_apply import apply_template_content_defaults, apply_template_layout
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.ports import ReportDocument, ReportParser, TemplateRepository, VersionHistoryRepository
 
@@ -39,12 +40,8 @@ class DocumentSessionService:
     def apply_template_defaults(self, document: ReportDocument) -> None:
         if self._template_repo is None:
             return
-        content = self._template_repo.get_content_defaults(document.template_id)
-        if not content:
-            return
-        for section_id, defaults in content.items():
-            if isinstance(defaults, dict):
-                document.section_overrides[section_id] = dict(defaults)
+        apply_template_layout(document, self._template_repo)
+        apply_template_content_defaults(document, self._template_repo)
 
     def load_versions_for_document(self, document: ReportDocument) -> None:
         if self._version_history_repo is None:

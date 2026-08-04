@@ -41,6 +41,7 @@ from src.ui.styles import SPACING, caption_style
 from src.ui.controllers.app_state import AppState
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from src.ui.features.workspace.components.section_editor_panel import SectionEditorPanel
+from src.ui.shared.report_editor.preview_panel import PreviewPanel
 
 
 class WorkspaceView(QWidget):
@@ -51,10 +52,7 @@ class WorkspaceView(QWidget):
         self._vm = view_model
         self._active_section_id: str | None = None
         self._active_annotation_tool: str | None = None
-        self._preview_page_items: list[dict] = []
         self._section_anchor_map: dict[str, dict] = {}
-        self._active_preview_page: int | None = None
-        self._active_preview_anchor: dict | None = None
 
         self._project_tabs = QTabBar()
         self._project_tabs.setObjectName("WorkspaceProjectTabs")
@@ -73,10 +71,7 @@ class WorkspaceView(QWidget):
         self._active_section_label = QLabel("")
         self._active_section_label.setObjectName("WorkspaceActiveSection")
         self._section_editor = SectionEditorPanel()
-        self._preview_scroll = QScrollArea()
-        self._preview_scroll.setObjectName("WorkspacePreviewScroll")
-        self._preview_pages_widget = QWidget()
-        self._preview_pages_layout = QVBoxLayout(self._preview_pages_widget)
+        self._preview_panel = PreviewPanel()
         self._banner = InlineBanner("", level=FeedbackLevel.INFO)
         self._banner.sync_visibility()
 
@@ -100,16 +95,7 @@ class WorkspaceView(QWidget):
         if hasattr(self, "_more_btn"):
             self._more_btn.refresh_appearance()
         self._section_editor.refresh_appearance()
-        self._refresh_preview_page_styles()
-
-    def _refresh_preview_page_styles(self) -> None:
-        for item in self._preview_page_items:
-            page_label = item.get("page_label")
-            image_label = item.get("image_label")
-            if page_label is not None:
-                page_label.setStyleSheet("")
-            if image_label is not None:
-                image_label.setStyleSheet("")
+        self._preview_panel.refresh_appearance()
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
@@ -254,14 +240,8 @@ class WorkspaceView(QWidget):
         body_layout.setContentsMargins(SPACING.lg, SPACING.md, SPACING.lg, SPACING.lg)
         body_layout.setSpacing(SPACING.sm)
 
-        self._preview_scroll.setWidgetResizable(True)
-        self._preview_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._preview_scroll.setWidget(self._preview_pages_widget)
-        self._preview_pages_layout.setContentsMargins(0, 0, 0, 0)
-        self._preview_pages_layout.setSpacing(SPACING.lg)
-
         body_layout.addWidget(self._banner)
-        body_layout.addWidget(self._preview_scroll, stretch=1)
+        body_layout.addWidget(self._preview_panel, stretch=1)
         layout.addWidget(body, stretch=1)
         return container
 
@@ -282,7 +262,7 @@ class WorkspaceView(QWidget):
 
         self._vm.project_loaded.connect(self._on_project_loaded)
         self._vm.sections_summary_ready.connect(self._on_sections_summary_ready)
-        self._vm.preview_ready.connect(self._render_preview_pages)
+        self._vm.preview_ready.connect(self._preview_panel.render_pages)
         self._vm.preview_generating.connect(self._on_preview_generating)
         self._vm.global_fields_ready.connect(self._on_global_fields_ready)
         self._vm.error_occurred.connect(
@@ -294,6 +274,7 @@ class WorkspaceView(QWidget):
         self._vm.template_dirty_changed.connect(self._on_layout_dirty_changed)
         self._vm.templates_list_ready.connect(self._populate_template_combo)
         self._vm.preview_metadata_ready.connect(self._on_preview_metadata)
+        self._preview_panel.page_clicked.connect(self._on_preview_page_clicked)
         self._vm.export_validation_ready.connect(self._on_export_validation)
 
     def _setup_shortcuts(self) -> None:
@@ -429,6 +410,7 @@ class WorkspaceView(QWidget):
 
     def _on_preview_generating(self, generating: bool) -> None:
         self._preview_status_label.setText("Atualizando preview…" if generating else "")
+        self._preview_panel.set_status_text("Atualizando preview…" if generating else "")
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
         self._edit_stack.setCurrentIndex(1 if visible else 0)
@@ -490,7 +472,7 @@ class WorkspaceView(QWidget):
 
     def _on_tool_selected(self, tool_id: str) -> None:
         self._active_annotation_tool = tool_id
-        self._preview_scroll.setToolTip(
+        self._preview_panel.scroll_area().setToolTip(
             f"Ferramenta ativa: {tool_id}. Clique na preview para aplicar (MVP)."
         )
 
@@ -506,6 +488,7 @@ class WorkspaceView(QWidget):
 
     def _on_sections_summary_ready(self, sections: list[dict]) -> None:
         self._section_anchor_map = {s["id"]: s for s in sections}
+        self._preview_panel.set_anchor_map(self._section_anchor_map)
         for section in sections:
             section.setdefault("subtitle", "")
             section.setdefault("body", "")
@@ -514,58 +497,13 @@ class WorkspaceView(QWidget):
             self._section_editor.set_active_section(self._active_section_id)
             self._focus_preview_section(self._active_section_id)
 
-    def _render_preview_pages(self, pages_png: list[bytes]) -> None:
-        scroll_pos = self._preview_scroll.verticalScrollBar().value()
-        prev_count = len(self._preview_page_items)
-        self._clear_preview_pages()
-        if not pages_png:
-            empty = QLabel("Nenhuma página disponível para preview.")
-            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            empty.setObjectName("SidebarHint")
-            empty.setStyleSheet(caption_style())
-            self._preview_pages_layout.addWidget(empty)
-            return
-
-        self._preview_page_items = []
-        for index, page_png in enumerate(pages_png, start=1):
-            page_container = QWidget()
-            page_layout = QVBoxLayout(page_container)
-            page_layout.setContentsMargins(0, 0, 0, 0)
-
-            page_label = QLabel(f"Página {index}")
-            page_label.setObjectName("WorkspacePageLabel")
-            page_label.setCursor(Qt.CursorShape.PointingHandCursor)
-            page_label.mousePressEvent = lambda event, pn=index: self._on_preview_page_clicked(pn)  # type: ignore[method-assign]
-            image_label = QLabel()
-            image_label.setObjectName("WorkspacePreviewPage")
-            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            pixmap = QPixmap()
-            pixmap.loadFromData(page_png)
-            image_label.setPixmap(pixmap)
-
-            page_layout.addWidget(page_label)
-            page_layout.addWidget(image_label)
-            self._preview_pages_layout.addWidget(page_container)
-            self._preview_page_items.append({
-                "page_number": index,
-                "container": page_container,
-                "page_label": page_label,
-                "image_label": image_label,
-                "base_pixmap": pixmap,
-            })
-
-        self._preview_pages_layout.addStretch(1)
-        if abs(len(pages_png) - prev_count) <= 1:
-            self._preview_scroll.verticalScrollBar().setValue(scroll_pos)
-
     def _on_preview_page_clicked(self, page_number: int) -> None:
-        for section_id, info in self._section_anchor_map.items():
-            page = (info or {}).get("page_start") or (info or {}).get("page")
-            if page == page_number:
-                self._section_editor.navigate_to_section(section_id)
-                return
+        section_id = self._preview_panel.section_id_for_page(page_number)
+        if section_id:
+            self._section_editor.navigate_to_section(section_id)
 
     def _on_preview_metadata(self, anchor_map: dict) -> None:
+        self._preview_panel.update_anchor_map(anchor_map)
         for section_id, info in anchor_map.items():
             if section_id in self._section_anchor_map:
                 self._section_anchor_map[section_id]["page_start"] = info.get("page")
@@ -586,23 +524,10 @@ class WorkspaceView(QWidget):
             self._banner.sync_visibility()
 
     def _clear_preview_pages(self) -> None:
-        while self._preview_pages_layout.count():
-            item = self._preview_pages_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-        self._preview_page_items = []
+        self._preview_panel.clear()
 
     def _focus_preview_section(self, section_id: str) -> None:
-        section = self._section_anchor_map.get(section_id) or {}
-        anchor = section.get("anchor_rect") if isinstance(section.get("anchor_rect"), dict) else section
-        page_number = section.get("page_start") or (anchor or {}).get("page")
-        if page_number is None or page_number < 1 or page_number > len(self._preview_page_items):
-            return
-        self._active_preview_anchor = anchor
-        self._active_preview_page = page_number
-        item = self._preview_page_items[page_number - 1]
-        self._preview_scroll.ensureWidgetVisible(item["container"], 24, 24)
+        self._preview_panel.focus_section(section_id)
 
     def _on_add_pdf_clicked(self) -> None:
         document = self._app_state.active_document

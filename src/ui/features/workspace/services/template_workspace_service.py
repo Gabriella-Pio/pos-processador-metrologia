@@ -1,6 +1,7 @@
 """Operações de template no workspace."""
 from __future__ import annotations
 
+from src.core.application.template_apply import apply_template_content_defaults, apply_template_layout
 from src.core.application.template_layout import (
     document_has_layout_changes,
     layout_snapshot,
@@ -29,11 +30,11 @@ class TemplateWorkspaceService:
         document.template_id = template_id
         document.section_overrides.clear()
         document.section_order = None
+        document.deleted_section_ids = []
+        document.custom_sections = []
         if self._template_repo is not None:
-            content = self._template_repo.get_content_defaults(template_id)
-            for section_id, defaults in (content or {}).items():
-                if isinstance(defaults, dict):
-                    document.section_overrides[section_id] = dict(defaults)
+            apply_template_layout(document, self._template_repo)
+            apply_template_content_defaults(document, self._template_repo)
 
     def save_as_template(
         self,

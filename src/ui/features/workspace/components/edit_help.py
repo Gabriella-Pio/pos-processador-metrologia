@@ -34,7 +34,7 @@ _SECTION_HINTS: dict[str, str] = {
     "resultados": "Edite o texto introdutório e a grade de medições extraída do CALYPSO.",
     "grafica": "Texto introdutório e fotografias/gráficos do componente.",
     "tomografia": "Texto introdutório e fotografias da inspeção tomográfica.",
-    "interpretacao": "Texto gerado a partir das medições (somente leitura).",
+    "interpretacao": "Texto introdutório antes da lista de características. No template, edite o parágrafo inicial; os itens por medição são gerados automaticamente no workspace.",
     "conclusao": "Texto da conclusão conforme resultado das medições.",
     "controle_tecnico": "Responsáveis técnicos pela medição e revisão.",
 }

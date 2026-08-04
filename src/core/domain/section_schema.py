@@ -1,7 +1,7 @@
 """
 Fonte única de verdade para IDs, rótulos e ordem das seções do relatório.
 
-Usado por: generator, adapters, TemplateView, TemplateEditor e Workspace.
+Usado por: generator, adapters, TemplateEditor e Workspace.
 """
 from __future__ import annotations
 
@@ -57,6 +57,11 @@ def default_template_sections() -> list[dict]:
     ]
 
 
+def is_custom_section_id(section_id: str) -> bool:
+    """Seção personalizada criada pelo usuário (não faz parte do schema fixo)."""
+    return section_id.startswith("custom_") and section_id not in SECTION_TITLES
+
+
 def merge_saved_template_config(saved_config: dict) -> list[dict]:
     """Reconcilia config salva com schema atual (novas seções entram no fim)."""
     if not saved_config:
@@ -64,20 +69,28 @@ def merge_saved_template_config(saved_config: dict) -> list[dict]:
 
     known = {s.id: s for s in SECTION_DEFINITIONS}
     ordered_ids = sorted(
-        saved_config.keys(),
+        (sid for sid in saved_config if not sid.startswith("_")),
         key=lambda sid: saved_config[sid].get("order", 999),
     )
     result: list[dict] = []
     seen: set[str] = set()
     for section_id in ordered_ids:
-        if section_id not in known:
-            continue
-        seen.add(section_id)
-        result.append({
-            "id": section_id,
-            "label": known[section_id].label,
-            "enabled": saved_config[section_id].get("enabled", True),
-        })
+        if section_id in known:
+            seen.add(section_id)
+            result.append({
+                "id": section_id,
+                "label": known[section_id].label,
+                "enabled": saved_config[section_id].get("enabled", True),
+            })
+        elif is_custom_section_id(section_id):
+            cfg = saved_config[section_id]
+            seen.add(section_id)
+            result.append({
+                "id": section_id,
+                "label": cfg.get("title") or section_id.replace("_", " ").title(),
+                "enabled": cfg.get("enabled", True),
+                "custom": True,
+            })
     for section in SECTION_DEFINITIONS:
         if section.id not in seen:
             result.append({

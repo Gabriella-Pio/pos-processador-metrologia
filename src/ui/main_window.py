@@ -1,5 +1,5 @@
 """
-Janela principal: coordena navegação Home ↔ Workspace e modais de projeto/template.
+Janela principal: coordena navegação Home ↔ Workspace ↔ Template Editor.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from src.core.domain.ports import (
     VersionHistoryRepository,
 )
 from src.ui.accessibility import AppearanceManager
-from src.ui.components.feedback import show_friendly_error
+from src.ui.components.feedback import confirm_action, show_friendly_error
 from src.ui.components.header import AppHeader
 from src.ui.components.modal_overlay import ModalOverlay
 from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog
@@ -27,6 +27,7 @@ from src.ui.controllers.app_state import AppState
 from src.ui.features.home.viewmodels.home_viewmodel import HomeViewModel
 from src.ui.controllers.navigation_controller import NavigationController
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
+from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
 from src.ui.features.home.components.home_view import HomeView
 from src.ui.features.templates.components.template_editor_view import TemplateEditorView
 from src.ui.features.workspace.components.workspace_view import WorkspaceView
@@ -59,9 +60,9 @@ class MainWindow(QMainWindow):
             version_history_repo,
             template_repo,
         )
+        self._template_editor_vm = TemplateEditorViewModel(template_repo, report_exporter)
         self._nav_controller = NavigationController()
         self._project_setup_dialog: ProjectSetupDialog | None = None
-        self._template_editor_dialog: TemplateEditorView | None = None
 
         central_widget = QWidget()
         central_widget.setObjectName("MainCentral")
@@ -76,8 +77,10 @@ class MainWindow(QMainWindow):
         self._stack.setObjectName("MainViewStack")
         self._home_view = HomeView(self._home_vm)
         self._workspace_view = WorkspaceView(self._app_state, self._workspace_vm)
+        self._template_editor_view = TemplateEditorView(self._template_editor_vm)
         self._stack.addWidget(self._home_view)
         self._stack.addWidget(self._workspace_view)
+        self._stack.addWidget(self._template_editor_view)
         main_layout.addWidget(self._stack)
         self.setCentralWidget(central_widget)
 
@@ -96,6 +99,8 @@ class MainWindow(QMainWindow):
         self._home_view.new_document_requested.connect(self._open_project_setup)
         self._home_view.template_editor_requested.connect(self._open_template_editor)
         self._home_view.recent_file_opened.connect(self._open_recent_file)
+        self._template_editor_view.saved.connect(lambda _tid: self._home_vm.load_dashboard())
+        self._template_editor_vm.template_name_changed.connect(self._on_template_name_changed)
 
     def _setup_shortcuts(self) -> None:
         back = QShortcut(QKeySequence("Alt+Left"), self)
@@ -138,6 +143,7 @@ class MainWindow(QMainWindow):
         self._header.refresh_appearance()
         self._home_view.refresh_appearance()
         self._workspace_view.refresh_appearance()
+        self._template_editor_view.refresh_appearance()
 
     def _toggle_fullscreen(self) -> None:
         if self.isFullScreen():
@@ -146,6 +152,13 @@ class MainWindow(QMainWindow):
             self.showFullScreen()
 
     def _go_home(self) -> None:
+        if self._stack.currentIndex() == 2 and self._template_editor_vm.is_dirty():
+            if not confirm_action(
+                self,
+                "Sair do editor?",
+                "Há alterações não salvas no template.",
+            ):
+                return
         self._nav_controller.navigate_to(0)
 
     def _on_navigation_changed(self, index: int, can_back: bool, can_forward: bool) -> None:
@@ -168,6 +181,24 @@ class MainWindow(QMainWindow):
                 (comp_name, None),
             ])
             self._header.set_badge_text(project_name)
+        elif index == 2:
+            name = self._template_editor_vm.template_name or "Template"
+            self._header.set_breadcrumb([
+                ("Início", self._go_home),
+                ("Templates", None),
+                (name, None),
+            ])
+            self._header.set_badge_text("Editor de templates")
+
+    def _on_template_name_changed(self, name: str) -> None:
+        if self._stack.currentIndex() != 2:
+            return
+        display = name.strip() or "Template"
+        self._header.set_breadcrumb([
+            ("Início", self._go_home),
+            ("Templates", None),
+            (display, None),
+        ])
 
     def _open_project_setup(self) -> None:
         if self._project_setup_dialog is not None:
@@ -206,29 +237,15 @@ class MainWindow(QMainWindow):
         dialog.activateWindow()
 
     def _open_template_editor(self, template_id: str) -> None:
-        if self._template_editor_dialog is not None:
-            self._template_editor_dialog.raise_()
-            self._template_editor_dialog.activateWindow()
-            return
-
-        dialog = TemplateEditorView(self._template_repo, template_id=template_id, parent=self)
-        dialog.saved.connect(lambda _tid: self._home_vm.load_dashboard())
-
-        host = self.centralWidget() or self
-        overlay = ModalOverlay(host, dialog)
-
-        def on_finished(_result: int) -> None:
-            overlay.deleteLater()
-            self._template_editor_dialog = None
-
-        self._template_editor_dialog = dialog
-        overlay.show()
-        overlay.raise_()
-        dialog.finished.connect(on_finished)
-        dialog.setWindowModality(Qt.WindowModality.NonModal)
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
+        if self._stack.currentIndex() == 2 and self._template_editor_vm.is_dirty():
+            if not confirm_action(
+                self,
+                "Abrir outro template?",
+                "Há alterações não salvas no template atual.",
+            ):
+                return
+        self._template_editor_view.load_template(template_id)
+        self._nav_controller.navigate_to(2)
 
     def _open_recent_file(self, file_id: str) -> None:
         try:
