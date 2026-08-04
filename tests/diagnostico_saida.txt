@@ -1,0 +1,246 @@
+
+=== PÁGINA 1 ===
+[000] -> Nome
+[001] -> CARCACA DE BOMBA CARGILL 8
+[002] -> Nome da MMC
+[003] -> PRISMO_USS2
+[004] -> Numero da MMC
+[005] -> 145224042119
+[006] -> Operador
+[007] -> Master
+[008] -> Last 1 measurements
+[009] -> ► Approval ≠ Blocked
+[010] -> Parte
+[011] -> 14
+[012] -> Data/Hora
+[013] -> 23/06/2026 09:42
+[014] -> Run
+[015] -> Todas Caracteristicas
+[016] -> Numero de medições
+[017] -> 12
+[018] -> Medições fora da tolerância
+[019] -> 6
+[020] -> Duração da Medição
+[021] -> 00:00:01,0
+[022] -> 7.8.08
+[023] -> CALYPSO
+[024] -> Name
+[025] -> Nominal value
+[026] -> Measured value
+[027] -> +/-
+[028] -> Desvio
+[029] -> +Tol
+[030] -> -Tol
+[031] -> Diametro_ASSENTO ENTRADA
+[032] -> 81,9696 mm
+[033] -> 81,9972
+[034] -> 0,1500
+[035] -> -0,1500
+[036] -> -0,0276
+[037] -> Diametro_ENCAIXE SUPERIOR
+[038] -> 80,0755 mm
+[039] -> 80,0599
+[040] -> 0,1500
+[041] -> -0,1500
+[042] -> 0,0156
+[043] -> Diametro_ENCAIXE INFERIOR
+[044] -> 80,0523 mm
+[045] -> 80,0474
+[046] -> 0,1500
+[047] -> -0,1500
+[048] -> 0,0049
+[049] -> Diametro_EMBOLO
+[050] -> 75,9719 mm
+[051] -> 75,0001
+[052] -> 0,1500
+[053] -> -0,1500
+[054] -> 0,9718
+[055] -> 0,8218
+[056] -> X
+[057] -> Y
+[058] -> Z
+[059] -> Cilindricidade ASSENTO ENTRADA
+[060] -> 0,0128 mm
+[061] -> 0,0000
+[062] -> 0,0129
+[063] -> 0,0000
+[064] -> 0,0128
+[065] -> Pontos 690
+[066] -> Tipo de filtro Sem Filtro
+[067] -> Lc
+[068] -> upr
+[069] -> Vmess[mm/s]
+[070] -> Raio da sonda 0,7490
+[071] -> Método de avaliação Elemento Mínimo
+[072] -> X
+[073] -> Y
+[074] -> Z
+[075] -> Cilindricidade EMBOLO
+[076] -> 0,0511 mm
+[077] -> 0,0000
+[078] -> 0,0256
+[079] -> 0,0000
+[080] -> 0,0511
+[081] -> 0,0255
+[082] -> Pontos 1680
+[083] -> Tipo de filtro Sem Filtro
+[084] -> Lc
+[085] -> upr
+[086] -> Vmess[mm/s]
+[087] -> Raio da sonda 0,7490
+[088] -> Método de avaliação Elemento Mínimo
+[089] -> (P 8.2_04) STANDART CEM
+[090] -> Page 1 of 4
+
+=== PÁGINA 2 ===
+[000] -> CARCACA DE BOMBA CARGILL 8
+[001] -> Peça:
+[002] -> 14
+[003] -> Parte n°
+[004] -> Master
+[005] -> Operador
+[006] -> 23/06/2026 09:42
+[007] -> Data/Hora
+[008] -> Page 2 of 4
+[009] -> 7.8.08
+[010] -> CALYPSO
+[011] -> Name
+[012] -> Nominal value
+[013] -> Measured value
+[014] -> +/-
+[015] -> Desvio
+[016] -> +Tol
+[017] -> -Tol
+[018] -> X
+[019] -> Y
+[020] -> Z
+[021] -> Cilindricidade ENCAIXE SUPERIOR
+[022] -> 0,0420 mm
+[023] -> 0,0000
+[024] -> 0,0178
+[025] -> 0,0000
+[026] -> 0,0420
+[027] -> 0,0242
+[028] -> Pontos 537
+[029] -> Tipo de filtro Sem Filtro
+[030] -> Lc
+[031] -> upr
+[032] -> Vmess[mm/s]
+[033] -> Raio da sonda 0,7489
+[034] -> Método de avaliação Elemento Mínimo
+[035] -> X
+[036] -> Y
+[037] -> Z
+[038] -> Cilindricidade ENCAIXE INFERIOR
+[039] -> 0,0723 mm
+[040] -> 0,0000
+[041] -> 0,0332
+[042] -> 0,0000
+[043] -> 0,0723
+[044] -> 0,0391
+[045] -> Pontos 1335
+[046] -> Tipo de filtro Sem Filtro
+[047] -> Lc
+[048] -> upr
+[049] -> Vmess[mm/s]
+[050] -> Raio da sonda 0,9993
+[051] -> Método de avaliação Elemento Mínimo
+[052] -> Diametro_AREA DE TRABALHO
+[053] -> 75,9764 mm
+[054] -> 76,0000
+[055] -> 0,1500
+[056] -> -0,1500
+[057] -> -0,0236
+[058] -> Diametro_AREA DE NAO TRABALHO
+[059] -> 75,9698 mm
+[060] -> 76,0000
+[061] -> 0,1500
+[062] -> -0,1500
+[063] -> -0,0302
+[064] -> X
+[065] -> Y
+[066] -> Z
+[067] -> Cilindricidade AREA DE TRABALHO
+[068] -> 0,0428 mm
+[069] -> 0,0000
+[070] -> 0,0332
+[071] -> 0,0000
+[072] -> 0,0428
+[073] -> 0,0096
+[074] -> Pontos 461
+[075] -> Tipo de filtro Sem Filtro
+[076] -> Lc
+[077] -> upr
+[078] -> Vmess[mm/s]
+[079] -> Raio da sonda 0,7490
+[080] -> Método de avaliação Elemento Mínimo
+
+=== PÁGINA 3 ===
+[000] -> CARCACA DE BOMBA CARGILL 8
+[001] -> Peça:
+[002] -> 14
+[003] -> Parte n°
+[004] -> Master
+[005] -> Operador
+[006] -> 23/06/2026 09:42
+[007] -> Data/Hora
+[008] -> Page 3 of 4
+[009] -> 7.8.08
+[010] -> CALYPSO
+[011] -> Name
+[012] -> Nominal value
+[013] -> Measured value
+[014] -> +/-
+[015] -> Desvio
+[016] -> +Tol
+[017] -> -Tol
+[018] -> X
+[019] -> Y
+[020] -> Z
+[021] -> Cilindricidade AREA DE NAO TRABA…
+[022] -> 0,0499 mm
+[023] -> 0,0000
+[024] -> 0,0332
+[025] -> 0,0000
+[026] -> 0,0499
+[027] -> 0,0167
+[028] -> Pontos 1212
+[029] -> Tipo de filtro Sem Filtro
+[030] -> Lc
+[031] -> upr
+[032] -> Vmess[mm/s]
+[033] -> Raio da sonda 0,7490
+[034] -> Método de avaliação Elemento Mínimo
+[035] -> n.def.
+[036] -> Event
+[037] -> Text
+
+=== PÁGINA 4 ===
+[000] -> CARCACA DE BOMBA CARGILL 8
+[001] -> Peça:
+[002] -> 14
+[003] -> Parte n°
+[004] -> Master
+[005] -> Operador
+[006] -> 23/06/2026 09:42
+[007] -> Data/Hora
+[008] -> Page 4 of 4
+[009] -> 7.8.08
+[010] -> CALYPSO
+[011] -> Este documento, emitido na data de 23/06/2026 09:42:56, tem a finalidade de apresentar somente os dados no
+[012] -> processo realizadas dentro do CENTRO DE EXECELÊNCIA EM METROLOGIA SENAI ZEISS, instalado na
+[013] -> FACULDADE DE TECNOLOGIA SENAI ÍTALO BOLOGNA no endereço: R. Armogaste José da Silveira, 612 - St.
+[014] -> Centro Oeste, Goiânia – GO.
+[015] -> Todas medições foram feitas dentro de temperatura controlada entre 19-21 °C
+[016] -> Esse Documento não pode ser reproduzido sem a autorização da coordenação do CENTRO DE EXECELÊNCIA EM
+[017] -> METROLOGIA SENAI ZEISS
+[018] -> ASS:
+[019] -> RT do CENTRO DE EXECELÊNCIA EM METROLOGIA
+[020] -> Nome e contato do cliente:
+[021] -> Serviço oferecido
+[022] -> Data Recebimento da(s) peça(s):
+[023] -> amostragem
+[024] -> ensaio
+[025] -> nome da empresa
+[026] -> xx/xx/xxxx
+[027] -> Contato da empresa
