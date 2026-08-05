@@ -10,7 +10,7 @@ from src.core.parser.parser import RelatorioCalypsoDto
 from src.core.parser.table_extractor import MedicaoItemDto
 
 _TEMPLATE_GLOBAL_KEY = "_global"
-_PROTECTED_SECTION_IDS = frozenset({"cabecalho", "historico_versoes"})
+_PROTECTED_SECTION_IDS = frozenset({"cabecalho", "historico_versoes", "anexos"})
 
 
 def split_template_content_defaults(content_defaults: dict) -> tuple[dict, dict]:
@@ -135,6 +135,11 @@ def build_template_sections_summary(
     """Lista de seções para o sumário do editor de templates."""
     from src.core.application.interpretacao_edit import build_interpretacao_editor_fields
     from src.core.domain.report_field_registry import default_prose_values
+    from src.core.domain.table_row_registry import (
+        TABLE_SECTIONS,
+        merge_table_rows,
+        resolve_introducao_table_rows,
+    )
 
     section_defaults, _global = split_template_content_defaults(content_defaults)
     result: list[dict] = []
@@ -147,7 +152,24 @@ def build_template_sections_summary(
                 report_kind=report_kind,
                 existing=defaults,
             )
+        if section_id == "introducao" and not str(defaults.get("nota") or "").strip():
+            defaults["nota"] = str(
+                defaults.get("nota")
+                or defaults.get("intro")
+                or defaults.get("nota_deteccao")
+                or ""
+            )
         cfg = sections_config.get(section_id, {})
+        stored_rows = section_defaults.get(section_id, {}).get("table_rows")
+        if section_id == "introducao":
+            table_rows = resolve_introducao_table_rows(
+                section_defaults.get(section_id, {}),
+                report_kind=report_kind,
+            )
+        elif section_id in TABLE_SECTIONS:
+            table_rows = merge_table_rows(section_id, stored_rows)
+        else:
+            table_rows = defaults.get("table_rows")
         result.append(
             {
                 "id": section_id,
@@ -157,7 +179,7 @@ def build_template_sections_summary(
                 "protected": section_id in _PROTECTED_SECTION_IDS,
                 "custom": is_custom_section_id(section_id),
                 "fields": defaults,
-                "table_rows": defaults.get("table_rows"),
+                "table_rows": table_rows,
                 "media_kinds": defaults.get("media_kinds"),
                 "has_overrides": bool(section_defaults.get(section_id)),
                 "override_keys": sorted(section_defaults.get(section_id, {}).keys()),

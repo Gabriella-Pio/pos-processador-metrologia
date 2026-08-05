@@ -8,3 +8,4 @@ from .tomografia_section import TomografiaSection
 from .interpretacao_section import InterpretacaoSection
 from .conclusao_section import ConclusaoSection
 from .historico_versoes_section import HistoricoVersoesSection
+from .anexos_section import AnexosSection

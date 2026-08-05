@@ -5,7 +5,7 @@ from src.core.application.template_preview import split_template_content_default
 from src.core.domain.ports import ReportDocument, TemplateRepository
 from src.core.domain.section_schema import is_custom_section_id
 
-_FIXED_SECTION_IDS = frozenset({"cabecalho", "historico_versoes"})
+_FIXED_SECTION_IDS = frozenset({"cabecalho", "historico_versoes", "anexos"})
 
 
 def apply_template_layout(document: ReportDocument, template_repo: TemplateRepository | None) -> None:

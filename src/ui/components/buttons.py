@@ -119,7 +119,9 @@ class IconButton(_BaseButton):
 
     def __init__(self, icon: QIcon, tooltip: str = "", parent=None) -> None:
         super().__init__("", icon, parent)
+        # Sobrescreve o min-height=36 do _BaseButton para o tamanho compacto.
         self.setFixedSize(34, 34)
+        self.setMinimumHeight(34)
         if tooltip:
             self.setToolTip(tooltip)
         self.refresh_appearance()

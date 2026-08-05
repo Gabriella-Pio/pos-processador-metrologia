@@ -4,6 +4,16 @@ from __future__ import annotations
 TOMO_PROSE_DEFAULTS: dict[str, dict[str, str]] = {
     "introducao": {
         "section_title": "RELATÓRIO TÉCNICO — INSPEÇÃO TOMOGRÁFICA INDUSTRIAL",
+        "intro": (
+            "Nota: “não identificadas” indica ausência de indicações detectáveis nas condições "
+            "do ensaio e não constitui garantia absoluta de inexistência de descontinuidades "
+            "abaixo do limite de detecção."
+        ),
+        "nota": (
+            "Nota: “não identificadas” indica ausência de indicações detectáveis nas condições "
+            "do ensaio e não constitui garantia absoluta de inexistência de descontinuidades "
+            "abaixo do limite de detecção."
+        ),
         "objetivo": (
             "Apresentar os resultados da inspeção por tomografia computadorizada industrial "
             "realizada no componente {componente}, com foco na avaliação não destrutiva de "
@@ -40,6 +50,7 @@ TOMO_PROSE_DEFAULTS: dict[str, dict[str, str]] = {
             "do ensaio e não constitui garantia absoluta de inexistência de descontinuidades "
             "abaixo do limite de detecção."
         ),
+        "foto_legenda": "Peça avaliada em processo de inspeção tomográfica",
     },
     "identificacao": {
         "section_title": "IDENTIFICAÇÃO E CONDIÇÕES DA INSPEÇÃO",
@@ -127,7 +138,6 @@ TOMO_PROSE_DEFAULTS: dict[str, dict[str, str]] = {
             "relatório não estabelece conformidade com desenho, norma de produto ou critério de "
             "aceitação não fornecido e não substitui ensaios funcionais do componente."
         ),
-        "aprovacao": "",
     },
 }
 
@@ -141,4 +151,14 @@ IDENTIFICACAO_TOMO_TABLE_ROWS = (
     ("geracao", "Geração da radiação", "Gerador elétrico por tubo de raios X; sem fonte radioisotópica selada"),
     ("unidade", "Unidade executora", "Centro de Excelência em Metrologia SENAI | ZEISS"),
     ("data_hora", "Data de emissão", "{data_hora}"),
+)
+
+INTRODUCAO_TOMO_TABLE_ROWS = (
+    ("amostra", "AMOSTRA", "1 peça"),
+    ("tipo_analise", "TIPO DE ANÁLISE", "Qualitativa"),
+    ("metodo", "MÉTODO", "Não destrutivo"),
+    ("equipamento", "EQUIPAMENTO", "ZEISS BOSELLO MAX 80-150"),
+    ("trincas", "TRINCAS INTERNAS", "Não identificadas"),
+    ("impurezas", "IMPUREZAS", "Não identificadas"),
+    ("obstrucoes", "OBSTRUÇÕES", "Não identificadas"),
 )

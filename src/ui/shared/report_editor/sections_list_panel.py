@@ -28,7 +28,7 @@ _ACCENT_WIDTH = 3
 _ACTIONS_WIDTH = 76
 
 
-_PROTECTED_TEMPLATE_IDS = frozenset({"cabecalho", "historico_versoes"})
+_PROTECTED_TEMPLATE_IDS = frozenset({"cabecalho", "historico_versoes", "anexos"})
 
 
 class TemplateSectionRow(QFrame):

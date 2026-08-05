@@ -33,6 +33,8 @@ class SectionMediaDef:
 
 PROSE_TEMPLATES: dict[str, dict[str, str]] = {
     "introducao": {
+        "nota": "",
+        "intro": "",  # legado — migrado para nota
         "objetivo": (
             "Apresentar os resultados da inspeção dimensional realizada no componente "
             "identificado como {componente}, com base no relatório ZEISS CALYPSO."
@@ -78,24 +80,19 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
     },
     "observacoes_limitacoes": {
         "body": "",
-        "aprovacao": "",
     },
     "interpretacao": {
         "intro": (
             "Análise detalhada das {numero_medicoes} características inspecionadas no "
             "componente {componente}:"
         ),
+        "nota": "",
     },
     "controle_tecnico": {
         "intro": (
             "Registro dos responsáveis técnicos pela medição, revisão e, quando aplicável, "
             "aprovação deste relatório."
         ),
-        "label_measured_by": "Medido por",
-        "label_reviewed_by": "Revisado por",
-        "label_approved_by": "Aprovado por",
-        "label_role": "Cargo",
-        "label_institutional_email": "E-mail institucional",
     },
     "identificacao": {
         "intro": "",
@@ -111,9 +108,17 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
             "dimensionais constatadas, cabendo avaliação do setor de engenharia e qualidade "
             "para liberação ou retrabalho."
         ),
+        # Rótulo centrado sob a conclusão — espaço para assinatura gov.br posterior.
+        "aprovacao": "Aprovação / Coordenação CEM",
     },
     "historico_versoes": {
         "intro": "Registro das versões emitidas deste relatório.",
+    },
+    "anexos": {
+        "intro": (
+            "Seguem anexos os PDFs de origem fornecidos na importação do projeto, "
+            "para consulta e rastreabilidade."
+        ),
     },
 }
 
@@ -130,6 +135,13 @@ INTRODUCAO_CONTENT_BLOCKS: tuple[IntroducaoBlockDef, ...] = (
     IntroducaoBlockDef("title_referencia", "referencia", "Referência de medição"),
 )
 
+# body_key → title_key (rótulo editável no PDF, ex.: objetivo → title_objetivo)
+INTRODUCAO_BODY_TITLE_KEYS: dict[str, str] = {
+    block.body_key: block.title_key
+    for block in INTRODUCAO_CONTENT_BLOCKS
+    if block.body_key
+}
+
 INTRODUCAO_HEADER_ONLY_BLOCKS: tuple[IntroducaoBlockDef, ...] = (
     IntroducaoBlockDef("title_amostra", "valor_amostra", "Amostra"),
     IntroducaoBlockDef("title_valores", "valor_valores", "Valores avaliados"),
@@ -137,40 +149,46 @@ INTRODUCAO_HEADER_ONLY_BLOCKS: tuple[IntroducaoBlockDef, ...] = (
     IntroducaoBlockDef("title_mmc", "valor_mmc", "Máquina de medição (MMC)"),
 )
 
+_SECTION_FOOTER_NOTE = SectionFieldDef("nota", "Nota de rodapé", "textarea")
+
 _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
-    "introducao": (),
+    "introducao": (
+        SectionFieldDef("objetivo", "Objetivo", "textarea"),
+        SectionFieldDef("escopo", "Escopo da análise", "textarea"),
+        SectionFieldDef("referencia", "Referência de medição", "textarea"),
+        _SECTION_FOOTER_NOTE,
+    ),
     "identificacao": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "metodo_escopo": (
         SectionFieldDef("body", "Texto do método e escopo", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "registro_componente": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "controle_tecnico": (
-        SectionFieldDef("label_measured_by", "Título — Medido por"),
-        SectionFieldDef("measured_by", "Medido por"),
-        SectionFieldDef("label_reviewed_by", "Título — Revisado por"),
-        SectionFieldDef("reviewed_by", "Revisado por"),
-        SectionFieldDef("label_approved_by", "Título — Aprovado por"),
-        SectionFieldDef("approved_by", "Aprovado por"),
-        SectionFieldDef("label_role", "Título — Cargo"),
-        SectionFieldDef("role", "Cargo"),
-        SectionFieldDef("label_institutional_email", "Título — E-mail institucional"),
-        SectionFieldDef("institutional_email", "E-mail institucional"),
+        SectionFieldDef("intro", "Texto introdutório / subtítulo", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "resultados": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "grafica": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "tomografia": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "resultados_inspecao": (
         SectionFieldDef("body", "Texto dos resultados", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "interpretacao": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
@@ -178,22 +196,33 @@ _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
         SectionFieldDef("bullet_2", "Interpretação 2", "textarea"),
         SectionFieldDef("bullet_3", "Interpretação 3", "textarea"),
         SectionFieldDef("bullet_4", "Interpretação 4", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
     "conclusao": (
         SectionFieldDef("texto", "Texto da conclusão", "textarea"),
         SectionFieldDef("modo", "Modo", "text", editable=False),
+        SectionFieldDef("aprovacao", "Aprovação / Coordenação CEM", "text"),
+        _SECTION_FOOTER_NOTE,
     ),
     "observacoes_limitacoes": (
         SectionFieldDef("body", "Texto das observações", "textarea"),
-        SectionFieldDef("aprovacao", "Aprovação / Coordenação", "text"),
+        _SECTION_FOOTER_NOTE,
     ),
     "historico_versoes": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _SECTION_FOOTER_NOTE,
+    ),
+    "anexos": (
+        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _SECTION_FOOTER_NOTE,
     ),
 }
 
 _SECTION_MEDIA: dict[str, tuple[SectionMediaDef, ...]] = {
-    "introducao": (SectionMediaDef("photos", "Fotografias"),),
+    "introducao": (
+        SectionMediaDef("tables", "Tabela da introdução"),
+        SectionMediaDef("photos", "Fotografias"),
+    ),
     "grafica": (
         SectionMediaDef("photos", "Fotografias"),
         SectionMediaDef("graphics", "Gráficos"),
@@ -202,6 +231,7 @@ _SECTION_MEDIA: dict[str, tuple[SectionMediaDef, ...]] = {
     "registro_componente": (SectionMediaDef("photos", "Fotografias"),),
     "resultados": (SectionMediaDef("tables", "Tabela de resultados"),),
     "identificacao": (SectionMediaDef("tables", "Tabela de identificação"),),
+    "controle_tecnico": (SectionMediaDef("tables", "Tabela de controle técnico"),),
 }
 
 GLOBAL_FIELDS: tuple[GlobalFieldDef, ...] = (

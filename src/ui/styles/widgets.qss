@@ -259,9 +259,12 @@ QListWidget {{
     color: {text_primary};
 }}
 QListWidget::item {{
-    padding: 6px 8px;
+    /* padding no widget customizado — padding no item corta o conteúdo */
+    padding: 0px;
+    margin: 2px 0px;
     border-radius: 4px;
     border-bottom: 1px solid {border_subtle};
+    min-height: 36px;
 }}
 QListWidget::item:hover {{
     background-color: {bg_surface_alt};
@@ -290,29 +293,35 @@ margin: {sm}px;
 background: rgba(74, 111, 212, 0.08);
 
 /* @fragment workspace_annotation_toolbar */
-QFrame {{
+QFrame#AnnotationToolbar {{
     background-color: {bg_surface};
-    border-top: 1px solid {border};
-    border-bottom: 1px solid {border};
+    border: 1px solid {senai_blue};
+    border-radius: {radius_md}px;
 }}
 
 /* @fragment workspace_annotation_button */
 QPushButton {{
     background-color: {bg_surface_alt};
-    color: {text_secondary};
-    border: 1px solid {border};
+    color: {text_primary};
+    border: 1px solid {border_strong};
     border-radius: {radius_sm}px;
-    font-size: 14px;
+    font-size: 12px;
+    padding: 4px;
 }}
 QPushButton:hover {{
     background-color: {bg_elevated};
     color: {text_primary};
-    border-color: {border_strong};
+    border-color: {senai_blue_light};
 }}
 QPushButton:checked {{
-    background-color: rgba(74, 111, 212, 0.28);
+    background-color: rgba(74, 111, 212, 0.35);
     color: {text_primary};
-    border-color: {senai_blue};
+    border-color: {senai_blue_light};
+}}
+QPushButton:disabled {{
+    background-color: {bg_surface_alt};
+    color: {text_muted};
+    border-color: {border_subtle};
 }}
 
 /* @fragment workspace_version_entry */

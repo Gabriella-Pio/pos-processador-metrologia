@@ -14,16 +14,22 @@ class InterpretacaoSection(BaseSection):
         story.append(anchored_section_title(heading, styles['secao'], "interpretacao", contexto_extra.get("section_anchor_map")))
         intro_default = PROSE_TEMPLATES.get("interpretacao", {}).get("intro", "")
         intro_text = get_section_prose(contexto_extra, "interpretacao", "intro", intro_default)
-        story.append(Paragraph(intro_text, styles['texto']))
-        story.append(Spacer(1, 4))
+        if intro_text.strip():
+            story.append(Paragraph(intro_text, styles["texto"]))
+            story.append(Spacer(1, 4))
 
         report_kind = contexto_extra.get("report_kind") or getattr(dados_parseados, "source_kind", "")
         prose = contexto_extra.get("section_prose", {}).get("interpretacao", {})
-        has_edited_bullets = any(str(prose.get(f"bullet_{i}") or "").strip() for i in range(1, 5))
+        bullet_keys = sorted(
+            (k for k in prose if k.startswith("bullet_") and str(prose.get(k) or "").strip()),
+            key=lambda k: int(k.split("_", 1)[1]) if k.split("_", 1)[1].isdigit() else 999,
+        )
+        has_edited_bullets = bool(bullet_keys)
 
         if report_kind in {"tomografia", "insp_ect"} or has_edited_bullets:
-            for i in range(1, 5):
-                bullet = get_section_prose(contexto_extra, "interpretacao", f"bullet_{i}", "")
+            keys = bullet_keys or [f"bullet_{i}" for i in range(1, 5)]
+            for key in keys:
+                bullet = get_section_prose(contexto_extra, "interpretacao", key, "")
                 if bullet:
                     story.append(Paragraph(f"•  {bullet}", styles["bullet"]))
             story.append(Spacer(1, 10))

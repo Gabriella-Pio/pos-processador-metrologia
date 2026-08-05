@@ -2,11 +2,13 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate
 from .styles import ReportStyles
 from .constants import ReportTheme, TEMPLATE_PADRAO_OFICIAL
+from .prose_helpers import append_section_footer_note
 from src.core.domain.section_numbering import build_section_number_map
+from .components.pdf_annex import append_source_pdfs
 from .sections import (
     CabecalhoSection, IntroducaoSection, IdentificacaoSection, ControleTecnicoSection,
     ResultadosSection, GraficaSection, TomografiaSection, InterpretacaoSection,
-    ConclusaoSection, HistoricoVersoesSection
+    ConclusaoSection, HistoricoVersoesSection, AnexosSection,
 )
 from .sections.tomo_extra_sections import (
     MetodoEscopoSection,
@@ -31,6 +33,7 @@ class ReportGenerator:
         "conclusao": ConclusaoSection,
         "observacoes_limitacoes": ObservacoesLimitacoesSection,
         "historico_versoes": HistoricoVersoesSection,
+        "anexos": AnexosSection,
     }
 
     @classmethod
@@ -89,6 +92,8 @@ class ReportGenerator:
             "table_rows": table_rows or {},
             "section_number_map": build_section_number_map(template_config),
             "report_kind": opcoes_extras.get("report_kind", ""),
+            "foto_captions": opcoes_extras.get("foto_captions") or {},
+            "anexo_pdfs": list(opcoes_extras.get("anexo_pdfs") or []),
         }
 
         for bloco in template_config:
@@ -99,13 +104,20 @@ class ReportGenerator:
                 secao_classe = cls.REGISTRY_SECOES[tipo]
                 instancia_secao = secao_classe(config)
                 instancia_secao.render(story, styles, dados_parseados, contexto_extra)
+                append_section_footer_note(story, styles, tipo, contexto_extra)
             elif tipo.startswith("custom_"):
                 from .sections.custom_section import CustomSection
                 CustomSection({**config, "section_id": tipo}).render(
                     story, styles, dados_parseados, contexto_extra
                 )
+                append_section_footer_note(story, styles, tipo, contexto_extra)
 
         doc.build(story, onFirstPage=cls._adicionar_rodape, onLaterPages=cls._adicionar_rodape)
+
+        anexos_enabled = any(b.get("tipo") == "anexos" for b in template_config)
+        if anexos_enabled:
+            append_source_pdfs(caminho_saida, contexto_extra.get("anexo_pdfs") or [])
+
         print(f"[Engine] Relatório modular gerado com sucesso em: {caminho_saida}")
 
     @staticmethod

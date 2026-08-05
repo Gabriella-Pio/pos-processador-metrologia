@@ -43,7 +43,11 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
             document.evaluated_component,
         )
         images = [
-            {"path": str(img.image_path), "section_id": img.section_id}
+            {
+                "path": str(img.image_path),
+                "section_id": img.section_id,
+                "caption": img.caption or "",
+            }
             for img in document.images
         ]
         with self._connect() as conn:
@@ -97,7 +101,11 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
         document.section_order = json.loads(order_raw) if order_raw else None
         images_raw = json.loads(row[4] or "[]")
         document.images = [
-            ReportImage(image_path=Path(item["path"]), section_id=item["section_id"])
+            ReportImage(
+                image_path=Path(item["path"]),
+                section_id=item["section_id"],
+                caption=str(item.get("caption") or ""),
+            )
             for item in images_raw
             if item.get("path") and item.get("section_id")
         ]

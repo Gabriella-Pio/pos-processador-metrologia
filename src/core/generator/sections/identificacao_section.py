@@ -2,8 +2,9 @@ from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
-from ..prose_helpers import get_section_heading
+from ..prose_helpers import get_section_heading, get_section_prose
 from src.core.domain.placeholder_utils import resolve_placeholders
+from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 
 class IdentificacaoSection(BaseSection):
@@ -14,6 +15,16 @@ class IdentificacaoSection(BaseSection):
             SECTION_HEADING_DEFAULTS["identificacao"],
         )
         story.append(anchored_section_title(heading, styles['secao'], "identificacao", contexto_extra.get("section_anchor_map")))
+
+        intro = get_section_prose(
+            contexto_extra,
+            "identificacao",
+            "intro",
+            PROSE_TEMPLATES.get("identificacao", {}).get("intro", ""),
+        )
+        if intro.strip():
+            story.append(Paragraph(intro, styles["texto"]))
+            story.append(Spacer(1, 8))
 
         ctx = contexto_extra.get("placeholder_context", {})
         table_rows = (contexto_extra.get("table_rows") or {}).get("identificacao", [])

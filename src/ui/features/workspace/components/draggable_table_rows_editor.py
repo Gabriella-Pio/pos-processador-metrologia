@@ -1,36 +1,97 @@
 """Editor de linhas label | valor com reordenação por arraste."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QVBoxLayout
+import uuid
 
-from src.ui.components.buttons import SecondaryButton
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QResizeEvent
+from PyQt6.QtWidgets import (
+    QAbstractScrollArea,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QSizePolicy,
+    QVBoxLayout,
+)
+
+from src.ui.components.buttons import IconButton, SecondaryButton
+from src.ui.components.icons import icon_close
 from src.ui.components.placeholder_field import PlaceholderTextEdit
-from src.ui.styles import SPACING, heading_style
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, caption_style, heading_style
+
+
+def _micro_label(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setStyleSheet(
+        f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
+        f"font-weight: {TYPOGRAPHY.weight_medium}; background: transparent;"
+    )
+    return label
 
 
 class _TableRowWidget(QFrame):
-    def __init__(self, row: dict[str, str], parent=None) -> None:
+    """Uma linha no estilo do PDF: rótulo + valor no mesmo card."""
+
+    remove_requested = pyqtSignal()
+
+    def __init__(
+        self,
+        row: dict[str, str],
+        *,
+        multiline_value: bool = True,
+        allow_remove: bool = False,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self.row_id = row.get("id", "")
+        self.setObjectName("IdentTableRow")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.setStyleSheet(
+            f"QFrame#IdentTableRow {{"
+            f" background: {PALETTE.bg_surface};"
+            f" border: 1px solid {PALETTE.border_subtle};"
+            f" border-radius: 8px;"
+            f"}}"
+        )
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(SPACING.xs, SPACING.sm, SPACING.xs, SPACING.sm)
+        layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, SPACING.sm)
         layout.setSpacing(SPACING.sm)
 
         self._drag_handle = QLabel("⠿")
         self._drag_handle.setToolTip("Arraste para reordenar")
-        self._drag_handle.setFixedWidth(16)
-        self._drag_handle.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._drag_handle.setFixedWidth(18)
+        self._drag_handle.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        self._drag_handle.setStyleSheet(
+            f"color: {PALETTE.text_muted}; font-size: 16px; background: transparent; padding-top: 4px;"
+        )
+        self._drag_handle.setCursor(Qt.CursorShape.SizeAllCursor)
 
+        fields = QVBoxLayout()
+        fields.setContentsMargins(0, 0, 0, 0)
+        fields.setSpacing(4)
+
+        fields.addWidget(_micro_label("Rótulo (como no PDF)"))
         self._label_edit = PlaceholderTextEdit(multiline=False)
         self._label_edit.set_text(row.get("label", ""))
+        fields.addWidget(self._label_edit)
 
-        self._value_edit = PlaceholderTextEdit(multiline=False)
+        fields.addWidget(_micro_label("Valor"))
+        self._value_edit = PlaceholderTextEdit(multiline=multiline_value)
         self._value_edit.set_text(row.get("value", ""))
+        fields.addWidget(self._value_edit)
 
         layout.addWidget(self._drag_handle, alignment=Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(self._label_edit, stretch=2)
-        layout.addWidget(self._value_edit, stretch=3)
+        layout.addLayout(fields, stretch=1)
+
+        if allow_remove:
+            remove_btn = IconButton(icon_close(), "Remover linha")
+            remove_btn.setFixedSize(22, 22)
+            remove_btn.setIconSize(QSize(12, 12))
+            remove_btn.clicked.connect(self.remove_requested.emit)
+            layout.addWidget(remove_btn, alignment=Qt.AlignmentFlag.AlignTop)
 
     def to_dict(self) -> dict[str, str]:
         return {
@@ -44,65 +105,162 @@ class DraggableTableRowsEditor(QFrame):
     rows_changed = pyqtSignal(list)
     restore_requested = pyqtSignal()
 
-    def __init__(self, title: str = "Linhas da tabela", parent=None) -> None:
+    def __init__(
+        self,
+        title: str = "Linhas da tabela",
+        *,
+        multiline_value: bool = True,
+        allow_add_remove: bool = False,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._loading = False
-        self._item_by_widget: dict[int, QListWidgetItem] = {}
+        self._multiline_value = multiline_value
+        self._allow_add_remove = allow_add_remove
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         title_label = QLabel(title)
         title_label.setStyleSheet(heading_style(4))
+        title_label.setWordWrap(True)
+
+        hint = QLabel(
+            "Cada card é uma célula da tabela no PDF. Arraste ⠿ para reordenar; "
+            "use ✕ para remover."
+        )
+        hint.setWordWrap(True)
+        hint.setObjectName("SidebarHint")
+        hint.setStyleSheet(caption_style())
 
         self._list = QListWidget()
         self._list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._list.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._list.setSpacing(8)
         self._list.setUniformItemSizes(False)
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._list.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+        self._list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._list.setStyleSheet(
+            "QListWidget { background: transparent; border: none; }"
+            "QListWidget::item { background: transparent; padding: 0px; }"
+        )
         self._list.model().rowsMoved.connect(self._emit_rows)
 
-        btn_row = QHBoxLayout()
-        restore = SecondaryButton("Restaurar ordem padrão")
+        self._actions = QVBoxLayout()
+        self._actions.setSpacing(SPACING.xs)
+        if allow_add_remove:
+            add_btn = SecondaryButton("+ Adicionar linha")
+            add_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            add_btn.clicked.connect(self._on_add_row)
+            self._actions.addWidget(add_btn)
+        restore = SecondaryButton("Restaurar linhas padrão")
+        restore.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        restore.setToolTip("Volta rótulos, valores e ordem ao padrão do template")
         restore.clicked.connect(self.restore_requested.emit)
-        btn_row.addStretch(1)
-        btn_row.addWidget(restore)
+        self._actions.addWidget(restore)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, SPACING.sm, 0, 0)
-        layout.setSpacing(SPACING.xs)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(SPACING.sm)
         layout.addWidget(title_label)
+        layout.addWidget(hint)
         layout.addWidget(self._list)
-        layout.addLayout(btn_row)
+        layout.addLayout(self._actions)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._sync_all_item_widths()
 
     def set_rows(self, rows: list[dict[str, str]]) -> None:
         self._loading = True
         self._list.clear()
-        self._item_by_widget.clear()
         for row in rows:
-            item = QListWidgetItem()
-            item.setFlags(
-                item.flags()
-                | Qt.ItemFlag.ItemIsDragEnabled
-                | Qt.ItemFlag.ItemIsDropEnabled
-                | Qt.ItemFlag.ItemIsEnabled
-            )
-            widget = _TableRowWidget(row)
-            widget._label_edit.text_changed.connect(self._emit_rows)
-            widget._value_edit.text_changed.connect(self._emit_rows)
-            widget._label_edit.height_changed.connect(
-                lambda w=widget, i=item: self._sync_item_height(i, w)
-            )
-            widget._value_edit.height_changed.connect(
-                lambda w=widget, i=item: self._sync_item_height(i, w)
-            )
-            self._list.addItem(item)
-            self._list.setItemWidget(item, widget)
-            self._sync_item_height(item, widget)
+            self._append_row_item(row, emit_on_ready=False)
         self._loading = False
+        QTimer.singleShot(0, self._sync_all_item_widths)
+
+    def _viewport_width(self) -> int:
+        return max(80, self._list.viewport().width())
+
+    def _append_row_item(self, row: dict[str, str], *, emit_on_ready: bool = False) -> None:
+        item = QListWidgetItem()
+        item.setFlags(
+            item.flags()
+            | Qt.ItemFlag.ItemIsDragEnabled
+            | Qt.ItemFlag.ItemIsDropEnabled
+            | Qt.ItemFlag.ItemIsEnabled
+        )
+        widget = _TableRowWidget(
+            row,
+            multiline_value=self._multiline_value,
+            allow_remove=self._allow_add_remove,
+        )
+        widget._label_edit.text_changed.connect(self._emit_rows)
+        widget._value_edit.text_changed.connect(self._emit_rows)
+        widget._label_edit.height_changed.connect(
+            lambda w=widget: self._sync_widget_height(w)
+        )
+        widget._value_edit.height_changed.connect(
+            lambda w=widget: self._sync_widget_height(w)
+        )
+        if self._allow_add_remove:
+            widget.remove_requested.connect(lambda w=widget: self._remove_widget(w))
+        self._list.addItem(item)
+        self._list.setItemWidget(item, widget)
+        self._sync_item_height(item, widget)
+        QTimer.singleShot(0, lambda w=widget: self._sync_widget_height(w))
+        if emit_on_ready:
+            self._emit_rows()
+
+    def _on_add_row(self) -> None:
+        row_id = f"custom_{uuid.uuid4().hex[:8]}"
+        self._append_row_item(
+            {"id": row_id, "label": "Novo campo", "value": ""},
+            emit_on_ready=True,
+        )
+
+    def _remove_widget(self, widget: _TableRowWidget) -> None:
+        item = self._item_for_widget(widget)
+        if item is None:
+            return
+        row = self._list.row(item)
+        if row >= 0:
+            self._list.takeItem(row)
+            self._emit_rows()
+
+    def _item_for_widget(self, widget: _TableRowWidget) -> QListWidgetItem | None:
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            if item is not None and self._list.itemWidget(item) is widget:
+                return item
+        return None
+
+    def _sync_widget_height(self, widget: _TableRowWidget) -> None:
+        item = self._item_for_widget(widget)
+        if item is None:
+            return
+        self._sync_item_height(item, widget)
+
+    def _sync_all_item_widths(self) -> None:
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            widget = self._list.itemWidget(item)
+            if isinstance(widget, _TableRowWidget):
+                self._sync_item_height(item, widget)
 
     def _sync_item_height(self, item: QListWidgetItem, widget: _TableRowWidget) -> None:
-        hint = widget.sizeHint()
-        # Garante espaço para chips + padding vertical
-        item.setSizeHint(hint)
-        widget.adjustSize()
+        try:
+            if self._list.row(item) < 0:
+                return
+            width = self._viewport_width()
+            widget.setMaximumWidth(width)
+            widget.setFixedWidth(width)
+            widget.adjustSize()
+            hint = widget.sizeHint()
+            height = max(hint.height(), widget.minimumSizeHint().height(), 88)
+            item.setSizeHint(QSize(width, height))
+        except RuntimeError:
+            return
 
     def get_rows(self) -> list[dict[str, str]]:
         rows: list[dict[str, str]] = []

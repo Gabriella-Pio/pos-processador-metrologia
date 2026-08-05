@@ -19,7 +19,7 @@ from src.core.domain.parsed_overrides import build_effective_dto, build_prose_co
 from src.core.parser.parser import PDFParserService
 from src.core.domain.placeholder_utils import build_placeholder_context
 from src.core.domain.report_field_registry import merge_section_prose, PROSE_TEMPLATES
-from src.core.domain.table_row_registry import INTRODUCAO_BLOCK_TITLES, SECTION_HEADING_DEFAULTS, merge_table_rows
+from src.core.domain.table_row_registry import INTRODUCAO_BLOCK_TITLES, SECTION_HEADING_DEFAULTS
 from src.core.domain.ports import ReportDocument, TechnicalControlInfo
 from src.core.domain.section_schema import is_navigable_section, sections_config_to_blocks
 from src.core.domain.section_numbering import build_section_number_map
@@ -83,7 +83,11 @@ class RealReportExporterAdapter:
             section_prose=section_prose,
             placeholder_context=placeholder_context,
             table_rows=table_rows,
-            opcoes_extras={"report_kind": self._report_kind(document)},
+            opcoes_extras={
+                "report_kind": self._report_kind(document),
+                "foto_captions": self._montar_foto_captions(document),
+                "anexo_pdfs": self._montar_anexo_pdfs(document),
+            },
         )
         self._last_section_anchor_map = section_anchor_map
         document.last_export_path = output_path
@@ -157,15 +161,15 @@ class RealReportExporterAdapter:
 
     @staticmethod
     def _apply_section_order(blocos: list[dict], document: ReportDocument) -> list[dict]:
-        if not document.section_order:
-            ordered = list(blocos)
-        else:
+        # cabecalho no início; histórico antes dos anexos; anexos sempre por último.
+        start = [b for b in blocos if b["tipo"] == "cabecalho"]
+        historico = [b for b in blocos if b["tipo"] == "historico_versoes"]
+        anexos = [b for b in blocos if b["tipo"] == "anexos"]
+        middle = [b for b in blocos if b["tipo"] not in _FIXED_SECTION_IDS]
+        if document.section_order:
             order_index = {sid: idx for idx, sid in enumerate(document.section_order)}
-            start = [b for b in blocos if b["tipo"] == "cabecalho"]
-            end = [b for b in blocos if b["tipo"] == "historico_versoes"]
-            middle = [b for b in blocos if b["tipo"] not in _FIXED_SECTION_IDS]
             middle.sort(key=lambda b: order_index.get(b["tipo"], 10_000))
-            ordered = start + middle + end
+        ordered = start + middle + historico + anexos
         return RealReportExporterAdapter._inject_custom_sections(ordered, document)
 
     @staticmethod
@@ -183,12 +187,28 @@ class RealReportExporterAdapter:
         result: list[dict] = []
         inserted = False
         for bloco in blocos:
-            if bloco["tipo"] == "historico_versoes" and not inserted:
+            # Custom antes do histórico (e dos anexos, que ficam por último).
+            if bloco["tipo"] in {"historico_versoes", "anexos"} and not inserted:
                 result.extend(custom_blocks)
                 inserted = True
             result.append(bloco)
         if not inserted:
             result.extend(custom_blocks)
+        return result
+
+    @staticmethod
+    def _montar_anexo_pdfs(document: ReportDocument) -> list[str]:
+        paths = list(document.attachment_pdf_paths or [])
+        if not paths and document.source_pdf_path:
+            paths = [document.source_pdf_path]
+        seen: set[str] = set()
+        result: list[str] = []
+        for path in paths:
+            key = str(Path(path).resolve()) if Path(path).exists() else str(path)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(str(path))
         return result
 
     def _montar_fotos_secoes(self, document: ReportDocument) -> dict:
@@ -200,6 +220,14 @@ class RealReportExporterAdapter:
         for imagem in document.images:
             fotos_por_secao.setdefault(imagem.section_id, []).append(str(imagem.image_path))
         return fotos_por_secao
+
+    def _montar_foto_captions(self, document: ReportDocument) -> dict[str, str]:
+        """Legendas por path da foto (cada imagem pode ter a sua)."""
+        captions: dict[str, str] = {}
+        for imagem in document.images:
+            if imagem.caption:
+                captions[str(imagem.image_path)] = imagem.caption
+        return captions
 
     def _versao_atual(self, document: ReportDocument) -> str:
         if document.version_history:
@@ -248,13 +276,52 @@ class RealReportExporterAdapter:
             if section_id == "introducao":
                 for key, default in INTRODUCAO_BLOCK_TITLES.items():
                     merged.setdefault(key, overrides.get(key, default))
+                if not str(merged.get("nota") or "").strip():
+                    merged["nota"] = str(
+                        overrides.get("nota")
+                        or overrides.get("intro")
+                        or overrides.get("nota_deteccao")
+                        or merged.get("intro")
+                        or merged.get("nota_deteccao")
+                        or ""
+                    )
+                for row in overrides.get("table_rows") or []:
+                    row_id = row.get("id", "")
+                    if row_id in ("objetivo", "escopo", "referencia"):
+                        if not str(merged.get(row_id) or "").strip() and row.get("value"):
+                            merged[row_id] = str(row.get("value") or "")
+                        title_key = f"title_{row_id}"
+                        if row.get("label") and not str(overrides.get(title_key) or "").strip():
+                            merged[title_key] = str(row.get("label") or "")
             result[section_id] = merged
         return result
 
     def _montar_table_rows(self, document: ReportDocument) -> dict[str, list]:
-        stored = document.section_overrides.get("identificacao", {}).get("table_rows")
-        if self._report_kind(document) == "tomografia" and not stored:
-            from src.core.domain.table_row_registry import default_tomo_identificacao_rows
+        from src.core.domain.table_row_registry import (
+            apply_control_info_to_rows,
+            default_tomo_identificacao_rows,
+            merge_table_rows,
+            resolve_introducao_table_rows,
+        )
 
-            return {"identificacao": default_tomo_identificacao_rows()}
-        return {"identificacao": merge_table_rows("identificacao", stored)}
+        result: dict[str, list] = {}
+        kind = self._report_kind(document)
+
+        stored_ident = document.section_overrides.get("identificacao", {}).get("table_rows")
+        if kind == "tomografia" and not stored_ident:
+            result["identificacao"] = default_tomo_identificacao_rows()
+        else:
+            result["identificacao"] = merge_table_rows("identificacao", stored_ident)
+
+        stored_ctrl = document.section_overrides.get("controle_tecnico", {}).get("table_rows")
+        ctrl_rows = merge_table_rows("controle_tecnico", stored_ctrl)
+        if not stored_ctrl and document.control_info is not None:
+            ctrl_rows = apply_control_info_to_rows(ctrl_rows, document.control_info)
+        result["controle_tecnico"] = ctrl_rows
+
+        intro_overrides = document.section_overrides.get("introducao", {})
+        result["introducao"] = resolve_introducao_table_rows(
+            intro_overrides,
+            report_kind=kind,
+        )
+        return result

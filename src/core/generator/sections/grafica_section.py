@@ -1,6 +1,6 @@
 from reportlab.platypus import Paragraph, Spacer
 from .base import BaseSection, anchored_section_title
-from ..components.image_handler import ReportImageHandler
+from ..components.photo_grid import append_photo_grid
 from ..prose_helpers import get_section_prose, get_section_heading
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
@@ -15,11 +15,10 @@ class GraficaSection(BaseSection):
         intro_text = get_section_prose(contexto_extra, "grafica", "intro", intro_default)
         story.append(Paragraph(intro_text, styles['texto']))
         
-        # Exemplo opcional: renderizando fotos dinâmicas caso o usuário tenha anexado fotos nesta seção
         fotos_secao = contexto_extra.get("fotos_secoes", {}).get("grafica", [])
-        for caminho in fotos_secao:
-            elem = ReportImageHandler.criar_elemento_foto(caminho, styles=styles)
+        captions = contexto_extra.get("foto_captions") or {}
+        if fotos_secao:
             story.append(Spacer(1, 4))
-            story.append(elem)
+            append_photo_grid(story, list(fotos_secao), captions, styles)
 
         story.append(Spacer(1, 10))

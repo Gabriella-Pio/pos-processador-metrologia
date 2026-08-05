@@ -38,6 +38,7 @@ class ReportImage:
     image_path: Path
     section_id: str
     annotations: list[Annotation] = field(default_factory=list)
+    caption: str = ""
 
 
 @dataclass
@@ -69,6 +70,8 @@ class ReportDocument:
     source_pdf_path: Path
     client_project: str
     evaluated_component: str
+    # PDFs de origem a anexar na seção Anexos (vazio = usa ``source_pdf_path``).
+    attachment_pdf_paths: list[Path] = field(default_factory=list)
     images: list[ReportImage] = field(default_factory=list)
     control_info: TechnicalControlInfo | None = None
     version_history: list[VersionEntry] = field(default_factory=list)

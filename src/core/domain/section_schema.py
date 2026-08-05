@@ -40,6 +40,7 @@ SECTION_DEFINITIONS: tuple[SectionDefinition, ...] = (
     SectionDefinition("conclusao", "Conclusão"),
     SectionDefinition("observacoes_limitacoes", "Observações e limitações", enabled_by_default=False),
     SectionDefinition("historico_versoes", "Histórico de versões"),
+    SectionDefinition("anexos", "Anexos"),
 )
 
 SECTION_TITLES: dict[str, str] = {s.id: s.label for s in SECTION_DEFINITIONS}
@@ -64,6 +65,7 @@ TEMPLATE_TOMOGRAFIA_OFICIAL: list[dict] = [
     {"tipo": "observacoes_limitacoes", "config": {}},
     {"tipo": "controle_tecnico", "config": {}},
     {"tipo": "historico_versoes", "config": {}},
+    {"tipo": "anexos", "config": {}},
 ]
 
 TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG: dict[str, dict] = {
@@ -81,6 +83,7 @@ TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG: dict[str, dict] = {
     "conclusao": {"enabled": True, "order": 11},
     "observacoes_limitacoes": {"enabled": True, "order": 12},
     "historico_versoes": {"enabled": True, "order": 13},
+    "anexos": {"enabled": True, "order": 14},
 }
 
 _NAVIGABLE_IDS = frozenset(s.id for s in SECTION_DEFINITIONS if s.navigable)

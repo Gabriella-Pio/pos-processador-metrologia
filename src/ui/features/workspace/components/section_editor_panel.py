@@ -22,6 +22,9 @@ class SectionEditorPanel(QFrame):
     sections_reordered = pyqtSignal(list)
     new_version_requested = pyqtSignal()
     image_dropped = pyqtSignal(Path)
+    image_remove_requested = pyqtSignal(object)
+    image_caption_changed = pyqtSignal(object, str)
+    image_selected = pyqtSignal(object)
     tool_selected = pyqtSignal(str)
     edit_visibility_changed = pyqtSignal(bool)
 
@@ -33,6 +36,7 @@ class SectionEditorPanel(QFrame):
         self._active_section_id: str | None = None
         self._itens_medicao: list[dict[str, str]] = []
         self._edit_open = False
+        self._document_images: list[ReportImage] = []
 
         self._sections_panel = SectionsPanel()
         self._sections_panel.section_navigated.connect(self._on_section_navigated)
@@ -75,10 +79,12 @@ class SectionEditorPanel(QFrame):
         self._vm = view_model
         self._edit_view.section_field_changed.connect(view_model.update_section_field)
         self._edit_view.section_field_restore_requested.connect(view_model.restore_section_field)
-        self._edit_view.section_block_restore_requested.connect(view_model.restore_section_block)
         self._edit_view.table_rows_changed.connect(view_model.update_section_table_rows)
         self._edit_view.table_rows_restore_requested.connect(view_model.restore_section_table_rows)
         self._edit_view.image_dropped.connect(self.image_dropped.emit)
+        self._edit_view.image_remove_requested.connect(self.image_remove_requested.emit)
+        self._edit_view.image_caption_changed.connect(self.image_caption_changed.emit)
+        self._edit_view.image_selected.connect(self.image_selected.emit)
         self._edit_view.tool_selected.connect(self.tool_selected.emit)
         self._edit_view.itens_medicao_changed.connect(view_model.update_itens_medicao)
         self._edit_view.section_restore_requested.connect(view_model.restore_section)
@@ -136,6 +142,8 @@ class SectionEditorPanel(QFrame):
             section.get("table_rows"),
             self._itens_medicao,
         )
+        # Reaplica filtro de fotos da seção aberta (evita lista da seção anterior).
+        self._edit_view.render_images(self._document_images)
         self._edit_open = True
         self._show_sumario_tab()
         self.edit_visibility_changed.emit(True)
@@ -144,7 +152,8 @@ class SectionEditorPanel(QFrame):
     def _refresh_edit_if_open(self) -> None:
         if not self._edit_open or self._active_section_id is None:
             return
-        if self._edit_view.has_pending_textarea():
+        # Não sobrescreve campos enquanto o usuário digita (preview/summary refresh).
+        if self._edit_view.has_pending_textarea() or self._edit_view.has_focused_editor():
             return
         section = self._sections_map.get(self._active_section_id, {})
         self._edit_view.patch_section(
@@ -176,14 +185,22 @@ class SectionEditorPanel(QFrame):
             self._close_edit()
 
     def render_images(self, images: list[ReportImage]) -> None:
+        self._document_images = list(images)
         self._sections_panel.set_section_images(images)
         self._edit_view.render_images(images)
+
+    def editing_section_id(self) -> str | None:
+        """Seção cujo editor está aberto (fonte de verdade para associar fotos)."""
+        if not self._edit_open:
+            return None
+        return self._edit_view.current_section_id()
 
     def render_versions(self, entries) -> None:
         self._version_panel.render_history(entries)
 
     def set_source_attachments(self, paths: list[Path]) -> None:
-        pass
+        """Recebe os PDFs de origem do projeto (seção Anexos usa o documento ativo)."""
+        self._source_attachment_paths = list(paths or [])
 
     def update_document_context(self, document: ReportDocument | None) -> None:
         self._close_edit()

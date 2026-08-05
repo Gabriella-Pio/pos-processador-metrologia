@@ -51,6 +51,7 @@ class WorkspaceView(QWidget):
         self._vm = view_model
         self._active_section_id: str | None = None
         self._active_annotation_tool: str | None = None
+        self._active_annotation_image = None
         self._section_anchor_map: dict[str, dict] = {}
 
         self._project_tabs = QTabBar()
@@ -257,6 +258,9 @@ class WorkspaceView(QWidget):
         self._section_editor.sections_reordered.connect(self._vm.reorder_sections)
         self._section_editor.new_version_requested.connect(self._on_register_version)
         self._section_editor.image_dropped.connect(self._on_image_dropped)
+        self._section_editor.image_remove_requested.connect(self._on_image_remove)
+        self._section_editor.image_caption_changed.connect(self._on_image_caption_changed)
+        self._section_editor.image_selected.connect(self._on_image_selected)
         self._section_editor.tool_selected.connect(self._on_tool_selected)
 
         self._vm.project_loaded.connect(self._on_project_loaded)
@@ -398,11 +402,13 @@ class WorkspaceView(QWidget):
             f"{document.client_project} — {document.evaluated_component}"
         )
         session = self._app_state.project_session
-        if session and len(session.documents) > 1:
+        if session and session.documents:
             paths = [s.source_pdf_path for s in session.documents]
-            self._section_editor.set_source_attachments(paths)
         else:
-            self._section_editor.update_document_context(document)
+            paths = [document.source_pdf_path] if document.source_pdf_path else []
+        document.attachment_pdf_paths = list(paths)
+        self._section_editor.set_source_attachments(paths)
+        self._section_editor.update_document_context(document)
         self._refresh_images()
         self._refresh_versions()
         self._vm.refresh_global_fields()
@@ -463,19 +469,33 @@ class WorkspaceView(QWidget):
             self._sync_section_meta_row()
 
     def _on_image_dropped(self, image_path: Path) -> None:
-        if self._active_section_id is None:
+        # Preferir a seção em edição — evita gravar foto na seção errada.
+        section_id = self._section_editor.editing_section_id() or self._active_section_id
+        if section_id is None:
             show_friendly_error(
                 self,
                 "Selecione uma seção",
-                "Escolha uma seção no sumário antes de associar uma fotografia.",
+                "Abra a edição de uma seção antes de associar uma fotografia.",
             )
             return
-        self._vm.add_image_to_section(image_path, self._active_section_id)
+        self._active_section_id = section_id
+        self._vm.add_image_to_section(image_path, section_id)
+
+    def _on_image_remove(self, image) -> None:
+        self._vm.remove_image(image)
+
+    def _on_image_caption_changed(self, image, caption: str) -> None:
+        self._vm.update_image_caption(image, caption)
+
+    def _on_image_selected(self, image) -> None:
+        self._active_annotation_image = image
 
     def _on_tool_selected(self, tool_id: str) -> None:
         self._active_annotation_tool = tool_id
+        target = getattr(self._active_annotation_image, "image_path", None)
+        name = Path(target).name if target else "nenhuma foto"
         self._preview_panel.scroll_area().setToolTip(
-            f"Ferramenta ativa: {tool_id}. Clique na preview para aplicar (MVP)."
+            f"Ferramenta: {tool_id} · foto: {name}. Clique na preview para aplicar (MVP)."
         )
 
     def _refresh_images(self) -> None:

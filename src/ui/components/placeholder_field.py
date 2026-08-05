@@ -1,12 +1,11 @@
 """Campo de texto com placeholders `{chave}` — completer, chips e altura dinâmica."""
 from __future__ import annotations
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QFontMetrics, QTextCursor, QTextOption
 from PyQt6.QtWidgets import (
     QCompleter,
     QFrame,
-    QHBoxLayout,
     QListWidget,
     QPushButton,
     QSizePolicy,
@@ -16,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.domain.placeholder_utils import PLACEHOLDER_CATALOG, extract_placeholders, placeholder_label, remove_placeholder
+from src.ui.components.flow_layout import FlowLayout
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
 
 
@@ -29,6 +29,7 @@ class _PlaceholderChip(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(placeholder_label(key))
         self.clicked.connect(lambda: self.remove_requested.emit(self._key))
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.setStyleSheet(
             f"QPushButton {{ background: {PALETTE.bg_surface_alt}; color: {PALETTE.senai_blue_light}; "
             f"border: 1px solid {PALETTE.border_subtle}; border-radius: 10px; padding: 2px 8px; "
@@ -65,7 +66,7 @@ class _PlaceholderPopup(QListWidget):
 
 
 class PlaceholderTextEdit(QFrame):
-    """Editor com placeholders; altura cresce com o texto (e com chips)."""
+    """Editor com placeholders; chips ficam *fora* da caixa do input."""
 
     text_changed = pyqtSignal(str)
     height_changed = pyqtSignal()
@@ -73,69 +74,108 @@ class PlaceholderTextEdit(QFrame):
     _MIN_LINES_COMPACT = 1
     _MIN_LINES_MULTILINE = 2
     _MAX_HEIGHT = 360
-    _PAD_Y = 14
+    _PAD_Y = 16
 
     def __init__(self, multiline: bool = True, parent=None) -> None:
         super().__init__(parent)
         self._loading = False
         self._multiline = multiline
-        self._completer = None
         self._popup: _PlaceholderPopup | None = None
         self._brace_pos: int | None = None
 
         completer_keys = [f"{{{key}}}" for key, _ in PLACEHOLDER_CATALOG]
 
+        # Caixa visual só no editor — chips ficam abaixo, fora da borda
         self._editor = QTextEdit()
+        self._editor.setObjectName("PlaceholderEditor")
         self._editor.setAcceptRichText(False)
         self._editor.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
         self._editor.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._editor.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._editor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._editor.setTabChangesFocus(True)
+        self._editor.setStyleSheet(
+            f"QTextEdit#PlaceholderEditor {{"
+            f" background: {PALETTE.bg_surface_alt};"
+            f" color: {PALETTE.text_primary};"
+            f" border: 1px solid {PALETTE.border_subtle};"
+            f" border-radius: 8px;"
+            f" padding: 6px 8px;"
+            f" font-size: {TYPOGRAPHY.size_body}px;"
+            f"}}"
+            f"QTextEdit#PlaceholderEditor:focus {{"
+            f" border: 1px solid {PALETTE.senai_blue_light};"
+            f"}}"
+        )
         self._editor.textChanged.connect(self._on_text_changed)
         self._editor.document().documentLayout().documentSizeChanged.connect(
             lambda _size: self._adjust_editor_height()
         )
 
-        completer = QCompleter(completer_keys)
-        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self._completer = completer
+        self._completer = QCompleter(completer_keys)
+        self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
 
         self._chips_host = QWidget()
-        self._chips_layout = QHBoxLayout(self._chips_host)
-        self._chips_layout.setContentsMargins(0, 0, 0, 0)
-        self._chips_layout.setSpacing(SPACING.xs)
-        self._chips_layout.addStretch(1)
+        self._chips_host.setObjectName("PlaceholderChipsHost")
+        self._chips_host.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._chips_layout = FlowLayout(
+            self._chips_host,
+            margin=0,
+            h_spacing=SPACING.xs,
+            v_spacing=SPACING.xs,
+        )
+        self._chips_layout.setContentsMargins(2, 4, 2, 0)
+        self._chips_host.hide()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(SPACING.xs)
+        layout.setSpacing(0)
         layout.addWidget(self._editor)
         layout.addWidget(self._chips_host)
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        self._adjust_editor_height()
+        self.setStyleSheet("PlaceholderTextEdit { background: transparent; border: none; }")
+        QTimer.singleShot(0, self._adjust_editor_height)
 
-    def set_text(self, value: str) -> None:
+    def set_text(self, value: str, *, force: bool = False) -> None:
+        """Atualiza o texto. Com foco, ignora sync externo (evita cursor voltar ao início)."""
+        new_value = value or ""
+        if self._editor.toPlainText() == new_value:
+            return
+        if not force and self._editor.hasFocus():
+            return
         self._loading = True
-        self._editor.setPlainText(value or "")
+        self._editor.setPlainText(new_value)
         self._loading = False
         self._rebuild_chips()
         self._adjust_editor_height()
+        QTimer.singleShot(0, self._adjust_editor_height)
 
     def get_text(self) -> str:
         return self._editor.toPlainText()
 
+    def has_editor_focus(self) -> bool:
+        return self._editor.hasFocus()
+
+    def focus_editor(self) -> None:
+        self._editor.setFocus(Qt.FocusReason.OtherFocusReason)
+
     def sizeHint(self) -> QSize:
-        width = max(120, self.width() or 200)
-        chips_h = self._chips_host.sizeHint().height() if self._chips_host.isVisible() else 0
-        spacing = SPACING.xs if chips_h else 0
+        width = max(80, self.width() or 120)
+        chips_h = 0
+        if self._chips_host.isVisible():
+            chips_h = self._chips_layout.heightForWidth(width)
+        spacing = 4 if chips_h else 0
         height = self._editor.height() + chips_h + spacing
         return QSize(width, max(height, self._min_editor_height()))
 
     def minimumSizeHint(self) -> QSize:
         hint = self.sizeHint()
-        return QSize(80, hint.height())
+        return QSize(60, hint.height())
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._adjust_editor_height()
 
     def _min_editor_height(self) -> int:
         metrics = QFontMetrics(self._editor.font())
@@ -143,12 +183,11 @@ class PlaceholderTextEdit(QFrame):
         return metrics.lineSpacing() * lines + self._PAD_Y
 
     def _adjust_editor_height(self) -> None:
-        doc_height = int(self._editor.document().documentLayout().documentSize().height())
+        doc_height = int(ceil_doc_height(self._editor))
         target = max(self._min_editor_height(), doc_height + self._PAD_Y)
         target = min(target, self._MAX_HEIGHT)
         if self._editor.height() != target:
             self._editor.setFixedHeight(target)
-        # Scroll interno só se estourou o teto
         if target >= self._MAX_HEIGHT:
             self._editor.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         else:
@@ -192,9 +231,9 @@ class PlaceholderTextEdit(QFrame):
         self.text_changed.emit(self.get_text())
 
     def _rebuild_chips(self) -> None:
-        while self._chips_layout.count() > 1:
+        while self._chips_layout.count():
             item = self._chips_layout.takeAt(0)
-            widget = item.widget()
+            widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.deleteLater()
         keys = extract_placeholders(self.get_text())
@@ -202,10 +241,14 @@ class PlaceholderTextEdit(QFrame):
         for key in keys:
             chip = _PlaceholderChip(key)
             chip.remove_requested.connect(self._remove_placeholder)
-            self._chips_layout.insertWidget(self._chips_layout.count() - 1, chip)
+            self._chips_layout.addWidget(chip)
         self.updateGeometry()
         self.height_changed.emit()
 
     def _remove_placeholder(self, key: str) -> None:
         self.set_text(remove_placeholder(self.get_text(), key))
         self.text_changed.emit(self.get_text())
+
+
+def ceil_doc_height(editor: QTextEdit) -> float:
+    return editor.document().documentLayout().documentSize().height()

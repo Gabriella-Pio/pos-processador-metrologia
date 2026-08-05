@@ -499,7 +499,19 @@ class WorkspaceViewModel(QObject):
         document = self._active_document()
         if document is None:
             return
-        document.section_overrides.get(section_id, {}).pop(field, None)
+        from src.core.domain.report_field_registry import INTRODUCAO_BODY_TITLE_KEYS
+
+        section_ov = document.section_overrides.get(section_id, {})
+        section_ov.pop(field, None)
+        # Restaurar bloco inteiro: texto + título (Objetivo / Escopo / …)
+        title_key = INTRODUCAO_BODY_TITLE_KEYS.get(field)
+        if title_key:
+            section_ov.pop(title_key, None)
+        else:
+            for body_key, paired_title in INTRODUCAO_BODY_TITLE_KEYS.items():
+                if field == paired_title:
+                    section_ov.pop(body_key, None)
+                    break
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
 
     def update_section_table_rows(self, section_id: str, rows: list[dict[str, str]]) -> None:
@@ -507,6 +519,8 @@ class WorkspaceViewModel(QObject):
         if document is None:
             return
         document.section_overrides.setdefault(section_id, {})["table_rows"] = rows
+        if section_id == "controle_tecnico":
+            self._sync_control_info_from_table_rows(document, rows)
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
 
     def restore_section_table_rows(self, section_id: str) -> None:
@@ -515,6 +529,22 @@ class WorkspaceViewModel(QObject):
             return
         document.section_overrides.get(section_id, {}).pop("table_rows", None)
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+
+    def _sync_control_info_from_table_rows(self, document, rows: list[dict[str, str]]) -> None:
+        from src.core.domain.table_row_registry import control_info_updates_from_rows
+
+        updates = control_info_updates_from_rows(rows)
+        if not updates:
+            return
+        if document.control_info is None:
+            document.control_info = TechnicalControlInfo(
+                measured_by=updates.get("measured_by", ""),
+                reviewed_by=updates.get("reviewed_by", ""),
+            )
+        for field, value in updates.items():
+            setattr(document.control_info, field, value)
+        if "measured_by" in updates:
+            sync_measured_by(document, updates["measured_by"])
 
     def delete_section(self, section_id: str) -> bool:
         document = self._active_document()
@@ -606,6 +636,37 @@ class WorkspaceViewModel(QObject):
         document.images.append(ReportImage(image_path=image_path, section_id=section_id))
         self._app_state.notify_images_changed()
         self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
+
+    def remove_image(self, image: ReportImage) -> None:
+        document = self._active_document()
+        if document is None:
+            return
+        document.images = [
+            img for img in document.images
+            if not (
+                img.section_id == image.section_id
+                and str(img.image_path) == str(image.image_path)
+            )
+        ]
+        self._app_state.notify_images_changed()
+        self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
+
+    def update_image_caption(self, image: ReportImage, caption: str) -> None:
+        document = self._active_document()
+        if document is None:
+            return
+        for img in document.images:
+            if (
+                img.section_id == image.section_id
+                and str(img.image_path) == str(image.image_path)
+            ):
+                img.caption = caption
+                break
+        # Não dispara images_changed: reconstrói a lista e reseta o cursor da legenda.
+        # Preview/PDF ainda atualiza via schedule_preview.
+        self._commit_document_change(
+            preview=True, summary=False, data_dirty_flag=True,
+        )
 
     def add_annotation(self, image: ReportImage, annotation: Annotation) -> None:
         image.annotations.append(annotation)

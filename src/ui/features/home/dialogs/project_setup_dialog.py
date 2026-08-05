@@ -40,7 +40,10 @@ class ProjectSetupDialog(QDialog):
         self._client_field = LabeledLineEdit("Cliente / Projeto", required=True)
         self._component_field = LabeledLineEdit("Componente avaliado", required=True)
         self._counter_label = QLabel("Nenhum arquivo selecionado")
-        self._drop_zone = DropZone(self._counter_label)
+        self._warning_label = QLabel("")
+        self._warning_label.setWordWrap(True)
+        self._warning_label.hide()
+        self._drop_zone = DropZone(self._counter_label, self._warning_label)
         self._drop_zone.setMinimumHeight(120)
         self._files_error = QLabel("")
         self._files_error.hide()
@@ -87,10 +90,17 @@ class ProjectSetupDialog(QDialog):
         browse_row = QHBoxLayout()
         browse_btn = SecondaryButton("Adicionar PDFs…")
         browse_btn.clicked.connect(self._browse_files)
+        remove_btn = SecondaryButton("Remover selecionados")
+        remove_btn.setToolTip("Remove os PDFs marcados na lista (também Delete/Backspace)")
+        remove_btn.clicked.connect(self._drop_zone.remove_selected)
         browse_row.addWidget(browse_btn)
+        browse_row.addWidget(remove_btn)
         browse_row.addWidget(self._counter_label)
         browse_row.addStretch()
 
+        self._warning_label.setStyleSheet(
+            f"color: {p.warning}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
+        )
         self._files_error.setStyleSheet(
             f"color: {p.danger}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
         )
@@ -118,6 +128,7 @@ class ProjectSetupDialog(QDialog):
         layout.addLayout(form_row)
         layout.addWidget(self._drop_zone)
         layout.addLayout(browse_row)
+        layout.addWidget(self._warning_label)
         layout.addWidget(self._files_error)
         layout.addWidget(mode_label)
         layout.addWidget(self._mode_combo)
@@ -155,8 +166,12 @@ class ProjectSetupDialog(QDialog):
         self._set_overlay_visible(False)
         paths, _ = QFileDialog.getOpenFileNames(self, "Selecionar PDFs", "", "PDF (*.pdf)")
         self._set_overlay_visible(True)
+        duplicates: list[str] = []
         for path in paths:
-            self._drop_zone.add_path_string(path)
+            if not self._drop_zone.add_path_string(path):
+                duplicates.append(Path(path).name)
+        if duplicates:
+            self._drop_zone.warn_duplicates(duplicates)
 
     def _on_confirm(self) -> None:
         valid = True

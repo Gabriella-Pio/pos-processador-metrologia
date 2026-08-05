@@ -13,7 +13,13 @@ from src.core.domain.report_field_registry import (
     section_has_overrides,
 )
 from src.core.domain.section_numbering import strip_number_prefix
-from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS, merge_table_rows
+from src.core.domain.table_row_registry import (
+    SECTION_HEADING_DEFAULTS,
+    TABLE_SECTIONS,
+    apply_control_info_to_rows,
+    merge_table_rows,
+    resolve_introducao_table_rows,
+)
 from src.ui.features.workspace.models.section_summary import SectionSummaryItem
 
 
@@ -55,25 +61,36 @@ class SectionSummaryPresenter:
             section_num = section.get("section_number")
 
             table_rows = None
-            if section_id == "identificacao":
-                table_rows = merge_table_rows("identificacao", overrides.get("table_rows"))
+            if section_id in TABLE_SECTIONS:
+                if section_id == "introducao":
+                    table_rows = resolve_introducao_table_rows(
+                        overrides,
+                        report_kind=str(ctx.get("report_kind", "mmc")),
+                    )
+                else:
+                    table_rows = merge_table_rows(section_id, overrides.get("table_rows"))
+                if (
+                    section_id == "controle_tecnico"
+                    and document.control_info is not None
+                    and not overrides.get("table_rows")
+                ):
+                    table_rows = apply_control_info_to_rows(table_rows, document.control_info)
 
-            if section_id == "controle_tecnico" and document.control_info is not None:
-                info = document.control_info
-                fields.update({
-                    "measured_by": info.measured_by,
-                    "reviewed_by": info.reviewed_by,
-                    "approved_by": info.approved_by,
-                    "role": info.role,
-                    "institutional_email": info.institutional_email,
-                    "label_measured_by": overrides.get("label_measured_by", "Medido por"),
-                    "label_reviewed_by": overrides.get("label_reviewed_by", "Revisado por"),
-                    "label_approved_by": overrides.get("label_approved_by", "Aprovado por"),
-                    "label_role": overrides.get("label_role", "Cargo"),
-                    "label_institutional_email": overrides.get(
-                        "label_institutional_email", "E-mail institucional"
-                    ),
-                })
+            if section_id == "introducao" and not str(fields.get("nota") or "").strip():
+                fields["nota"] = str(
+                    overrides.get("nota")
+                    or overrides.get("intro")
+                    or overrides.get("nota_deteccao")
+                    or fields.get("intro")
+                    or fields.get("nota_deteccao")
+                    or ""
+                )
+            if section_id == "introducao":
+                for row in overrides.get("table_rows") or []:
+                    row_id = row.get("id", "")
+                    if row_id in ("objetivo", "escopo", "referencia"):
+                        if not str(fields.get(row_id) or "").strip() and row.get("value"):
+                            fields[row_id] = str(row.get("value") or "")
 
             if section_id == "conclusao" and not str(fields.get("texto") or "").strip():
                 total_fora = sum(
@@ -96,6 +113,7 @@ class SectionSummaryPresenter:
                         effective,
                         report_kind=ctx.get("report_kind", "mmc"),
                         existing=fields,
+                        user_overrides=document.section_overrides.get("interpretacao", {}),
                     )
                 )
 

@@ -28,7 +28,11 @@ def sidebar_section_header(title: str) -> QWidget:
 
 
 def editor_panel_header(title: str = "") -> tuple[QWidget, QLabel, QWidget]:
-    """Cabeçalho do painel central de edição — título + host de ações à direita."""
+    """Cabeçalho compacto do painel de edição — rótulo curto + ações à direita.
+
+    O título longo da seção fica no campo editável da aba Conteúdo, para não
+    duplicar texto nem inflar o header.
+    """
     container = QWidget()
     container.setObjectName("EditorPanelHeader")
     outer = QHBoxLayout(container)
@@ -37,12 +41,12 @@ def editor_panel_header(title: str = "") -> tuple[QWidget, QLabel, QWidget]:
 
     title_block = QWidget()
     title_layout = QVBoxLayout(title_block)
-    title_layout.setContentsMargins(0, SPACING.xs, 0, SPACING.sm)
-    title_layout.setSpacing(6)
+    title_layout.setContentsMargins(0, 2, 0, 4)
+    title_layout.setSpacing(4)
 
     label = QLabel(title.upper() if title else "EDITAR SEÇÃO")
     label.setObjectName("SidebarSectionTitle")
-    label.setWordWrap(True)
+    label.setWordWrap(False)
     title_layout.addWidget(label)
 
     divider = QFrame()
@@ -56,7 +60,7 @@ def editor_panel_header(title: str = "") -> tuple[QWidget, QLabel, QWidget]:
     actions_host = QWidget()
     actions_host.setObjectName("EditorPanelHeaderActions")
     actions_layout = QHBoxLayout(actions_host)
-    actions_layout.setContentsMargins(0, 0, SPACING.xs, SPACING.sm)
+    actions_layout.setContentsMargins(0, 0, SPACING.xs, 4)
     actions_layout.setSpacing(SPACING.xs)
     outer.addWidget(actions_host)
 
