@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Union
 import fitz
 from .header_extractor import HeaderExtractor
 from .table_extractor import TableExtractor, MedicaoItemDto
+from .source_kind import detect_source_kind
+from .insp_ect_parser import InspEctParser, RelatorioInspEctDto
 
 @dataclass
 class RelatorioCalypsoDto:
@@ -21,11 +23,19 @@ class RelatorioCalypsoDto:
     itens_medicao: List[MedicaoItemDto] = field(default_factory=list)
     avisos_auditoria: List[str] = field(default_factory=list)
     texto_bruto_integral: str = ""
+    source_kind: str = "calypso"
+
+
+ParsedReportDto = Union[RelatorioCalypsoDto, RelatorioInspEctDto]
 
 
 class PDFParserService:
     @staticmethod
-    def extrair_dados_avancados(caminho_pdf: str) -> RelatorioCalypsoDto:
+    def extrair_dados_avancados(caminho_pdf: str) -> ParsedReportDto:
+        kind = detect_source_kind(caminho_pdf)
+        if kind == "insp_ect":
+            return InspEctParser.parse(caminho_pdf)
+
         doc = fitz.open(caminho_pdf)
         texto_completo = ""
         linhas_pag1 = []

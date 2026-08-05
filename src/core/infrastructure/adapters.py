@@ -28,6 +28,10 @@ class RealReportParserAdapter:
 
     def parse(self, pdf_path: Path) -> ReportDocument:
         dto_resultado = PDFParserService.extrair_dados_avancados(str(pdf_path))
+        source_kind = getattr(dto_resultado, "source_kind", "calypso") or "calypso"
+        maquina = getattr(dto_resultado, "maquina_mmc", "Não identificada")
+        if source_kind == "insp_ect":
+            maquina = getattr(dto_resultado, "equipamento_default", maquina) or maquina
 
         return ReportDocument(
             source_pdf_path=pdf_path,
@@ -43,6 +47,7 @@ class RealReportParserAdapter:
             # Payload opaco: a UI só carrega isso de volta pro exportador,
             # nunca lê seu conteúdo diretamente (ver comentário em ports.py).
             raw_parsed_data=dto_resultado,
+            source_kind=source_kind,
         )
 
 

@@ -85,6 +85,8 @@ class ReportDocument:
     # ReportExporter na hora de gerar o PDF final. Mantém a UI desacoplada
     # do formato interno usado pelo parser/gerador.
     raw_parsed_data: Any = None
+    # Tipo de origem detectado pelo parser: "calypso" | "insp_ect"
+    source_kind: str = "calypso"
     # Caminho do último PDF exportado com sucesso, usado para registrar
     # o arquivo no RecentFilesRepository após a exportação.
     last_export_path: Path | None = None
