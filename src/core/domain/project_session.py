@@ -3,8 +3,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from src.core.domain.ports import ReportDocument
+
+ReportMode = Literal["mmc_only", "tomo_only", "mixed"]
 
 
 @dataclass
@@ -14,6 +17,8 @@ class ProjectDocumentSlot:
     source_pdf_path: Path
     evaluated_component: str
     document: ReportDocument | None = None
+    source_kind: str = "calypso"
+    template_id: str | None = None
 
 
 @dataclass
@@ -22,6 +27,7 @@ class ProjectSession:
 
     client_project: str
     template_id: str = "default"
+    report_mode: ReportMode = "mixed"
     documents: list[ProjectDocumentSlot] = field(default_factory=list)
     active_index: int = 0
 
@@ -41,3 +47,10 @@ class ProjectSession:
     def set_active_index(self, index: int) -> None:
         if 0 <= index < len(self.documents):
             self.active_index = index
+
+    def effective_template_id(self, slot: ProjectDocumentSlot) -> str:
+        if self.report_mode == "mixed" and slot.template_id:
+            return slot.template_id
+        if self.report_mode == "tomo_only":
+            return slot.template_id or "tomografia"
+        return self.template_id or "default"

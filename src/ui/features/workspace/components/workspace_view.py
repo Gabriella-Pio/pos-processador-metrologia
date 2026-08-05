@@ -360,10 +360,18 @@ class WorkspaceView(QWidget):
         while self._project_tabs.count():
             self._project_tabs.removeTab(0)
         for index, slot in enumerate(session.documents):
-            label = slot.evaluated_component[:24] or slot.source_pdf_path.stem[:24]
+            base = slot.evaluated_component[:20] or slot.source_pdf_path.stem[:20]
+            kind = getattr(slot, "source_kind", "") or (
+                slot.document.source_kind if slot.document else ""
+            )
+            badge = "Tomo" if kind == "insp_ect" else "MMC"
+            label = f"{base} [{badge}]"
             self._project_tabs.addTab(label)
             path = slot.source_pdf_path.resolve()
-            self._project_tabs.setTabToolTip(index, f"{path.name}\n{path}")
+            tip = f"{path.name}\n{path}\nOrigem: {kind or 'desconhecida'}"
+            if slot.template_id:
+                tip += f"\nTemplate: {slot.template_id}"
+            self._project_tabs.setTabToolTip(index, tip)
         self._project_tabs.setCurrentIndex(session.active_index)
         self._project_tabs.blockSignals(False)
         self._update_export_options_visibility()

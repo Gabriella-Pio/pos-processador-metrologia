@@ -45,6 +45,11 @@ class ProjectSetupDialog(QDialog):
         self._files_error = QLabel("")
         self._files_error.hide()
         self._template_combo = QComboBox()
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItem("Detectar automaticamente", "auto")
+        self._mode_combo.addItem("Somente MMC (CALYPSO)", "mmc_only")
+        self._mode_combo.addItem("Somente Tomografia (INSP ECT)", "tomo_only")
+        self._mode_combo.addItem("Misto (MMC + Tomografia)", "mixed")
         self._confirm_btn = PrimaryButton("Abrir workspace")
 
         self._build_ui()
@@ -90,9 +95,15 @@ class ProjectSetupDialog(QDialog):
             f"color: {p.danger}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
         )
 
-        tmpl_hint = QLabel("Template aplicado a todos os relatórios deste projeto.")
+        tmpl_hint = QLabel(
+            "Modo do lote e template. Em modo misto, cada PDF usa o template "
+            "compatível com sua origem (MMC ou Tomografia)."
+        )
         tmpl_hint.setWordWrap(True)
         tmpl_hint.setStyleSheet(f"color: {p.text_secondary}; background: transparent;")
+
+        mode_label = QLabel("Modo do relatório")
+        mode_label.setStyleSheet(f"color: {p.text_secondary}; background: transparent;")
 
         footer = QHBoxLayout()
         cancel_btn = SecondaryButton("Cancelar")
@@ -108,6 +119,8 @@ class ProjectSetupDialog(QDialog):
         layout.addWidget(self._drop_zone)
         layout.addLayout(browse_row)
         layout.addWidget(self._files_error)
+        layout.addWidget(mode_label)
+        layout.addWidget(self._mode_combo)
         layout.addWidget(tmpl_hint)
         layout.addWidget(self._template_combo)
         layout.addStretch()
@@ -180,5 +193,6 @@ class ProjectSetupDialog(QDialog):
         return {
             "client_project": self._client_field.text(),
             "template_id": self._template_combo.currentData() or "default",
+            "report_mode": self._mode_combo.currentData() or "auto",
             "pdf_entries": pdf_entries,
         }

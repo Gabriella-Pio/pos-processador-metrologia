@@ -224,6 +224,7 @@ class MainWindow(QMainWindow):
                 data["client_project"],
                 entries,
                 template_id=data["template_id"],
+                report_mode=data.get("report_mode", "auto"),
             )
             self._nav_controller.navigate_to(1)
 

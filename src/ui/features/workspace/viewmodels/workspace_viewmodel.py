@@ -242,8 +242,11 @@ class WorkspaceViewModel(QObject):
         client_project: str,
         pdf_entries: list[tuple[Path, str]],
         template_id: str = "default",
+        report_mode: str = "auto",
     ) -> None:
-        session = self._doc_service.build_project_session(client_project, pdf_entries, template_id)
+        session = self._doc_service.build_project_session(
+            client_project, pdf_entries, template_id, report_mode=report_mode
+        )
         self._app_state.set_project_session(session)
         self.project_loaded.emit(session)
 
@@ -304,10 +307,16 @@ class WorkspaceViewModel(QObject):
         document = self._active_document()
         if session is None or document is None or self._template_repo is None:
             return
-        session.template_id = template_id
-        for slot in session.documents:
-            if slot.document is not None:
-                self._template_service.apply_template_change(slot.document, template_id)
+        slot = session.active_slot
+        if session.report_mode == "mixed" and slot is not None:
+            slot.template_id = template_id
+            self._template_service.apply_template_change(document, template_id)
+        else:
+            session.template_id = template_id
+            for project_slot in session.documents:
+                if project_slot.document is not None:
+                    project_slot.template_id = template_id
+                    self._template_service.apply_template_change(project_slot.document, template_id)
         self._commit_document_change(
             preview=True, summary=True, layout_dirty=True, data_dirty_flag=False, globals_refresh=True
         )
