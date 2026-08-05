@@ -5,7 +5,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from src.core.domain.ports import ReportDocument, WorkspaceSessionPort
+from src.core.domain.ports import ReportDocument, ReportImage, WorkspaceSessionPort
 
 
 class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
@@ -95,4 +95,10 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
         document.parsed_overrides = json.loads(row[2] or "{}")
         order_raw = row[3]
         document.section_order = json.loads(order_raw) if order_raw else None
+        images_raw = json.loads(row[4] or "[]")
+        document.images = [
+            ReportImage(image_path=Path(item["path"]), section_id=item["section_id"])
+            for item in images_raw
+            if item.get("path") and item.get("section_id")
+        ]
         return True
