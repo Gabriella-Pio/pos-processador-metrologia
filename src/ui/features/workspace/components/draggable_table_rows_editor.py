@@ -13,25 +13,24 @@ class _TableRowWidget(QFrame):
     def __init__(self, row: dict[str, str], parent=None) -> None:
         super().__init__(parent)
         self.row_id = row.get("id", "")
-        layout = QVBoxLayout(self)
+        layout = QHBoxLayout(self)
         layout.setContentsMargins(SPACING.xs, SPACING.sm, SPACING.xs, SPACING.sm)
-        layout.setSpacing(SPACING.xs)
+        layout.setSpacing(SPACING.sm)
 
-        top = QHBoxLayout()
         self._drag_handle = QLabel("⠿")
         self._drag_handle.setToolTip("Arraste para reordenar")
         self._drag_handle.setFixedWidth(16)
+        self._drag_handle.setAlignment(Qt.AlignmentFlag.AlignTop)
+
         self._label_edit = PlaceholderTextEdit(multiline=False)
         self._label_edit.set_text(row.get("label", ""))
-        top.addWidget(self._drag_handle)
-        top.addWidget(self._label_edit, stretch=1)
 
         self._value_edit = PlaceholderTextEdit(multiline=False)
         self._value_edit.set_text(row.get("value", ""))
-        self._value_edit.setMinimumHeight(40)
 
-        layout.addLayout(top)
-        layout.addWidget(self._value_edit)
+        layout.addWidget(self._drag_handle, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self._label_edit, stretch=2)
+        layout.addWidget(self._value_edit, stretch=3)
 
     def to_dict(self) -> dict[str, str]:
         return {
@@ -48,6 +47,7 @@ class DraggableTableRowsEditor(QFrame):
     def __init__(self, title: str = "Linhas da tabela", parent=None) -> None:
         super().__init__(parent)
         self._loading = False
+        self._item_by_widget: dict[int, QListWidgetItem] = {}
 
         title_label = QLabel(title)
         title_label.setStyleSheet(heading_style(4))
@@ -55,7 +55,7 @@ class DraggableTableRowsEditor(QFrame):
         self._list = QListWidget()
         self._list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._list.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self._list.setSpacing(6)
+        self._list.setSpacing(8)
         self._list.setUniformItemSizes(False)
         self._list.model().rowsMoved.connect(self._emit_rows)
 
@@ -75,6 +75,7 @@ class DraggableTableRowsEditor(QFrame):
     def set_rows(self, rows: list[dict[str, str]]) -> None:
         self._loading = True
         self._list.clear()
+        self._item_by_widget.clear()
         for row in rows:
             item = QListWidgetItem()
             item.setFlags(
@@ -86,10 +87,22 @@ class DraggableTableRowsEditor(QFrame):
             widget = _TableRowWidget(row)
             widget._label_edit.text_changed.connect(self._emit_rows)
             widget._value_edit.text_changed.connect(self._emit_rows)
-            item.setSizeHint(widget.sizeHint())
+            widget._label_edit.height_changed.connect(
+                lambda w=widget, i=item: self._sync_item_height(i, w)
+            )
+            widget._value_edit.height_changed.connect(
+                lambda w=widget, i=item: self._sync_item_height(i, w)
+            )
             self._list.addItem(item)
             self._list.setItemWidget(item, widget)
+            self._sync_item_height(item, widget)
         self._loading = False
+
+    def _sync_item_height(self, item: QListWidgetItem, widget: _TableRowWidget) -> None:
+        hint = widget.sizeHint()
+        # Garante espaço para chips + padding vertical
+        item.setSizeHint(hint)
+        widget.adjustSize()
 
     def get_rows(self) -> list[dict[str, str]]:
         rows: list[dict[str, str]] = []

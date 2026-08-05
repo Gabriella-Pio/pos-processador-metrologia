@@ -248,6 +248,7 @@ class TemplateEditorViewModel(QObject):
             self._sections_config,
             merge_template_content_defaults(self._content_defaults, self._global_defaults),
             self._active_section_id,
+            report_kind=self._report_kind(),
         ):
             if section["id"] == section_id:
                 return section
@@ -322,8 +323,14 @@ class TemplateEditorViewModel(QObject):
             self._sections_config,
             merge_template_content_defaults(self._content_defaults, self._global_defaults),
             self._active_section_id,
+            report_kind=self._report_kind(),
         )
         self.sections_summary_ready.emit(sections)
+
+    def _report_kind(self) -> str:
+        from src.core.domain.section_schema import is_tomography_template
+
+        return "tomografia" if is_tomography_template(self._template_id) else "mmc"
 
     def _emit_global_fields(self) -> None:
         values: dict[str, str] = {}

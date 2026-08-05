@@ -88,6 +88,17 @@ class SectionSummaryPresenter:
                 ) or ""
                 fields["modo"] = "reprovado" if total_fora > 0 else "aprovado"
 
+            if section_id == "interpretacao":
+                from src.core.application.interpretacao_edit import build_interpretacao_editor_fields
+
+                fields.update(
+                    build_interpretacao_editor_fields(
+                        effective,
+                        report_kind=ctx.get("report_kind", "mmc"),
+                        existing=fields,
+                    )
+                )
+
             override_keys = [
                 k for k in overrides
                 if k != "table_rows" and not isinstance(overrides.get(k), list)

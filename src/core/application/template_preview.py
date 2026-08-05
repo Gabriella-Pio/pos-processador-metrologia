@@ -129,12 +129,24 @@ def build_template_sections_summary(
     sections_config: dict,
     content_defaults: dict,
     active_section_id: str | None = None,
+    *,
+    report_kind: str = "mmc",
 ) -> list[dict]:
     """Lista de seções para o sumário do editor de templates."""
+    from src.core.application.interpretacao_edit import build_interpretacao_editor_fields
+    from src.core.domain.report_field_registry import default_prose_values
+
     section_defaults, _global = split_template_content_defaults(content_defaults)
     result: list[dict] = []
     for section_id, label, enabled in _ordered_sections(sections_config):
-        defaults = section_defaults.get(section_id, {})
+        defaults = dict(default_prose_values(section_id, {"report_kind": report_kind}))
+        defaults.update(section_defaults.get(section_id, {}))
+        if section_id == "interpretacao":
+            defaults = build_interpretacao_editor_fields(
+                None,
+                report_kind=report_kind,
+                existing=defaults,
+            )
         cfg = sections_config.get(section_id, {})
         result.append(
             {
@@ -147,8 +159,8 @@ def build_template_sections_summary(
                 "fields": defaults,
                 "table_rows": defaults.get("table_rows"),
                 "media_kinds": defaults.get("media_kinds"),
-                "has_overrides": bool(defaults),
-                "override_keys": sorted(defaults.keys()) if defaults else [],
+                "has_overrides": bool(section_defaults.get(section_id)),
+                "override_keys": sorted(section_defaults.get(section_id, {}).keys()),
             }
         )
     if active_section_id:

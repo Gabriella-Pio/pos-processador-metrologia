@@ -18,7 +18,10 @@ class InterpretacaoSection(BaseSection):
         story.append(Spacer(1, 4))
 
         report_kind = contexto_extra.get("report_kind") or getattr(dados_parseados, "source_kind", "")
-        if report_kind in {"tomografia", "insp_ect"}:
+        prose = contexto_extra.get("section_prose", {}).get("interpretacao", {})
+        has_edited_bullets = any(str(prose.get(f"bullet_{i}") or "").strip() for i in range(1, 5))
+
+        if report_kind in {"tomografia", "insp_ect"} or has_edited_bullets:
             for i in range(1, 5):
                 bullet = get_section_prose(contexto_extra, "interpretacao", f"bullet_{i}", "")
                 if bullet:
