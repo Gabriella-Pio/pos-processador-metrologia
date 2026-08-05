@@ -19,7 +19,6 @@ from PyQt6.QtWidgets import (
 from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.feedback import confirm_action, show_friendly_error, show_info
 from src.ui.components.icons import icon_ellipsis, icon_edit
-from src.ui.features.workspace.dialogs.custom_section_dialog import CustomSectionDialog
 from src.ui.features.templates.components.template_sidebar_panel import TemplateSidebarPanel
 from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
@@ -81,7 +80,7 @@ class TemplateEditorView(QWidget):
         splitter.addWidget(self._sidebar)
         splitter.addWidget(self._build_editor_column())
         splitter.addWidget(self._build_preview_column())
-        splitter.setSizes([260, 420, 680])
+        splitter.setSizes([240, 320, 800])
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 2)
         splitter.setStretchFactor(2, 3)
@@ -194,9 +193,9 @@ class TemplateEditorView(QWidget):
         self._edit_stack.setCurrentIndex(1 if visible else 0)
         self._edit_container.setVisible(visible)
         if visible:
-            self._main_splitter.setSizes([260, 420, 680])
+            self._main_splitter.setSizes([240, 320, 800])
         else:
-            self._main_splitter.setSizes([260, 0, 1100])
+            self._main_splitter.setSizes([240, 0, 1120])
             self._section_title_label.setText("")
 
     def _on_section_selected(self, section_id: str) -> None:
@@ -207,10 +206,7 @@ class TemplateEditorView(QWidget):
         self._section_title_label.setText(f"Seção: {title}")
 
     def _on_add_custom_section(self) -> None:
-        dialog = CustomSectionDialog(self)
-        if dialog.exec() != dialog.DialogCode.Accepted:
-            return
-        section_id = self._vm.add_custom_section(dialog.get_title())
+        section_id = self._vm.add_custom_section("Nova seção")
         if section_id:
             self._sidebar.open_edit_for_section(section_id)
             self._on_section_selected(section_id)
