@@ -44,6 +44,10 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
         "referencia": (
             "Valores nominais e limites conforme relatório emitido pelo software ZEISS CALYPSO."
         ),
+        "valor_amostra": "1 peça",
+        "valor_valores": "{numero_medicoes_cabecalho}",
+        "valor_fora": "{total_fora} valores",
+        "valor_mmc": "{maquina_mmc}",
     },
     "resultados": {
         "intro": (
@@ -87,6 +91,11 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
             "Registro dos responsáveis técnicos pela medição, revisão e, quando aplicável, "
             "aprovação deste relatório."
         ),
+        "label_measured_by": "Medido por",
+        "label_reviewed_by": "Revisado por",
+        "label_approved_by": "Aprovado por",
+        "label_role": "Cargo",
+        "label_institutional_email": "E-mail institucional",
     },
     "identificacao": {
         "intro": "",
@@ -122,10 +131,10 @@ INTRODUCAO_CONTENT_BLOCKS: tuple[IntroducaoBlockDef, ...] = (
 )
 
 INTRODUCAO_HEADER_ONLY_BLOCKS: tuple[IntroducaoBlockDef, ...] = (
-    IntroducaoBlockDef("title_amostra", None, "Amostra"),
-    IntroducaoBlockDef("title_valores", None, "Valores avaliados"),
-    IntroducaoBlockDef("title_fora", None, "Fora dos limites"),
-    IntroducaoBlockDef("title_mmc", None, "Máquina de medição (MMC)"),
+    IntroducaoBlockDef("title_amostra", "valor_amostra", "Amostra"),
+    IntroducaoBlockDef("title_valores", "valor_valores", "Valores avaliados"),
+    IntroducaoBlockDef("title_fora", "valor_fora", "Fora dos limites"),
+    IntroducaoBlockDef("title_mmc", "valor_mmc", "Máquina de medição (MMC)"),
 )
 
 _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
@@ -140,10 +149,15 @@ _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
     ),
     "controle_tecnico": (
+        SectionFieldDef("label_measured_by", "Título — Medido por"),
         SectionFieldDef("measured_by", "Medido por"),
+        SectionFieldDef("label_reviewed_by", "Título — Revisado por"),
         SectionFieldDef("reviewed_by", "Revisado por"),
+        SectionFieldDef("label_approved_by", "Título — Aprovado por"),
         SectionFieldDef("approved_by", "Aprovado por"),
+        SectionFieldDef("label_role", "Título — Cargo"),
         SectionFieldDef("role", "Cargo"),
+        SectionFieldDef("label_institutional_email", "Título — E-mail institucional"),
         SectionFieldDef("institutional_email", "E-mail institucional"),
     ),
     "resultados": (
@@ -159,11 +173,11 @@ _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
         SectionFieldDef("body", "Texto dos resultados", "textarea"),
     ),
     "interpretacao": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea", editable=False),
-        SectionFieldDef("bullet_1", "Interpretação 1", "textarea", editable=False),
-        SectionFieldDef("bullet_2", "Interpretação 2", "textarea", editable=False),
-        SectionFieldDef("bullet_3", "Interpretação 3", "textarea", editable=False),
-        SectionFieldDef("bullet_4", "Interpretação 4", "textarea", editable=False),
+        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        SectionFieldDef("bullet_1", "Interpretação 1", "textarea"),
+        SectionFieldDef("bullet_2", "Interpretação 2", "textarea"),
+        SectionFieldDef("bullet_3", "Interpretação 3", "textarea"),
+        SectionFieldDef("bullet_4", "Interpretação 4", "textarea"),
     ),
     "conclusao": (
         SectionFieldDef("texto", "Texto da conclusão", "textarea"),

@@ -24,12 +24,19 @@ def validate_for_export(document: ReportDocument) -> list[ExportIssue]:
     if not getattr(effective, "operador", "").strip():
         issues.append(ExportIssue("warning", "Operador não informado."))
 
-    sections_with_photos = {"identificacao", "resultados", "grafica"}
-    for section_id in sections_with_photos:
-        has_media_block = section_id in document.section_overrides or section_id in {
-            img.section_id for img in document.images
-        }
-        if has_media_block and not any(img.section_id == section_id for img in document.images):
+    # Só alerta falta de foto se a seção realmente tiver imagens esperadas
+    # (já associadas) ou media_kinds explícito pedindo photos — prosa sozinha não conta.
+    photo_sections = {"identificacao", "resultados", "grafica", "tomografia", "registro_componente"}
+    for section_id in photo_sections:
+        overrides = document.section_overrides.get(section_id, {})
+        media_kinds = overrides.get("media_kinds")
+        wants_photos = (
+            (isinstance(media_kinds, list) and "photos" in media_kinds)
+            or any(img.section_id == section_id for img in document.images)
+        )
+        if not wants_photos:
+            continue
+        if not any(img.section_id == section_id for img in document.images):
             issues.append(ExportIssue(
                 "warning",
                 f"Seção “{section_id}” sem fotografias associadas.",

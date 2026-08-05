@@ -33,7 +33,14 @@ class MedicoesTableEditor(QFrame):
 
         self._table = QTableWidget(0, len(self._columns))
         self._table.setHorizontalHeaderLabels(self._headers)
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        header = self._table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for col in range(1, len(self._columns)):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        self._table.verticalHeader().setDefaultSectionSize(32)
+        self._table.setAlternatingRowColors(True)
+        self._table.setWordWrap(False)
+        self._table.setMinimumHeight(220)
         self._table.cellChanged.connect(self._on_cell_changed)
 
         btn_row = QHBoxLayout()

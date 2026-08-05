@@ -72,8 +72,17 @@ class IntroducaoSection(BaseSection):
                 Paragraph(block_title("title_valores", "VALORES AVALIADOS"), estilo_titulo_tabela)
             ],
             [
-                Paragraph("1 peça", styles['texto']),
-                Paragraph(f"<b>{resolve_placeholders('{numero_medicoes_cabecalho}', ctx)}</b>", styles['texto'])
+                Paragraph(
+                    resolve_placeholders(
+                        str(prose.get("valor_amostra", "1 peça")),
+                        ctx,
+                    ),
+                    styles['texto'],
+                ),
+                Paragraph(
+                    f"<b>{resolve_placeholders(str(prose.get('valor_valores', '{numero_medicoes_cabecalho}')), ctx)}</b>",
+                    styles['texto'],
+                )
             ],
             [
                 Paragraph(block_title("title_fora", "FORA DOS LIMITES"), estilo_titulo_tabela),
@@ -81,10 +90,15 @@ class IntroducaoSection(BaseSection):
             ],
             [
                 Paragraph(
-                    f"<font color='{ReportTheme.COR_ALERTA.hexval()}'><b>{resolve_placeholders('{total_fora}', ctx)} valores</b></font>",
+                    f"<font color='{ReportTheme.COR_ALERTA.hexval()}'><b>"
+                    f"{resolve_placeholders(str(prose.get('valor_fora', '{total_fora} valores')), ctx)}"
+                    f"</b></font>",
                     styles['texto'],
                 ),
-                Paragraph(f"<b>{resolve_placeholders('{maquina_mmc}', ctx)}</b>", styles['texto'])
+                Paragraph(
+                    f"<b>{resolve_placeholders(str(prose.get('valor_mmc', '{maquina_mmc}')), ctx)}</b>",
+                    styles['texto'],
+                )
             ]
         ]
 

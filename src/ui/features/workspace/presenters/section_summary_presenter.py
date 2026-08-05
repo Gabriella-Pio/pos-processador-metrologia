@@ -66,7 +66,27 @@ class SectionSummaryPresenter:
                     "approved_by": info.approved_by,
                     "role": info.role,
                     "institutional_email": info.institutional_email,
+                    "label_measured_by": overrides.get("label_measured_by", "Medido por"),
+                    "label_reviewed_by": overrides.get("label_reviewed_by", "Revisado por"),
+                    "label_approved_by": overrides.get("label_approved_by", "Aprovado por"),
+                    "label_role": overrides.get("label_role", "Cargo"),
+                    "label_institutional_email": overrides.get(
+                        "label_institutional_email", "E-mail institucional"
+                    ),
                 })
+
+            if section_id == "conclusao" and not str(fields.get("texto") or "").strip():
+                total_fora = sum(
+                    1
+                    for item in (getattr(effective, "itens_medicao", []) or [])
+                    if getattr(item, "status", "") == "Fora"
+                )
+                fields["texto"] = (
+                    fields.get("texto_reprovado")
+                    if total_fora > 0
+                    else fields.get("texto_aprovado")
+                ) or ""
+                fields["modo"] = "reprovado" if total_fora > 0 else "aprovado"
 
             override_keys = [
                 k for k in overrides

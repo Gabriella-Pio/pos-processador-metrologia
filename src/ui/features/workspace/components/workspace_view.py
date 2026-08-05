@@ -34,7 +34,6 @@ from src.ui.components.feedback import (
     show_friendly_error,
     show_info,
 )
-from src.ui.features.workspace.dialogs.custom_section_dialog import CustomSectionDialog
 from src.ui.features.workspace.dialogs.save_template_dialog import SaveTemplateDialog
 from src.ui.features.workspace.dialogs.version_register_dialog import VersionRegisterDialog
 from src.ui.styles import SPACING, caption_style
@@ -109,7 +108,7 @@ class WorkspaceView(QWidget):
         splitter.addWidget(self._section_editor)
         splitter.addWidget(self._build_editor_column())
         splitter.addWidget(self._build_preview_panel())
-        splitter.setSizes([260, 420, 680])
+        splitter.setSizes([240, 320, 800])
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 2)
         splitter.setStretchFactor(2, 3)
@@ -424,9 +423,9 @@ class WorkspaceView(QWidget):
         self._edit_stack.setCurrentIndex(1 if visible else 0)
         self._edit_container.setVisible(visible)
         if visible:
-            self._main_splitter.setSizes([260, 420, 680])
+            self._main_splitter.setSizes([240, 320, 800])
         else:
-            self._main_splitter.setSizes([260, 0, 1100])
+            self._main_splitter.setSizes([240, 0, 1120])
 
     def _sync_section_meta_row(self) -> None:
         has_section = bool(self._active_section_label.text().strip())
@@ -456,16 +455,11 @@ class WorkspaceView(QWidget):
                 self._sync_section_meta_row()
 
     def _on_add_custom_section(self) -> None:
-        dialog = CustomSectionDialog(self)
-        if dialog.exec() != dialog.DialogCode.Accepted:
-            return
-        section_id = self._vm.add_custom_section(dialog.get_title())
+        section_id = self._vm.add_custom_section("Nova seção")
         if section_id:
             self._active_section_id = section_id
             self._section_editor.open_edit_for_section(section_id)
-            anchor = self._section_anchor_map.get(section_id, {})
-            title = anchor.get("title", section_id) if isinstance(anchor, dict) else section_id
-            self._active_section_label.setText(f"Seção: {title}")
+            self._active_section_label.setText("Seção: Nova seção")
             self._sync_section_meta_row()
 
     def _on_image_dropped(self, image_path: Path) -> None:

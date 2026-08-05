@@ -29,16 +29,23 @@ class ControleTecnicoSection(BaseSection):
             styles['texto']
         ))
 
+        prose = contexto_extra.get("section_prose", {}).get("controle_tecnico", {})
+        label_measured = prose.get("label_measured_by") or "Medido por"
+        label_reviewed = prose.get("label_reviewed_by") or "Revisado por"
+        label_approved = prose.get("label_approved_by") or "Aprovado por"
+        label_role = prose.get("label_role") or "Cargo"
+        label_email = prose.get("label_institutional_email") or "E-mail institucional"
+
         linhas = [
-            [Paragraph("<b>Medido por</b>", styles['texto']),
+            [Paragraph(f"<b>{label_measured}</b>", styles['texto']),
              Paragraph(info.get("measured_by") or "Não informado", styles['texto'])],
-            [Paragraph("<b>Revisado por</b>", styles['texto']),
+            [Paragraph(f"<b>{label_reviewed}</b>", styles['texto']),
              Paragraph(info.get("reviewed_by") or "Não informado", styles['texto'])],
-            [Paragraph("<b>Aprovado por</b>", styles['texto']),
+            [Paragraph(f"<b>{label_approved}</b>", styles['texto']),
              Paragraph(info.get("approved_by") or "Não aplicável", styles['texto'])],
-            [Paragraph("<b>Cargo</b>", styles['texto']),
+            [Paragraph(f"<b>{label_role}</b>", styles['texto']),
              Paragraph(info.get("role") or "Não informado", styles['texto'])],
-            [Paragraph("<b>E-mail institucional</b>", styles['texto']),
+            [Paragraph(f"<b>{label_email}</b>", styles['texto']),
              Paragraph(info.get("institutional_email") or "Não informado", styles['texto'])],
             [Paragraph("<b>Data/Hora</b>", styles['texto']),
              Paragraph(info.get("timestamp_str") or "Não informado", styles['texto'])],

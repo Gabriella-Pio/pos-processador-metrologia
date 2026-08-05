@@ -13,22 +13,25 @@ class _TableRowWidget(QFrame):
     def __init__(self, row: dict[str, str], parent=None) -> None:
         super().__init__(parent)
         self.row_id = row.get("id", "")
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(SPACING.xs, SPACING.xs, SPACING.xs, SPACING.xs)
-        layout.setSpacing(SPACING.sm)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(SPACING.xs, SPACING.sm, SPACING.xs, SPACING.sm)
+        layout.setSpacing(SPACING.xs)
 
+        top = QHBoxLayout()
         self._drag_handle = QLabel("⠿")
         self._drag_handle.setToolTip("Arraste para reordenar")
         self._drag_handle.setFixedWidth(16)
-
         self._label_edit = PlaceholderTextEdit(multiline=False)
         self._label_edit.set_text(row.get("label", ""))
+        top.addWidget(self._drag_handle)
+        top.addWidget(self._label_edit, stretch=1)
+
         self._value_edit = PlaceholderTextEdit(multiline=False)
         self._value_edit.set_text(row.get("value", ""))
+        self._value_edit.setMinimumHeight(40)
 
-        layout.addWidget(self._drag_handle)
-        layout.addWidget(self._label_edit, stretch=2)
-        layout.addWidget(self._value_edit, stretch=3)
+        layout.addLayout(top)
+        layout.addWidget(self._value_edit)
 
     def to_dict(self) -> dict[str, str]:
         return {
@@ -52,7 +55,8 @@ class DraggableTableRowsEditor(QFrame):
         self._list = QListWidget()
         self._list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._list.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self._list.setSpacing(4)
+        self._list.setSpacing(6)
+        self._list.setUniformItemSizes(False)
         self._list.model().rowsMoved.connect(self._emit_rows)
 
         btn_row = QHBoxLayout()
