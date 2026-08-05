@@ -17,6 +17,15 @@ class InterpretacaoSection(BaseSection):
         story.append(Paragraph(intro_text, styles['texto']))
         story.append(Spacer(1, 4))
 
+        report_kind = contexto_extra.get("report_kind") or getattr(dados_parseados, "source_kind", "")
+        if report_kind in {"tomografia", "insp_ect"}:
+            for i in range(1, 5):
+                bullet = get_section_prose(contexto_extra, "interpretacao", f"bullet_{i}", "")
+                if bullet:
+                    story.append(Paragraph(f"•  {bullet}", styles["bullet"]))
+            story.append(Spacer(1, 10))
+            return
+
         for item in dados_parseados.itens_medicao:
             tem_tol = item.tol_superior != "N/A" and item.tol_inferior != "N/A"
             

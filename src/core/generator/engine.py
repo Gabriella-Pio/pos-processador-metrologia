@@ -8,18 +8,28 @@ from .sections import (
     ResultadosSection, GraficaSection, TomografiaSection, InterpretacaoSection,
     ConclusaoSection, HistoricoVersoesSection
 )
+from .sections.tomo_extra_sections import (
+    MetodoEscopoSection,
+    RegistroComponenteSection,
+    ResultadosInspecaoSection,
+    ObservacoesLimitacoesSection,
+)
 
 class ReportGenerator:
     REGISTRY_SECOES = {
         "cabecalho": CabecalhoSection,
         "introducao": IntroducaoSection,
         "identificacao": IdentificacaoSection,
+        "metodo_escopo": MetodoEscopoSection,
+        "registro_componente": RegistroComponenteSection,
         "controle_tecnico": ControleTecnicoSection,
         "resultados": ResultadosSection,
         "grafica": GraficaSection,
         "tomografia": TomografiaSection,
+        "resultados_inspecao": ResultadosInspecaoSection,
         "interpretacao": InterpretacaoSection,
         "conclusao": ConclusaoSection,
+        "observacoes_limitacoes": ObservacoesLimitacoesSection,
         "historico_versoes": HistoricoVersoesSection,
     }
 
@@ -44,10 +54,14 @@ class ReportGenerator:
         table_rows: dict | None = None,
     ):
         if opcoes_extras is None:
-            opcoes_extras = {"incluir_tomografia": False}
+            opcoes_extras = {}
 
         if template_config is None:
             template_config = TEMPLATE_PADRAO_OFICIAL
+
+        # Tomografia entra quando o bloco está no template (sem flag silenciosa).
+        incluir_tomografia = any(b.get("tipo") == "tomografia" for b in template_config)
+        opcoes_extras.setdefault("incluir_tomografia", incluir_tomografia)
 
         doc = _TrackingDocTemplate(
             caminho_saida, pagesize=letter,
@@ -74,14 +88,12 @@ class ReportGenerator:
             "placeholder_context": placeholder_context or {},
             "table_rows": table_rows or {},
             "section_number_map": build_section_number_map(template_config),
+            "report_kind": opcoes_extras.get("report_kind", ""),
         }
 
         for bloco in template_config:
             tipo = bloco.get("tipo")
             config = bloco.get("config", {})
-
-            if tipo == "tomografia" and not opcoes_extras.get("incluir_tomografia", False):
-                continue
 
             if tipo in cls.REGISTRY_SECOES:
                 secao_classe = cls.REGISTRY_SECOES[tipo]

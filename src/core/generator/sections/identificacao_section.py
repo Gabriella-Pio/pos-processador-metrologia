@@ -17,6 +17,13 @@ class IdentificacaoSection(BaseSection):
 
         ctx = contexto_extra.get("placeholder_context", {})
         table_rows = (contexto_extra.get("table_rows") or {}).get("identificacao", [])
+        if not table_rows:
+            from src.core.domain.table_row_registry import default_table_rows, default_tomo_identificacao_rows
+
+            if contexto_extra.get("report_kind") == "tomografia":
+                table_rows = default_tomo_identificacao_rows()
+            else:
+                table_rows = default_table_rows("identificacao")
 
         dados_cab = []
         for row in table_rows:
@@ -27,6 +34,12 @@ class IdentificacaoSection(BaseSection):
                 Paragraph(f"<b>{label}</b>", styles['texto']),
                 Paragraph(value_html, styles['texto']),
             ])
+
+        if not dados_cab:
+            dados_cab = [
+                [Paragraph("<b>Componente</b>", styles["texto"]),
+                 Paragraph(str(contexto_extra.get("componente_avaliado", "")), styles["texto"])],
+            ]
 
         tabela_cab = Table(dados_cab, colWidths=[200, 340])
         tabela_cab.setStyle(TableStyle([

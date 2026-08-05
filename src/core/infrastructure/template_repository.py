@@ -26,6 +26,28 @@ class JSONTemplateRepository(TemplateRepository):
                 "configs": {},
                 "content_defaults": {},
             })
+        self.ensure_builtin_templates()
+
+    def ensure_builtin_templates(self) -> None:
+        """Garante template oficial de tomografia (Bosello / CEMSZ)."""
+        from src.core.domain.section_schema import TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG
+        from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
+
+        estado = self._carregar_estado()
+        templates = estado.setdefault("templates", [])
+        if not any(t.get("id") == "tomografia" for t in templates):
+            templates.append({
+                "id": "tomografia",
+                "name": "Template Tomografia SENAI/Bosello",
+                "is_default": False,
+            })
+        configs = estado.setdefault("configs", {})
+        if not configs.get("tomografia"):
+            configs["tomografia"] = dict(TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG)
+        content = estado.setdefault("content_defaults", {})
+        if not content.get("tomografia"):
+            content["tomografia"] = {sid: dict(vals) for sid, vals in TOMO_PROSE_DEFAULTS.items()}
+        self._salvar_estado(estado)
 
     def list_templates(self) -> list[dict]:
         estado = self._carregar_estado()

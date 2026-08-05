@@ -29,12 +29,16 @@ SECTION_DEFINITIONS: tuple[SectionDefinition, ...] = (
     SectionDefinition("cabecalho", "Cabeçalho institucional", navigable=False),
     SectionDefinition("introducao", "Introdução"),
     SectionDefinition("identificacao", "Identificação e condições de medição"),
+    SectionDefinition("metodo_escopo", "Método e escopo da avaliação", enabled_by_default=False),
+    SectionDefinition("registro_componente", "Registro do componente", enabled_by_default=False),
     SectionDefinition("controle_tecnico", "Controle técnico"),
     SectionDefinition("resultados", "Resultados dimensionais"),
     SectionDefinition("grafica", "Análise gráfica dos resultados"),
-    SectionDefinition("tomografia", "Inspeção tomográfica", enabled_by_default=True),
+    SectionDefinition("tomografia", "Inspeção tomográfica", enabled_by_default=False),
+    SectionDefinition("resultados_inspecao", "Resultados da inspeção", enabled_by_default=False),
     SectionDefinition("interpretacao", "Interpretação dos resultados"),
     SectionDefinition("conclusao", "Conclusão"),
+    SectionDefinition("observacoes_limitacoes", "Observações e limitações", enabled_by_default=False),
     SectionDefinition("historico_versoes", "Histórico de versões"),
 )
 
@@ -45,6 +49,39 @@ TEMPLATE_PADRAO_OFICIAL: list[dict] = [
     for s in SECTION_DEFINITIONS
     if s.enabled_by_default
 ]
+
+# Template oficial de inspeção tomográfica (modelo CEMSZ / Bosello).
+TEMPLATE_TOMOGRAFIA_OFICIAL: list[dict] = [
+    {"tipo": "cabecalho", "config": {}},
+    {"tipo": "introducao", "config": {"variant": "tomografia"}},
+    {"tipo": "identificacao", "config": {}},
+    {"tipo": "metodo_escopo", "config": {}},
+    {"tipo": "registro_componente", "config": {}},
+    {"tipo": "tomografia", "config": {}},
+    {"tipo": "resultados_inspecao", "config": {}},
+    {"tipo": "interpretacao", "config": {}},
+    {"tipo": "conclusao", "config": {}},
+    {"tipo": "observacoes_limitacoes", "config": {}},
+    {"tipo": "controle_tecnico", "config": {}},
+    {"tipo": "historico_versoes", "config": {}},
+]
+
+TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG: dict[str, dict] = {
+    "cabecalho": {"enabled": True, "order": 0},
+    "introducao": {"enabled": True, "order": 1},
+    "identificacao": {"enabled": True, "order": 2},
+    "metodo_escopo": {"enabled": True, "order": 3},
+    "registro_componente": {"enabled": True, "order": 4},
+    "controle_tecnico": {"enabled": True, "order": 5},
+    "resultados": {"enabled": False, "order": 6},
+    "grafica": {"enabled": False, "order": 7},
+    "tomografia": {"enabled": True, "order": 8},
+    "resultados_inspecao": {"enabled": True, "order": 9},
+    "interpretacao": {"enabled": True, "order": 10},
+    "conclusao": {"enabled": True, "order": 11},
+    "observacoes_limitacoes": {"enabled": True, "order": 12},
+    "historico_versoes": {"enabled": True, "order": 13},
+}
 
 _NAVIGABLE_IDS = frozenset(s.id for s in SECTION_DEFINITIONS if s.navigable)
 
@@ -113,3 +150,7 @@ def sections_config_to_blocks(sections_config: dict) -> list[dict]:
 
 def is_navigable_section(section_id: str) -> bool:
     return section_id in _NAVIGABLE_IDS
+
+
+def is_tomography_template(template_id: str) -> bool:
+    return template_id in {"tomografia", "tomo"}

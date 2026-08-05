@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Optional
 
 from src.core.generator.constants import SECTION_TITLES, TEMPLATE_PADRAO_OFICIAL
+from src.core.domain.section_schema import (
+    TEMPLATE_TOMOGRAFIA_OFICIAL,
+    is_tomography_template,
+)
 from src.core.generator.engine import ReportGenerator
 from src.core.domain.parsed_overrides import build_effective_dto, build_prose_context
 from src.core.parser.parser import PDFParserService
@@ -79,6 +83,7 @@ class RealReportExporterAdapter:
             section_prose=section_prose,
             placeholder_context=placeholder_context,
             table_rows=table_rows,
+            opcoes_extras={"report_kind": self._report_kind(document)},
         )
         self._last_section_anchor_map = section_anchor_map
         document.last_export_path = output_path
@@ -100,8 +105,6 @@ class RealReportExporterAdapter:
             tipo = bloco["tipo"]
             if not is_navigable_section(tipo) and not tipo.startswith("custom_"):
                 continue
-            if tipo == "tomografia":
-                continue
             quantidade_fotos = fotos_por_secao.get(tipo, 0)
             resultado.append(
                 {
@@ -121,6 +124,17 @@ class RealReportExporterAdapter:
     def _resolver_blocos_template(self, document: ReportDocument) -> list[dict]:
         if document.template_layout_override:
             blocos = sections_config_to_blocks(document.template_layout_override)
+        elif is_tomography_template(document.template_id):
+            config_salva = (
+                self._template_repository.get_template_config(document.template_id)
+                if self._template_repository is not None
+                else {}
+            )
+            blocos = (
+                sections_config_to_blocks(config_salva)
+                if config_salva
+                else list(TEMPLATE_TOMOGRAFIA_OFICIAL)
+            )
         elif document.template_id == "default" or self._template_repository is None:
             blocos = list(TEMPLATE_PADRAO_OFICIAL)
         else:
@@ -131,6 +145,12 @@ class RealReportExporterAdapter:
                 else sections_config_to_blocks(config_salva)
             )
         return self._apply_section_order(blocos, document)
+
+    @staticmethod
+    def _report_kind(document: ReportDocument) -> str:
+        if is_tomography_template(document.template_id) or document.source_kind == "insp_ect":
+            return "tomografia"
+        return "mmc"
 
     def get_export_blocks(self, document: ReportDocument) -> list[dict]:
         return self._resolver_blocos_template(document)
@@ -212,8 +232,13 @@ class RealReportExporterAdapter:
 
     def _montar_section_prose(self, document: ReportDocument, effective_dto) -> dict[str, dict]:
         ctx = build_prose_context(effective_dto, document)
+        ctx["report_kind"] = self._report_kind(document)
         result: dict[str, dict] = {}
         section_ids = set(PROSE_TEMPLATES.keys()) | set(document.section_overrides.keys()) | set(SECTION_HEADING_DEFAULTS.keys())
+        if ctx["report_kind"] == "tomografia":
+            from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
+
+            section_ids |= set(TOMO_PROSE_DEFAULTS.keys())
         for section_id in section_ids:
             overrides = dict(document.section_overrides.get(section_id, {}))
             merged = merge_section_prose(section_id, overrides, ctx)
@@ -228,4 +253,8 @@ class RealReportExporterAdapter:
 
     def _montar_table_rows(self, document: ReportDocument) -> dict[str, list]:
         stored = document.section_overrides.get("identificacao", {}).get("table_rows")
+        if self._report_kind(document) == "tomografia" and not stored:
+            from src.core.domain.table_row_registry import default_tomo_identificacao_rows
+
+            return {"identificacao": default_tomo_identificacao_rows()}
         return {"identificacao": merge_table_rows("identificacao", stored)}

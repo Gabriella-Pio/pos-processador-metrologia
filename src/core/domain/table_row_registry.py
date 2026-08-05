@@ -14,22 +14,30 @@ class TableRowDef:
 SECTION_HEADING_DEFAULTS: dict[str, str] = {
     "introducao": "RELATÓRIO TÉCNICO — ANÁLISE DIMENSIONAL E TOMOGRÁFICA",
     "identificacao": "IDENTIFICAÇÃO E CONDIÇÕES DE MEDIÇÃO",
+    "metodo_escopo": "MÉTODO E ESCOPO DA AVALIAÇÃO",
+    "registro_componente": "REGISTRO DO COMPONENTE",
     "resultados": "RESULTADOS DIMENSIONAIS",
     "grafica": "ANÁLISE GRÁFICA DOS RESULTADOS",
     "tomografia": "INSPEÇÃO TOMOGRÁFICA",
+    "resultados_inspecao": "RESULTADOS DA INSPEÇÃO",
     "interpretacao": "INTERPRETAÇÃO DOS RESULTADOS",
     "conclusao": "CONCLUSÃO",
+    "observacoes_limitacoes": "OBSERVAÇÕES E LIMITAÇÕES",
     "controle_tecnico": "CONTROLE TÉCNICO",
     "historico_versoes": "HISTÓRICO DE VERSÕES",
 }
 
 NUMBERED_SECTION_IDS: frozenset[str] = frozenset({
     "identificacao",
+    "metodo_escopo",
+    "registro_componente",
     "resultados",
     "grafica",
     "tomografia",
+    "resultados_inspecao",
     "interpretacao",
     "conclusao",
+    "observacoes_limitacoes",
     "controle_tecnico",
     "historico_versoes",
 })
@@ -70,6 +78,15 @@ def default_table_rows(section_id: str) -> list[dict[str, str]]:
             for row in IDENTIFICACAO_TABLE_ROWS
         ]
     return []
+
+
+def default_tomo_identificacao_rows() -> list[dict[str, str]]:
+    from src.core.domain.tomo_template_defaults import IDENTIFICACAO_TOMO_TABLE_ROWS
+
+    return [
+        {"id": row_id, "label": label, "value": value}
+        for row_id, label, value in IDENTIFICACAO_TOMO_TABLE_ROWS
+    ]
 
 
 def merge_table_rows(section_id: str, stored: list | None) -> list[dict[str, str]]:

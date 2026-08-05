@@ -63,6 +63,19 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
             "Avaliação qualitativa da integridade interna do componente realizada por ensaio tomográfico."
         ),
     },
+    "metodo_escopo": {
+        "body": "",
+    },
+    "registro_componente": {
+        "intro": "",
+    },
+    "resultados_inspecao": {
+        "body": "",
+    },
+    "observacoes_limitacoes": {
+        "body": "",
+        "aprovacao": "",
+    },
     "interpretacao": {
         "intro": (
             "Análise detalhada das {numero_medicoes} características inspecionadas no "
@@ -79,6 +92,7 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
         "intro": "",
     },
     "conclusao": {
+        "texto": "",
         "texto_aprovado": (
             "O componente analisado atende plenamente aos requisitos dimensionais especificados "
             "no relatório de origem, estando aprovado."
@@ -88,6 +102,9 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
             "dimensionais constatadas, cabendo avaliação do setor de engenharia e qualidade "
             "para liberação ou retrabalho."
         ),
+    },
+    "historico_versoes": {
+        "intro": "Registro das versões emitidas deste relatório.",
     },
 }
 
@@ -116,6 +133,12 @@ _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
     "identificacao": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
     ),
+    "metodo_escopo": (
+        SectionFieldDef("body", "Texto do método e escopo", "textarea"),
+    ),
+    "registro_componente": (
+        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+    ),
     "controle_tecnico": (
         SectionFieldDef("measured_by", "Medido por"),
         SectionFieldDef("reviewed_by", "Revisado por"),
@@ -132,12 +155,26 @@ _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
     "tomografia": (
         SectionFieldDef("intro", "Texto introdutório", "textarea"),
     ),
+    "resultados_inspecao": (
+        SectionFieldDef("body", "Texto dos resultados", "textarea"),
+    ),
     "interpretacao": (
         SectionFieldDef("intro", "Texto introdutório", "textarea", editable=False),
+        SectionFieldDef("bullet_1", "Interpretação 1", "textarea", editable=False),
+        SectionFieldDef("bullet_2", "Interpretação 2", "textarea", editable=False),
+        SectionFieldDef("bullet_3", "Interpretação 3", "textarea", editable=False),
+        SectionFieldDef("bullet_4", "Interpretação 4", "textarea", editable=False),
     ),
     "conclusao": (
         SectionFieldDef("texto", "Texto da conclusão", "textarea"),
         SectionFieldDef("modo", "Modo", "text", editable=False),
+    ),
+    "observacoes_limitacoes": (
+        SectionFieldDef("body", "Texto das observações", "textarea"),
+        SectionFieldDef("aprovacao", "Aprovação / Coordenação", "text"),
+    ),
+    "historico_versoes": (
+        SectionFieldDef("intro", "Texto introdutório", "textarea"),
     ),
 }
 
@@ -148,6 +185,7 @@ _SECTION_MEDIA: dict[str, tuple[SectionMediaDef, ...]] = {
         SectionMediaDef("graphics", "Gráficos"),
     ),
     "tomografia": (SectionMediaDef("photos", "Fotografias"),),
+    "registro_componente": (SectionMediaDef("photos", "Fotografias"),),
     "resultados": (SectionMediaDef("tables", "Tabela de resultados"),),
     "identificacao": (SectionMediaDef("tables", "Tabela de identificação"),),
 }
@@ -240,7 +278,12 @@ def get_global_fields_for_section(section_id: str) -> tuple[GlobalFieldDef, ...]
 
 def default_prose_values(section_id: str, context: dict[str, str] | None = None) -> dict[str, str]:
     """Templates de prosa com placeholders — não resolve valores globais."""
-    return dict(PROSE_TEMPLATES.get(section_id, {}))
+    base = dict(PROSE_TEMPLATES.get(section_id, {}))
+    if context and context.get("report_kind") == "tomografia":
+        from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
+
+        base.update(TOMO_PROSE_DEFAULTS.get(section_id, {}))
+    return base
 
 
 def merge_section_prose(

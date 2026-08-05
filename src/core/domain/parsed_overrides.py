@@ -59,6 +59,12 @@ def build_prose_context(dto: Any, document: Any) -> dict[str, str]:
     if document is not None:
         ctx["client_project"] = getattr(document, "client_project", "")
         ctx["evaluated_component"] = getattr(document, "evaluated_component", "")
+        template_id = getattr(document, "template_id", "")
+        source_kind = getattr(document, "source_kind", "")
+        if template_id in {"tomografia", "tomo"} or source_kind == "insp_ect":
+            ctx["report_kind"] = "tomografia"
+        else:
+            ctx["report_kind"] = "mmc"
     return ctx
 
 
