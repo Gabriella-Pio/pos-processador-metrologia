@@ -31,6 +31,7 @@ class ProjectSession:
     documents: list[ProjectDocumentSlot] = field(default_factory=list)
     active_index: int = 0
     project_id: str | None = None
+    display_name: str = ""
 
     @property
     def active_slot(self) -> ProjectDocumentSlot | None:

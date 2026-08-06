@@ -56,6 +56,7 @@ _SESSION_SAVE_DEBOUNCE_MS = 2000
 class WorkspaceViewModel(QObject):
     document_loaded = pyqtSignal(object)
     project_loaded = pyqtSignal(object)
+    project_display_name_changed = pyqtSignal(str)
     export_finished = pyqtSignal(Path)
     sections_summary_ready = pyqtSignal(list)
     preview_ready = pyqtSignal(list)
@@ -128,6 +129,17 @@ class WorkspaceViewModel(QObject):
             self._project_service.save_session(session)
         except Exception:
             logger.exception("Falha ao persistir metadados do projeto")
+
+    def set_display_name(self, display_name: str) -> None:
+        session = self._app_state.project_session
+        if session is None:
+            return
+        cleaned = display_name.strip()
+        if not cleaned or cleaned == session.display_name:
+            return
+        session.display_name = cleaned
+        self._persist_project()
+        self.project_display_name_changed.emit(cleaned)
 
     def _refresh_export_validation(self) -> None:
         refresh_export_validation(self)

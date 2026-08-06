@@ -10,12 +10,14 @@ from PyQt6.QtGui import QCursor, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QFileDialog,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTabBar,
     QVBoxLayout,
     QWidget,
 )
 
+from src.core.application.project_serializer import resolved_display_name
 from src.core.domain.ports import ReportDocument
 from src.ui.components.inputs import LayoutTemplateSelector
 from src.ui.components.icons import icon_plus
@@ -69,6 +71,13 @@ class WorkspaceView(QWidget):
         self._add_pdf_btn.setToolTip("Incluir mais relatórios ZEISS no projeto")
         self._add_pdf_btn.clicked.connect(self._on_add_pdf_clicked)
 
+        self._project_title_edit = QLineEdit()
+        self._project_title_edit.setObjectName("WorkspaceProjectTitle")
+        self._project_title_edit.setPlaceholderText("Título do projeto")
+        self._project_title_edit.setToolTip("Nome exibido na Home — editável a qualquer momento")
+        self._project_title_edit.editingFinished.connect(self._on_project_title_edited)
+        self._project_title_block = False
+
         self._document_title_label = QLabel("Nenhum documento carregado")
         self._document_title_label.setObjectName("WorkspaceDocTitleCompact")
         self._active_section_label = QLabel("")
@@ -116,6 +125,14 @@ class WorkspaceView(QWidget):
         self._save_layout_action = self._project_tabs_strip._save_layout_action
         self._export_individual_action = self._project_tabs_strip._export_individual_action
         self._export_merged_action = self._project_tabs_strip._export_merged_action
+
+        title_row = QWidget()
+        title_row.setObjectName("WorkspaceProjectTitleRow")
+        title_layout = QVBoxLayout(title_row)
+        title_layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, 0)
+        title_layout.setSpacing(0)
+        title_layout.addWidget(self._project_title_edit)
+        outer.addWidget(title_row)
         outer.addWidget(self._project_tabs_strip)
 
         self._edit_placeholder = QLabel(
@@ -171,6 +188,7 @@ class WorkspaceView(QWidget):
         self._section_editor.tool_selected.connect(self._on_tool_selected)
 
         self._vm.project_loaded.connect(self._on_project_loaded)
+        self._vm.project_display_name_changed.connect(self._on_project_display_name_changed)
         self._vm.sections_summary_ready.connect(self._on_sections_summary_ready)
         self._vm.preview_ready.connect(self._preview_panel.render_pages)
         self._vm.preview_generating.connect(self._on_preview_generating)
@@ -266,6 +284,9 @@ class WorkspaceView(QWidget):
         self._export_merged_action.setVisible(multi)
 
     def _on_project_loaded(self, session) -> None:
+        self._project_title_block = True
+        self._project_title_edit.setText(resolved_display_name(session))
+        self._project_title_block = False
         self._project_tabs.blockSignals(True)
         while self._project_tabs.count():
             self._project_tabs.removeTab(0)
@@ -288,9 +309,24 @@ class WorkspaceView(QWidget):
 
     def _on_project_changed(self, session) -> None:
         if session is None:
+            self._project_title_block = True
+            self._project_title_edit.clear()
+            self._project_title_block = False
             while self._project_tabs.count():
                 self._project_tabs.removeTab(0)
         self._update_export_options_visibility()
+
+    def _on_project_title_edited(self) -> None:
+        if self._project_title_block:
+            return
+        self._vm.set_display_name(self._project_title_edit.text())
+
+    def _on_project_display_name_changed(self, display_name: str) -> None:
+        if self._project_title_edit.text() == display_name:
+            return
+        self._project_title_block = True
+        self._project_title_edit.setText(display_name)
+        self._project_title_block = False
 
     def _on_project_tab_changed(self, index: int) -> None:
         if index < 0:

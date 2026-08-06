@@ -37,3 +37,16 @@ class ProjectService:
         if self._repo is None:
             return []
         return self._repo.list_recent(limit)
+
+    def rename(self, project_id: str, display_name: str) -> bool:
+        if self._repo is None:
+            return False
+        workspace = self._repo.get(project_id)
+        if workspace is None:
+            return False
+        cleaned = display_name.strip()
+        if not cleaned:
+            return False
+        workspace.display_name = cleaned
+        self._repo.save(workspace)
+        return True

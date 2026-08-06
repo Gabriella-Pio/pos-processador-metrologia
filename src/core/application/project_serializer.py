@@ -8,6 +8,20 @@ from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.project_workspace import ProjectSlotSnapshot, ProjectWorkspace
 
 
+def default_display_name(session: ProjectSession) -> str:
+    """Nome inicial do projeto — stem do primeiro PDF importado."""
+    if session.documents:
+        return session.documents[0].source_pdf_path.stem
+    return session.client_project.strip() or "Projeto"
+
+
+def resolved_display_name(session: ProjectSession) -> str:
+    name = session.display_name.strip()
+    if name:
+        return name
+    return default_display_name(session)
+
+
 def session_to_workspace(session: ProjectSession) -> ProjectWorkspace:
     project_id = session.project_id or str(uuid.uuid4())
     slots = [
@@ -26,7 +40,7 @@ def session_to_workspace(session: ProjectSession) -> ProjectWorkspace:
         report_mode=session.report_mode,
         slots=slots,
         active_index=session.active_index,
-        display_name=session.client_project,
+        display_name=resolved_display_name(session),
     )
 
 
@@ -40,6 +54,9 @@ def workspace_to_session(workspace: ProjectWorkspace) -> ProjectSession:
         )
         for slot in workspace.slots
     ]
+    display_name = (workspace.display_name or "").strip()
+    if not display_name and workspace.slots:
+        display_name = Path(workspace.slots[0].source_pdf_path).stem
     return ProjectSession(
         client_project=workspace.client_project,
         template_id=workspace.template_id,
@@ -47,6 +64,7 @@ def workspace_to_session(workspace: ProjectWorkspace) -> ProjectSession:
         documents=documents,
         active_index=workspace.active_index,
         project_id=workspace.id,
+        display_name=display_name,
     )
 
 

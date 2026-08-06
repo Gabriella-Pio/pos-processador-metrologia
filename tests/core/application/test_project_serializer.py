@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.core.application.project_serializer import (
+    default_display_name,
     session_to_workspace,
     slots_from_json,
     slots_to_json,
@@ -20,6 +21,7 @@ def test_session_to_workspace_roundtrip() -> None:
         report_mode="mixed",
         project_id="proj-123",
         active_index=1,
+        display_name="relatorio_zeiss",
         documents=[
             ProjectDocumentSlot(
                 source_pdf_path=Path("/data/a.pdf"),
@@ -39,6 +41,7 @@ def test_session_to_workspace_roundtrip() -> None:
 
     assert restored.project_id == "proj-123"
     assert restored.client_project == "Cliente A"
+    assert restored.display_name == "relatorio_zeiss"
     assert restored.active_index == 1
     assert len(restored.documents) == 2
     assert restored.documents[0].source_pdf_path == Path("/data/a.pdf")
@@ -56,6 +59,19 @@ def test_slots_json_roundtrip() -> None:
     assert restored[1].template_id == "tomografia"
 
 
+def test_default_display_name_uses_first_pdf_stem() -> None:
+    session = ProjectSession(
+        client_project="Cargill",
+        documents=[
+            ProjectDocumentSlot(
+                source_pdf_path=Path("/data/medicoes_eixo.pdf"),
+                evaluated_component="Eixo",
+            ),
+        ],
+    )
+    assert default_display_name(session) == "medicoes_eixo"
+
+
 def test_workspace_to_session_preserves_metadata() -> None:
     workspace = ProjectWorkspace(
         id="uuid-1",
@@ -69,4 +85,5 @@ def test_workspace_to_session_preserves_metadata() -> None:
     session = workspace_to_session(workspace)
     assert session.project_id == "uuid-1"
     assert session.report_mode == "tomo_only"
+    assert session.display_name == "Lab Tomo"
     assert session.documents[0].evaluated_component == "Z"

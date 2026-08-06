@@ -10,6 +10,7 @@ from src.core.application.batch_processing import (
     infer_report_mode,
     template_id_for_kind,
 )
+from src.core.application.project_serializer import default_display_name
 from src.core.application.template_apply import apply_template_content_defaults, apply_template_layout
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.ports import ReportDocument, ReportParser, TemplateRepository, VersionHistoryRepository
@@ -113,4 +114,5 @@ class DocumentSessionService:
                     template_id=slot_template,
                 )
             )
+        session.display_name = default_display_name(session)
         return session
