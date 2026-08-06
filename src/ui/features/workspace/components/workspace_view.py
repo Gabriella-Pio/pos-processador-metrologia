@@ -10,21 +10,16 @@ from PyQt6.QtGui import QCursor, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
-    QFrame,
-    QHBoxLayout,
     QLabel,
-    QMenu,
     QPushButton,
-    QScrollArea,
     QTabBar,
     QVBoxLayout,
     QWidget,
 )
 
 from src.core.domain.ports import ReportDocument
-from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.inputs import LayoutTemplateSelector
-from src.ui.components.icons import icon_ellipsis, icon_export, icon_plus
+from src.ui.components.icons import icon_plus
 from src.ui.components.feedback import (
     FeedbackLevel,
     InlineBanner,
@@ -34,10 +29,19 @@ from src.ui.components.feedback import (
 )
 from src.ui.features.workspace.dialogs.save_template_dialog import SaveTemplateDialog
 from src.ui.features.workspace.dialogs.version_register_dialog import VersionRegisterDialog
-from src.ui.styles import SPACING, caption_style
+from src.ui.styles import SPACING
 from src.ui.controllers.app_state import AppState
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from src.ui.features.workspace.components.section_editor_panel import SectionEditorPanel
+from src.ui.features.workspace.components.workspace_export_flow import (
+    apply_export_validation_banner,
+    run_workspace_export,
+)
+from src.ui.features.workspace.components.workspace_preview_chrome import (
+    build_workspace_action_bar,
+    build_workspace_preview_column,
+    build_workspace_project_tabs_strip,
+)
 from src.ui.shared.report_editor.editor_shell import build_editor_stack, create_three_column_splitter
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
 
@@ -101,7 +105,26 @@ class WorkspaceView(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        self._project_tabs_strip = self._build_project_tabs_row()
+        (
+            self._project_tabs_strip,
+            self._preview_status_label,
+            self._data_dirty_label,
+            self._more_btn,
+            self._export_btn,
+            self._preview_menu,
+        ) = build_workspace_project_tabs_strip(
+            self._project_tabs,
+            self._add_pdf_btn,
+            on_more_clicked=self._show_preview_menu,
+            on_export_clicked=self._on_export_clicked,
+            on_save_layout=self._on_save_template_clicked,
+            on_change_layout=self._focus_template_combo,
+            export_individual_cb=self._export_individual_cb,
+            export_merged_cb=self._export_merged_cb,
+        )
+        self._save_layout_action = self._project_tabs_strip._save_layout_action
+        self._export_individual_action = self._project_tabs_strip._export_individual_action
+        self._export_merged_action = self._project_tabs_strip._export_merged_action
         outer.addWidget(self._project_tabs_strip)
 
         self._edit_placeholder = QLabel(
@@ -119,119 +142,26 @@ class WorkspaceView(QWidget):
         self._edit_container.setObjectName("WorkspaceEditorPanel")
         self._edit_container.setVisible(False)
 
-        splitter = create_three_column_splitter(
-            self._section_editor,
-            self._edit_container,
-            self._build_preview_panel(),
-        )
-        self._main_splitter = splitter
-        outer.addWidget(splitter, stretch=1)
-
-    def _build_project_tabs_row(self) -> QWidget:
-        row = QWidget()
-        row.setObjectName("WorkspaceProjectTabsStrip")
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(SPACING.md, SPACING.xs, SPACING.md, SPACING.xs)
-        layout.setSpacing(SPACING.sm)
-        layout.addWidget(self._project_tabs)
-        layout.addWidget(self._add_pdf_btn)
-        layout.addStretch(1)
-
-        self._preview_status_label = QLabel("")
-        self._preview_status_label.setObjectName("WorkspacePreviewStatus")
-        layout.addWidget(self._preview_status_label, alignment=Qt.AlignmentFlag.AlignVCenter)
-
-        self._data_dirty_label = QLabel("")
-        self._data_dirty_label.setObjectName("WorkspaceDataDirty")
-        layout.addWidget(self._data_dirty_label, alignment=Qt.AlignmentFlag.AlignVCenter)
-
-        self._more_btn = ChromeIconButton(icon_ellipsis(), "Mais ações do projeto")
-        self._more_btn.clicked.connect(self._show_preview_menu)
-        layout.addWidget(self._more_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
-
-        self._export_btn = PrimaryButton("Exportar", icon=icon_export())
-        self._export_btn.setToolTip("Exportar PDF (Ctrl+E)")
-        self._export_btn.clicked.connect(self._on_export_clicked)
-        layout.addWidget(self._export_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
-
-        self._build_preview_menu()
-        return row
-
-    def _build_preview_menu(self) -> None:
-        self._preview_menu = QMenu(self)
-        self._save_layout_action = self._preview_menu.addAction("Salvar layout…")
-        self._save_layout_action.triggered.connect(self._on_save_template_clicked)
-        self._change_layout_action = self._preview_menu.addAction("Alterar layout…")
-        self._change_layout_action.triggered.connect(self._focus_template_combo)
-        self._preview_menu.addSeparator()
-        self._export_individual_action = self._preview_menu.addAction("Exportar PDFs individuais")
-        self._export_individual_action.setCheckable(True)
-        self._export_individual_action.setChecked(True)
-        self._export_individual_action.toggled.connect(self._export_individual_cb.setChecked)
-        self._export_merged_action = self._preview_menu.addAction("Exportar um único PDF")
-        self._export_merged_action.setCheckable(True)
-        self._export_merged_action.setChecked(True)
-        self._export_merged_action.setEnabled(False)
-        self._export_merged_action.setToolTip("Em breve — mescla seções institucionais")
-        self._export_merged_action.toggled.connect(self._export_merged_cb.setChecked)
-        self._export_individual_cb.toggled.connect(self._export_individual_action.setChecked)
-        self._export_merged_cb.toggled.connect(self._export_merged_action.setChecked)
-
-    def _build_action_bar(self) -> QWidget:
-        self._action_bar = QWidget()
-        self._action_bar.setObjectName("WorkspacePreviewContext")
-        row = QHBoxLayout(self._action_bar)
-        row.setContentsMargins(0, SPACING.xs, 0, SPACING.xs)
-        row.setSpacing(SPACING.xs)
-        row.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-
-        row.addWidget(self._document_title_label)
-        self._meta_sep_before_section = QLabel("·")
-        self._meta_sep_before_section.setObjectName("WorkspaceMetaSeparator")
-        row.addWidget(self._meta_sep_before_section)
-        row.addWidget(self._active_section_label)
-        self._meta_sep_before_layout = QLabel("·")
-        self._meta_sep_before_layout.setObjectName("WorkspaceMetaSeparator")
-        row.addWidget(self._meta_sep_before_layout)
-
         self._template_selector = LayoutTemplateSelector()
         self._template_combo = self._template_selector.combo
         self._template_combo.currentIndexChanged.connect(self._on_template_changed)
-        row.addWidget(self._template_selector)
-        row.addStretch(1)
+        self._action_bar = build_workspace_action_bar(
+            self._document_title_label,
+            self._active_section_label,
+            self._template_selector,
+            self._export_individual_cb,
+            self._export_merged_cb,
+        )
+        self._meta_sep_before_section = self._action_bar._meta_sep_before_section
+        self._meta_sep_before_layout = self._action_bar._meta_sep_before_layout
 
-        self._export_options = QWidget()
-        export_opts_layout = QHBoxLayout(self._export_options)
-        export_opts_layout.setContentsMargins(0, 0, 0, 0)
-        export_opts_layout.setSpacing(SPACING.md)
-        export_opts_layout.addWidget(self._export_individual_cb)
-        export_opts_layout.addWidget(self._export_merged_cb)
-        return self._action_bar
-
-    def _build_preview_panel(self) -> QWidget:
-        container = QWidget()
-        container.setObjectName("WorkspacePreviewPanel")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        header = QWidget()
-        header.setObjectName("WorkspacePreviewHeader")
-        header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
-        header_layout.setSpacing(0)
-        header_layout.addWidget(self._build_action_bar())
-        layout.addWidget(header)
-
-        body = QWidget()
-        body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(SPACING.lg, SPACING.md, SPACING.lg, SPACING.lg)
-        body_layout.setSpacing(SPACING.sm)
-
-        body_layout.addWidget(self._banner)
-        body_layout.addWidget(self._preview_panel, stretch=1)
-        layout.addWidget(body, stretch=1)
-        return container
+        splitter = create_three_column_splitter(
+            self._section_editor,
+            self._edit_container,
+            build_workspace_preview_column(self._action_bar, self._banner, self._preview_panel),
+        )
+        self._main_splitter = splitter
+        outer.addWidget(splitter, stretch=1)
 
     def _connect_signals(self) -> None:
         self._app_state.document_changed.connect(self._on_document_changed)
@@ -520,18 +450,7 @@ class WorkspaceView(QWidget):
                 self._section_anchor_map[section_id]["anchor_rect"] = info
 
     def _on_export_validation(self, issues: list[dict]) -> None:
-        errors = [i for i in issues if i.get("level") == "error"]
-        warnings = [i for i in issues if i.get("level") == "warning"]
-        if errors:
-            self._banner.set_level(FeedbackLevel.DANGER)
-            self._banner.set_message(errors[0]["message"])
-        elif warnings:
-            self._banner.set_level(FeedbackLevel.WARNING)
-            self._banner.set_message(warnings[0]["message"])
-        else:
-            self._banner.set_level(FeedbackLevel.INFO)
-            self._banner.set_message("")
-            self._banner.sync_visibility()
+        apply_export_validation_banner(self._banner, issues)
 
     def _clear_preview_pages(self) -> None:
         self._preview_panel.clear()
@@ -560,29 +479,13 @@ class WorkspaceView(QWidget):
         self._vm.register_new_version(responsible, description)
 
     def _on_export_clicked(self) -> None:
-        session = self._app_state.project_session
-        multi = session is not None and len(session.documents) > 1
-
-        if multi and self._export_merged_cb.isChecked() and not self._export_merged_cb.isEnabled():
-            show_info(
-                self,
-                "Exportação unificada",
-                "Em breve — mescla seções institucionais em um único PDF.",
-            )
-
-        if multi and self._export_individual_cb.isChecked():
-            output_dir = QFileDialog.getExistingDirectory(
-                self, "Pasta para exportação em lote"
-            )
-            if output_dir:
-                paths = self._vm.export_all_documents(Path(output_dir))
-                if paths:
-                    show_info(self, "Exportação em lote", f"{len(paths)} PDF(s) exportado(s).")
-            return
-
-        output_path, _ = QFileDialog.getSaveFileName(self, "Exportar PDF", "", "PDF (*.pdf)")
-        if output_path:
-            self._vm.export_document(Path(output_path))
+        run_workspace_export(
+            self,
+            self._vm,
+            self._app_state,
+            export_individual_cb=self._export_individual_cb,
+            export_merged_cb=self._export_merged_cb,
+        )
 
     def _on_export_finished(self, final_path: Path) -> None:
         show_info(self, "Exportação concluída", f"Relatório salvo em:\n{final_path}")
