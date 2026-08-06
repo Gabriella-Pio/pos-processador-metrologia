@@ -21,9 +21,9 @@ from PyQt6.QtWidgets import (
 )
 
 from src.ui.components.centered_layout import make_centered_column
-from src.ui.components.icons import icon_file_pdf, icon_file_upload, icon_plus
+from src.ui.components.icons import icon_file_upload, icon_layers, icon_plus
 from src.ui.components.inputs import SearchBar
-from src.ui.features.home.models.dashboard import RecentFileSummary
+from src.ui.features.home.models.dashboard import ProjectSummary, RecentFileSummary
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
 from src.ui.accessibility.themes import _is_light_palette
 from src.ui.features.home.components.files_filter_bar import FilesFilterBar
@@ -175,12 +175,14 @@ class _InlineMetrics(QLabel):
 
     def set_stats(
         self,
-        file_count: int,
+        project_count: int,
+        export_count: int,
         template_count: int,
         last_project: str | None = None,
     ) -> None:
         parts = [
-            f"{file_count} arquivo{'s' if file_count != 1 else ''}",
+            f"{project_count} projeto{'s' if project_count != 1 else ''}",
+            f"{export_count} export{'s' if export_count != 1 else ''}",
             f"{template_count} template{'s' if template_count != 1 else ''}",
         ]
         if last_project:
@@ -214,12 +216,14 @@ class HeroCommandBar(QWidget):
     filters_changed = pyqtSignal(object)  # RecentFilesFilterState
     new_report_requested = pyqtSignal()
     new_template_requested = pyqtSignal()
-    continue_last_requested = pyqtSignal(str)
+    continue_project_requested = pyqtSignal(str)
+    continue_export_requested = pyqtSignal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         p = PALETTE
-        self._last_file: Optional[RecentFileSummary] = None
+        self._last_project: Optional[ProjectSummary] = None
+        self._last_export: Optional[RecentFileSummary] = None
 
         self.setStyleSheet(f"background: {_hero_gradient()};")
 
@@ -273,10 +277,10 @@ class HeroCommandBar(QWidget):
         self._secondary_card.clicked.connect(self.new_template_requested.emit)
 
         self._continue_card = _SpotlightCard(
-            icon_file_pdf(),
+            icon_layers(),
             "Continuar",
             "Retome seu último trabalho.",
-            accent="orange",
+            accent="blue",
         )
         self._continue_card.hide()
         self._continue_card.clicked.connect(self._on_continue_clicked)
@@ -336,8 +340,10 @@ class HeroCommandBar(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
     def _on_continue_clicked(self) -> None:
-        if self._last_file is not None:
-            self.continue_last_requested.emit(self._last_file.file_id)
+        if self._last_project is not None:
+            self.continue_project_requested.emit(self._last_project.project_id)
+        elif self._last_export is not None:
+            self.continue_export_requested.emit(self._last_export.file_id)
 
     def _on_filter_toggle(self, expanded: bool) -> None:
         self.filter_bar.set_expanded(expanded)
@@ -399,19 +405,43 @@ class HeroCommandBar(QWidget):
 
     def update_stats(
         self,
-        file_count: int,
+        project_count: int,
+        export_count: int,
         template_count: int,
-        last_file: Optional[RecentFileSummary] = None,
+        *,
+        last_project: Optional[ProjectSummary] = None,
+        last_export: Optional[RecentFileSummary] = None,
     ) -> None:
-        self._last_file = last_file
-        last_project = last_file.client_project if last_file is not None else None
-        self._inline_metrics.set_stats(file_count, template_count, last_project)
+        self._last_project = last_project
+        self._last_export = last_export
+        last_label = None
+        if last_project is not None:
+            last_label = last_project.display_name
+        elif last_export is not None:
+            last_label = last_export.client_project
+        self._inline_metrics.set_stats(
+            project_count, export_count, template_count, last_label
+        )
 
-        if last_file is not None:
+        if last_project is not None:
+            doc_hint = (
+                f"{last_project.document_count} PDFs · "
+                if last_project.is_batch
+                else ""
+            )
             self._continue_card.set_text(
-                f"Continuar · {last_file.file_name[:28]}",
+                f"Continuar · {last_project.display_name[:28]}",
                 (
-                    f"{last_file.client_project} · v{last_file.version} — "
+                    f"{doc_hint}{last_project.client_project} · "
+                    f"{last_project.report_mode_label()} — retome de onde parou"
+                ),
+            )
+            self._continue_card.show()
+        elif last_export is not None:
+            self._continue_card.set_text(
+                f"Continuar · {last_export.file_name[:28]}",
+                (
+                    f"{last_export.client_project} · v{last_export.version} — "
                     f"retome de onde parou"
                 ),
             )

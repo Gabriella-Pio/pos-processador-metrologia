@@ -20,6 +20,10 @@ def icon_file_pdf() -> QIcon:
     return app_icon("file-pdf", color=PALETTE.senai_orange)
 
 
+def icon_layers() -> QIcon:
+    return app_icon("layer-group", color=PALETTE.senai_blue_light)
+
+
 def icon_file_upload() -> QIcon:
     return app_icon("file-upload", color=PALETTE.senai_orange)
 

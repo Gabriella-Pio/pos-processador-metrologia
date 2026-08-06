@@ -45,13 +45,131 @@ class TemplateSummary:
 
 @dataclass(frozen=True)
 class RecentFileSummary:
-    """DTO simples para exibição de um arquivo recente (sem lógica)."""
+    """DTO simples para exibição de um PDF exportado (sem lógica)."""
     file_id: str
     file_name: str
     client_project: str
     version: str
     updated_at: datetime
     evaluated_component: str = ""
+
+
+@dataclass(frozen=True)
+class ProjectSummary:
+    """Projeto em andamento na Home — metadados persistidos em ``projects``."""
+    project_id: str
+    client_project: str
+    display_name: str
+    document_count: int
+    updated_at: datetime
+    report_mode: str = "mixed"
+    components: tuple[str, ...] = ()
+
+    @property
+    def is_batch(self) -> bool:
+        return self.document_count > 1
+
+    def report_mode_label(self) -> str:
+        labels = {
+            "mmc_only": "MMC",
+            "tomo_only": "Tomografia",
+            "mixed": "Misto",
+        }
+        return labels.get(self.report_mode, self.report_mode)
+
+
+def project_summary_from_workspace(workspace) -> ProjectSummary:
+    from src.core.domain.project_workspace import ProjectWorkspace
+
+    if not isinstance(workspace, ProjectWorkspace):
+        raise TypeError("workspace must be ProjectWorkspace")
+    components = tuple(
+        slot.evaluated_component.strip() or "Componente"
+        for slot in workspace.slots
+    )
+    updated = workspace.updated_at or datetime.now()
+    return ProjectSummary(
+        project_id=workspace.id,
+        client_project=workspace.client_project,
+        display_name=workspace.display_name or workspace.client_project,
+        document_count=len(workspace.slots),
+        updated_at=updated,
+        report_mode=workspace.report_mode,
+        components=components,
+    )
+
+
+def filter_projects(projects: list[ProjectSummary], query: str) -> list[ProjectSummary]:
+    """Filtra projetos por busca textual (compatibilidade)."""
+    return apply_projects_filters(projects, RecentFilesFilterState(query=query))
+
+
+def apply_projects_filters(
+    projects: list[ProjectSummary],
+    state: RecentFilesFilterState,
+    *,
+    now: datetime | None = None,
+) -> list[ProjectSummary]:
+    """Aplica busca textual, período, cliente/projeto, componente e ordenação."""
+    reference = now or datetime.now()
+    result = list(projects)
+
+    needle = state.query.strip().lower()
+    if needle:
+        result = [
+            item for item in result
+            if needle in item.display_name.lower()
+            or needle in item.client_project.lower()
+            or any(needle in component.lower() for component in item.components)
+        ]
+
+    cutoff = _period_cutoff(state.period, reference)
+    if cutoff is not None:
+        result = [item for item in result if item.updated_at >= cutoff]
+
+    if state.project:
+        result = [item for item in result if item.client_project == state.project]
+
+    if state.component:
+        result = [
+            item for item in result
+            if state.component in item.components
+        ]
+
+    if state.sort == SORT_RECENT:
+        result.sort(key=lambda item: item.updated_at, reverse=True)
+    elif state.sort == SORT_OLDEST:
+        result.sort(key=lambda item: item.updated_at)
+    elif state.sort == SORT_NAME:
+        result.sort(key=lambda item: item.display_name.lower())
+    elif state.sort == SORT_PROJECT:
+        result.sort(
+            key=lambda item: (item.client_project.lower(), item.display_name.lower())
+        )
+
+    return result
+
+
+def distinct_project_clients(
+    projects: list[ProjectSummary],
+    exports: list[RecentFileSummary] | None = None,
+) -> list[str]:
+    values = {item.client_project.strip() for item in projects if item.client_project.strip()}
+    if exports:
+        values.update(distinct_projects(exports))
+    return sorted(values, key=str.lower)
+
+
+def distinct_project_components(
+    projects: list[ProjectSummary],
+    exports: list[RecentFileSummary] | None = None,
+) -> list[str]:
+    values: set[str] = set()
+    for item in projects:
+        values.update(component.strip() for component in item.components if component.strip())
+    if exports:
+        values.update(distinct_components(exports))
+    return sorted(values, key=str.lower)
 
 
 @dataclass

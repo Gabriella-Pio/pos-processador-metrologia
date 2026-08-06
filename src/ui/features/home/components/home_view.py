@@ -1,5 +1,5 @@
 """
-HomeView — orquestrador da tela inicial (Arquivos | Templates).
+HomeView — orquestrador da tela inicial (Projetos | Exportados | Templates).
 """
 from __future__ import annotations
 
@@ -91,14 +91,16 @@ from src.ui.components.feedback import show_friendly_error
 from src.ui.features.home.components.hero import HeroCommandBar
 from src.ui.components.tab_bar import TabBar
 from src.ui.features.home.models.dashboard import (
+    ProjectSummary,
     RecentFileSummary,
     RecentFilesFilterState,
     TemplateSummary,
-    distinct_components,
-    distinct_projects,
+    distinct_project_clients,
+    distinct_project_components,
 )
 from src.ui.features.home.viewmodels.home_viewmodel import HomeViewModel
-from src.ui.features.home.components.recentes_panel import RecentesPanel
+from src.ui.features.home.components.ongoing_projects_panel import OngoingProjectsPanel
+from src.ui.features.home.components.exports_panel import ExportsPanel
 from src.ui.features.home.components.templates_panel import TemplatesPanel
 
 
@@ -106,15 +108,18 @@ class HomeView(QWidget):
     new_document_requested = pyqtSignal()
     template_manager_requested = pyqtSignal()
     template_editor_requested = pyqtSignal(str)
+    project_opened = pyqtSignal(str)
     recent_file_opened = pyqtSignal(str)
 
-    TAB_ARQUIVOS = 0
-    TAB_TEMPLATES = 1
+    TAB_PROJETOS = 0
+    TAB_EXPORTADOS = 1
+    TAB_TEMPLATES = 2
 
     def __init__(self, view_model: HomeViewModel, parent=None) -> None:
         super().__init__(parent)
         self._vm = view_model
         self._search_query = ""
+        self._projects: list[ProjectSummary] = []
         self._recent_files: list[RecentFileSummary] = []
         self._templates: list[TemplateSummary] = []
         self._build_ui()
@@ -138,14 +143,20 @@ class HomeView(QWidget):
         self._hero.filters_changed.connect(self._on_structured_filters_changed)
         self._hero.new_report_requested.connect(self.new_document_requested.emit)
         self._hero.new_template_requested.connect(self._on_create_template)
-        self._hero.continue_last_requested.connect(self.recent_file_opened.emit)
+        self._hero.continue_project_requested.connect(self.project_opened.emit)
+        self._hero.continue_export_requested.connect(self.recent_file_opened.emit)
 
-        self._tab_bar = TabBar(["Arquivos", "Templates"])
+        self._tab_bar = TabBar(["Projetos", "Exportados", "Templates"])
         self._tab_bar.tab_changed.connect(self._on_tab_changed)
 
-        self._arquivos = RecentesPanel()
-        self._arquivos.opened.connect(self.recent_file_opened.emit)
-        self._arquivos.import_requested.connect(self.new_document_requested.emit)
+        self._projects_panel = OngoingProjectsPanel()
+        self._projects_panel.opened.connect(self.project_opened.emit)
+        self._projects_panel.renamed.connect(self._on_project_renamed)
+        self._projects_panel.import_requested.connect(self.new_document_requested.emit)
+
+        self._exports_panel = ExportsPanel()
+        self._exports_panel.opened.connect(self.recent_file_opened.emit)
+        self._exports_panel.import_requested.connect(self.new_document_requested.emit)
 
         self._templates_panel = TemplatesPanel()
         self._templates_panel.template_selected.connect(self._on_template_selected)
@@ -155,9 +166,10 @@ class HomeView(QWidget):
         self._stack.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
         )
-        self._stack.addWidget(self._arquivos)
+        self._stack.addWidget(self._projects_panel)
+        self._stack.addWidget(self._exports_panel)
         self._stack.addWidget(self._templates_panel)
-        self._stack.setCurrentIndex(self.TAB_ARQUIVOS)
+        self._stack.setCurrentIndex(self.TAB_PROJETOS)
 
         self._scroll_host = _StickyTabScrollHost(self._hero, self._tab_bar, self._stack)
         self._page_scroll = self._scroll_host.page_scroll
@@ -166,7 +178,8 @@ class HomeView(QWidget):
 
     def _connect_view_model(self) -> None:
         self._vm.templates_loaded.connect(self._on_templates_loaded)
-        self._vm.recent_files_loaded.connect(self._on_arquivos_loaded)
+        self._vm.ongoing_projects_loaded.connect(self._on_projects_loaded)
+        self._vm.recent_files_loaded.connect(self._on_exports_loaded)
         self._vm.error_occurred.connect(
             lambda title, msg, details: show_friendly_error(self, title, msg, details)
         )
@@ -186,16 +199,40 @@ class HomeView(QWidget):
             self._templates_panel.apply_filter(self._search_query)
             self._update_search_hint()
 
-    def _on_arquivos_loaded(self, files: list[RecentFileSummary]) -> None:
-        self._recent_files = list(files)
-        self._arquivos.render(files)
-        self._hero.filter_bar.set_project_options(distinct_projects(files))
-        self._hero.filter_bar.set_component_options(distinct_components(files))
-        self._tab_bar.update_count(self.TAB_ARQUIVOS, len(files))
+    def _on_projects_loaded(self, projects: list[ProjectSummary]) -> None:
+        self._projects = list(projects)
+        self._projects_panel.render(projects)
+        self._tab_bar.update_count(self.TAB_PROJETOS, len(projects))
+        self._refresh_filter_options()
         self._refresh_hero_stats()
-        self._apply_arquivos_filters()
+        self._apply_list_filters()
 
-    def _merged_arquivos_filter_state(self) -> RecentFilesFilterState:
+    def _on_exports_loaded(self, files: list[RecentFileSummary]) -> None:
+        self._recent_files = list(files)
+        self._exports_panel.render(files)
+        self._tab_bar.update_count(self.TAB_EXPORTADOS, len(files))
+        self._refresh_filter_options()
+        self._refresh_hero_stats()
+        self._apply_list_filters()
+
+    def _refresh_filter_options(self) -> None:
+        self._hero.filter_bar.set_project_options(
+            distinct_project_clients(self._projects, self._recent_files)
+        )
+        self._hero.filter_bar.set_component_options(
+            distinct_project_components(self._projects, self._recent_files)
+        )
+
+    def _on_project_renamed(self, project_id: str, display_name: str) -> None:
+        self._vm.rename_project(project_id, display_name)
+
+    def _apply_list_filters(self) -> None:
+        state = self._merged_list_filter_state()
+        self._projects_panel.update_filters(state)
+        self._exports_panel.update_filters(state)
+        self._update_search_hint()
+
+    def _merged_list_filter_state(self) -> RecentFilesFilterState:
         bar = self._hero.filter_bar.current_state()
         return RecentFilesFilterState(
             query=self._search_query,
@@ -205,74 +242,92 @@ class HomeView(QWidget):
             sort=bar.sort,
         )
 
-    def _apply_arquivos_filters(self) -> None:
-        self._arquivos.update_filters(self._merged_arquivos_filter_state())
-        self._update_search_hint()
-
     def _clear_search_and_filters(self) -> None:
         self._search_query = ""
         self._hero.search_bar.clear()
         self._hero.filter_bar.clear_all_including_query()
         self._templates_panel.apply_filter("")
-        self._apply_arquivos_filters()
+        self._apply_list_filters()
 
     def _refresh_hero_stats(self) -> None:
-        last = self._recent_files[0] if self._recent_files else None
-        self._hero.update_stats(len(self._recent_files), len(self._templates), last)
+        last_project = self._projects[0] if self._projects else None
+        last_export = self._recent_files[0] if self._recent_files else None
+        self._hero.update_stats(
+            len(self._projects),
+            len(self._recent_files),
+            len(self._templates),
+            last_project=last_project,
+            last_export=last_export,
+        )
 
     def _on_search_changed(self, query: str) -> None:
         self._search_query = query
         self._hero.filter_bar.set_query(query)
-        self._apply_arquivos_filters()
+        self._apply_list_filters()
         self._templates_panel.apply_filter(query)
 
         if not query.strip():
             return
 
         current_index = self._stack.currentIndex()
-        current_has_results = (
-            self._arquivos.has_visible_items()
-            if current_index == self.TAB_ARQUIVOS
-            else self._templates_panel.has_visible_items()
-        )
+        if current_index == self.TAB_PROJETOS:
+            current_has_results = self._projects_panel.has_visible_items()
+        elif current_index == self.TAB_EXPORTADOS:
+            current_has_results = self._exports_panel.has_visible_items()
+        else:
+            current_has_results = self._templates_panel.has_visible_items()
         if current_has_results:
             return
 
-        if self._arquivos.has_visible_items():
-            self.switch_to_tab(self.TAB_ARQUIVOS)
+        if self._projects_panel.has_visible_items():
+            self.switch_to_tab(self.TAB_PROJETOS)
+        elif self._exports_panel.has_visible_items():
+            self.switch_to_tab(self.TAB_EXPORTADOS)
         elif self._templates_panel.has_visible_items():
             self.switch_to_tab(self.TAB_TEMPLATES)
 
     def _on_structured_filters_changed(self, _state: RecentFilesFilterState) -> None:
-        self._apply_arquivos_filters()
+        self._apply_list_filters()
 
     def _update_search_hint(self) -> None:
         query = self._search_query.strip()
-        if not query:
+        state = self._merged_list_filter_state()
+        has_filters = not state.is_default()
+        if not query and not has_filters:
             self._hero.set_search_result_hint("")
             return
-        file_count = self._arquivos.visible_count()
+        project_count = self._projects_panel.visible_count()
+        export_count = self._exports_panel.visible_count()
         template_count = self._templates_panel.visible_count()
-        total = file_count + template_count
+        total = project_count + export_count + template_count
         if total == 0:
-            self._hero.set_search_result_hint(f'Nenhum resultado para "{query}"')
+            if query:
+                self._hero.set_search_result_hint(f'Nenhum resultado para "{query}"')
+            else:
+                self._hero.set_search_result_hint("Nenhum resultado corresponde aos filtros")
         else:
             self._hero.set_search_result_hint(
-                f"{total} resultado(s) — {file_count} arquivo(s), {template_count} template(s)"
+                f"{total} resultado(s) — {project_count} projeto(s), "
+                f"{export_count} export(s), {template_count} template(s)"
             )
 
     def _on_tab_changed(self, index: int) -> None:
         self._stack.setCurrentIndex(index)
-        self._hero.set_filters_visible(index == self.TAB_ARQUIVOS)
+        self._hero.set_filters_visible(
+            index in (self.TAB_PROJETOS, self.TAB_EXPORTADOS)
+        )
 
     def switch_to_tab(self, index: int) -> None:
         self._tab_bar.set_active(index)
         self._stack.setCurrentIndex(index)
-        self._hero.set_filters_visible(index == self.TAB_ARQUIVOS)
+        self._hero.set_filters_visible(
+            index in (self.TAB_PROJETOS, self.TAB_EXPORTADOS)
+        )
 
     def refresh_appearance(self) -> None:
         """Reaplica estilos dinâmicos após mudança de tema/contraste/fonte."""
         self._tab_bar.refresh_appearance()
         self._hero.refresh_appearance()
-        self._arquivos.refresh_appearance()
+        self._projects_panel.refresh_appearance()
+        self._exports_panel.refresh_appearance()
         self._templates_panel.refresh_appearance()
