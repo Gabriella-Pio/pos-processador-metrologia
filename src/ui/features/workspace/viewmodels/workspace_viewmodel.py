@@ -15,6 +15,7 @@ from src.ui.features.workspace.document_commit import (
     persist_session,
     refresh_export_validation,
 )
+from src.core.application.project_service import ProjectService
 from src.core.application.document_editing import (
     extract_global_field_values,
     get_measurement_rows,
@@ -77,6 +78,7 @@ class WorkspaceViewModel(QObject):
         version_history_repo: VersionHistoryRepository | None = None,
         template_repo: TemplateRepository | None = None,
         session_repo: WorkspaceSessionPort | None = None,
+        project_service: ProjectService | None = None,
     ) -> None:
         super().__init__()
         self._app_state = app_state
@@ -86,6 +88,7 @@ class WorkspaceViewModel(QObject):
         self._version_history_repo = version_history_repo
         self._template_repo = template_repo
         self._session_repo = session_repo
+        self._project_service = project_service
         self._doc_service = DocumentSessionService(parser, template_repo, version_history_repo)
         self._template_service = TemplateWorkspaceService(template_repo, exporter)
         self._presenter = SectionSummaryPresenter(exporter)
@@ -116,6 +119,15 @@ class WorkspaceViewModel(QObject):
 
     def _persist_session(self) -> None:
         persist_session(self)
+
+    def _persist_project(self) -> None:
+        session = self._app_state.project_session
+        if session is None or self._project_service is None:
+            return
+        try:
+            self._project_service.save_session(session)
+        except Exception:
+            logger.exception("Falha ao persistir metadados do projeto")
 
     def _refresh_export_validation(self) -> None:
         refresh_export_validation(self)
@@ -206,7 +218,47 @@ class WorkspaceViewModel(QObject):
             if not self._parse_slot(session, index):
                 return
         ProjectCommands.ensure_project_attachment_paths(session)
+        self._persist_project()
         self.switch_document(0)
+
+    def load_project_by_id(self, project_id: str) -> bool:
+        if self._project_service is None:
+            self.error_occurred.emit(
+                "Projetos indisponíveis",
+                "O serviço de persistência de projetos não está configurado.",
+                "",
+            )
+            return False
+        session = self._project_service.load_session(project_id)
+        if session is None:
+            self.error_occurred.emit(
+                "Projeto não encontrado",
+                "Este projeto não existe mais ou foi removido.",
+                "",
+            )
+            return False
+        missing = [
+            slot.source_pdf_path
+            for slot in session.documents
+            if not slot.source_pdf_path.exists()
+        ]
+        if missing:
+            self.error_occurred.emit(
+                "Arquivos ausentes",
+                "Um ou mais PDFs de origem não foram encontrados:\n"
+                + "\n".join(str(path) for path in missing[:3]),
+                "",
+            )
+            return False
+        self._app_state.set_project_session(session)
+        self.project_loaded.emit(session)
+        for index in range(len(session.documents)):
+            if not self._parse_slot(session, index):
+                return False
+        ProjectCommands.ensure_project_attachment_paths(session)
+        active = min(max(session.active_index, 0), len(session.documents) - 1)
+        self.switch_document(active)
+        return True
 
     def load_from_pdf(self, pdf_path: Path, client_project: str, evaluated_component: str) -> None:
         self.load_project(
@@ -224,12 +276,16 @@ class WorkspaceViewModel(QObject):
             if not self._parse_slot(session, index):
                 return
         ProjectCommands.ensure_project_attachment_paths(session)
+        self._persist_project()
         self.project_loaded.emit(session)
 
     def switch_document(self, index: int) -> None:
         session = self._app_state.project_session
         if session is None:
             return
+        if session.active_index != index and self._session_timer.isActive():
+            self._session_timer.stop()
+            persist_session(self)
         document = ProjectCommands.activate_document(
             session, index, self._doc_service, self._session_repo
         )
@@ -240,6 +296,7 @@ class WorkspaceViewModel(QObject):
         self._commit_document_change(
             preview=True, summary=True, layout_dirty=True, data_dirty_flag=True, globals_refresh=True, persist=False
         )
+        self._persist_project()
         self._emit_templates_list()
 
     def _emit_templates_list(self) -> None:

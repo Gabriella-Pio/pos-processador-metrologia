@@ -8,6 +8,7 @@ import pytest
 
 from src.core.domain.ports import ReportDocument, ReportImage, VersionEntry
 from src.core.infrastructure.database import DatabaseManager
+from src.core.infrastructure.project_repository import SQLiteProjectRepository
 from src.core.infrastructure.recent_files_repository import SQLiteRecentFilesAdapter
 from src.core.infrastructure.version_history_repository import SQLiteVersionHistoryAdapter
 from src.core.infrastructure.workspace_session_repository import SQLiteWorkspaceSessionRepository
@@ -107,3 +108,12 @@ def test_database_manager_creates_required_tables(db_path: Path) -> None:
     assert "documentos" in tables
     assert "versoes" in tables
     assert "workspace_sessions" in tables
+    assert "projects" in tables
+    assert "project_versions" in tables
+
+
+def test_database_creates_projects_table_via_manager(db_path: Path) -> None:
+    db = DatabaseManager(str(db_path))
+    repo = SQLiteProjectRepository(db)
+    listed = repo.list_recent(limit=1)
+    assert listed == []

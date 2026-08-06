@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import QDialog, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
+from src.core.application.project_service import ProjectService
 from src.core.domain.ports import (
     RecentFilesRepository,
     ReportExporter,
@@ -43,6 +44,8 @@ class MainWindow(QMainWindow):
         template_repo: TemplateRepository,
         version_history_repo: VersionHistoryRepository | None = None,
         workspace_session_repo: WorkspaceSessionPort | None = None,
+        project_service: ProjectService | None = None,
+        version_snapshot_repo=None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Pós-processamento de Relatórios de Metrologia — SENAI × ZEISS")
@@ -62,6 +65,7 @@ class MainWindow(QMainWindow):
             version_history_repo,
             template_repo,
             workspace_session_repo,
+            project_service,
         )
         self._template_editor_vm = TemplateEditorViewModel(template_repo, report_exporter)
         self._nav_controller = NavigationController()
