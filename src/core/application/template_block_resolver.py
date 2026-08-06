@@ -1,0 +1,83 @@
+"""Resolução de blocos de template para exportação e sumário."""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from src.core.domain.section_schema import (
+    FIXED_SECTION_IDS,
+    TEMPLATE_TOMOGRAFIA_OFICIAL,
+    is_tomography_template,
+    sections_config_to_blocks,
+)
+from src.core.domain.ports import ReportDocument
+from src.core.generator.constants import TEMPLATE_PADRAO_OFICIAL
+
+if TYPE_CHECKING:
+    from src.core.infrastructure.template_repository import JSONTemplateRepository
+
+
+def resolve_template_blocks(
+    document: ReportDocument,
+    template_repository: JSONTemplateRepository | None = None,
+) -> list[dict]:
+    """Mesma lógica usada em ``export()`` e ``list_sections()``."""
+    if document.template_layout_override:
+        blocos = sections_config_to_blocks(document.template_layout_override)
+    elif is_tomography_template(document.template_id):
+        config_salva = (
+            template_repository.get_template_config(document.template_id)
+            if template_repository is not None
+            else {}
+        )
+        blocos = (
+            sections_config_to_blocks(config_salva)
+            if config_salva
+            else list(TEMPLATE_TOMOGRAFIA_OFICIAL)
+        )
+    elif document.template_id == "default" or template_repository is None:
+        blocos = list(TEMPLATE_PADRAO_OFICIAL)
+    else:
+        config_salva = template_repository.get_template_config(document.template_id)
+        blocos = (
+            list(TEMPLATE_PADRAO_OFICIAL)
+            if not config_salva
+            else sections_config_to_blocks(config_salva)
+        )
+    return apply_section_order(blocos, document)
+
+
+def apply_section_order(blocos: list[dict], document: ReportDocument) -> list[dict]:
+    """cabecalho no início; histórico antes dos anexos; anexos sempre por último."""
+    start = [b for b in blocos if b["tipo"] == "cabecalho"]
+    historico = [b for b in blocos if b["tipo"] == "historico_versoes"]
+    anexos = [b for b in blocos if b["tipo"] == "anexos"]
+    middle = [b for b in blocos if b["tipo"] not in FIXED_SECTION_IDS]
+    if document.section_order:
+        order_index = {sid: idx for idx, sid in enumerate(document.section_order)}
+        middle.sort(key=lambda b: order_index.get(b["tipo"], 10_000))
+    ordered = start + middle + historico + anexos
+    return inject_custom_sections(ordered, document)
+
+
+def inject_custom_sections(blocos: list[dict], document: ReportDocument) -> list[dict]:
+    if not document.custom_sections:
+        return blocos
+    deleted = set(document.deleted_section_ids)
+    custom_blocks = [
+        {"tipo": section["id"], "config": {"section_id": section["id"]}}
+        for section in document.custom_sections
+        if section.get("id") not in deleted
+    ]
+    if not custom_blocks:
+        return blocos
+    result: list[dict] = []
+    inserted = False
+    for bloco in blocos:
+        # Custom antes do histórico (e dos anexos, que ficam por último).
+        if bloco["tipo"] in {"historico_versoes", "anexos"} and not inserted:
+            result.extend(custom_blocks)
+            inserted = True
+        result.append(bloco)
+    if not inserted:
+        result.extend(custom_blocks)
+    return result

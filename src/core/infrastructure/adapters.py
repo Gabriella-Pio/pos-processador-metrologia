@@ -9,22 +9,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from src.core.generator.constants import SECTION_TITLES, TEMPLATE_PADRAO_OFICIAL
-from src.core.domain.section_schema import (
-    TEMPLATE_TOMOGRAFIA_OFICIAL,
-    FIXED_SECTION_IDS,
-    is_tomography_template,
-)
-from src.core.generator.engine import ReportGenerator
-from src.core.domain.parsed_overrides import build_effective_dto, build_prose_context
-from src.core.parser.parser import PDFParserService
-from src.core.domain.placeholder_utils import build_placeholder_context
-from src.core.domain.report_field_registry import merge_section_prose, PROSE_TEMPLATES
-from src.core.domain.table_row_registry import INTRODUCAO_BLOCK_TITLES, SECTION_HEADING_DEFAULTS
-from src.core.domain.ports import ReportDocument, TechnicalControlInfo
-from src.core.domain.section_schema import is_navigable_section, sections_config_to_blocks
+from src.core.application.export_context_builder import build_export_context
+from src.core.application.template_block_resolver import resolve_template_blocks
 from src.core.domain.section_numbering import build_section_number_map
+from src.core.domain.section_schema import is_navigable_section
+from src.core.domain.ports import ReportDocument, TechnicalControlInfo
+from src.core.generator.constants import SECTION_TITLES
+from src.core.generator.engine import ReportGenerator
 from src.core.infrastructure.template_repository import JSONTemplateRepository
+from src.core.parser.parser import PDFParserService
 
 
 class RealReportParserAdapter:
@@ -64,29 +57,26 @@ class RealReportExporterAdapter:
 
     def export(self, document: ReportDocument, output_path: Path) -> Path:
         section_anchor_map: dict[str, dict] = {}
-        effective_dto = build_effective_dto(document.raw_parsed_data, document.parsed_overrides)
-        section_prose = self._montar_section_prose(document, effective_dto)
-        placeholder_context = build_placeholder_context(effective_dto, document)
-        table_rows = self._montar_table_rows(document)
-        template_config = self._resolver_blocos_template(document)
+        ctx = build_export_context(document)
+        template_config = resolve_template_blocks(document, self._template_repository)
         ReportGenerator.gerar_relatorio_enriquecido(
-            dados_parseados=effective_dto,
+            dados_parseados=ctx.effective_dto,
             caminho_saida=str(output_path),
             cliente_projeto=document.client_project,
             componente_avaliado=document.evaluated_component,
-            fotos_secoes=self._montar_fotos_secoes(document),
-            versao_relatorio=self._versao_atual(document),
-            controle_tecnico=self._montar_controle_tecnico(document),
-            historico_versoes=self._montar_historico_versoes(document),
+            fotos_secoes=ctx.fotos_secoes,
+            versao_relatorio=ctx.versao_relatorio,
+            controle_tecnico=ctx.controle_tecnico,
+            historico_versoes=ctx.historico_versoes,
             template_config=template_config,
             section_page_map=section_anchor_map,
-            section_prose=section_prose,
-            placeholder_context=placeholder_context,
-            table_rows=table_rows,
+            section_prose=ctx.section_prose,
+            placeholder_context=ctx.placeholder_context,
+            table_rows=ctx.table_rows,
             opcoes_extras={
-                "report_kind": self._report_kind(document),
-                "foto_captions": self._montar_foto_captions(document),
-                "anexo_pdfs": self._montar_anexo_pdfs(document),
+                "report_kind": ctx.report_kind,
+                "foto_captions": ctx.foto_captions,
+                "anexo_pdfs": ctx.anexo_pdfs,
             },
         )
         self._last_section_anchor_map = section_anchor_map
@@ -98,7 +88,7 @@ class RealReportExporterAdapter:
         traduzida para ``{"id", "title"}`` — garante que o que aparece no
         Workspace é sempre fiel ao que vai sair no PDF final.
         """
-        blocos = self._resolver_blocos_template(document)
+        blocos = resolve_template_blocks(document, self._template_repository)
         number_map = build_section_number_map(blocos)
         fotos_por_secao: dict[str, int] = {}
         for imagem in document.images:
@@ -124,204 +114,5 @@ class RealReportExporterAdapter:
             )
         return resultado
 
-    # ------------------------------------------------------------- helpers
-    def _resolver_blocos_template(self, document: ReportDocument) -> list[dict]:
-        if document.template_layout_override:
-            blocos = sections_config_to_blocks(document.template_layout_override)
-        elif is_tomography_template(document.template_id):
-            config_salva = (
-                self._template_repository.get_template_config(document.template_id)
-                if self._template_repository is not None
-                else {}
-            )
-            blocos = (
-                sections_config_to_blocks(config_salva)
-                if config_salva
-                else list(TEMPLATE_TOMOGRAFIA_OFICIAL)
-            )
-        elif document.template_id == "default" or self._template_repository is None:
-            blocos = list(TEMPLATE_PADRAO_OFICIAL)
-        else:
-            config_salva = self._template_repository.get_template_config(document.template_id)
-            blocos = (
-                list(TEMPLATE_PADRAO_OFICIAL)
-                if not config_salva
-                else sections_config_to_blocks(config_salva)
-            )
-        return self._apply_section_order(blocos, document)
-
-    @staticmethod
-    def _report_kind(document: ReportDocument) -> str:
-        if is_tomography_template(document.template_id) or document.source_kind == "insp_ect":
-            return "tomografia"
-        return "mmc"
-
     def get_export_blocks(self, document: ReportDocument) -> list[dict]:
-        return self._resolver_blocos_template(document)
-
-    @staticmethod
-    def _apply_section_order(blocos: list[dict], document: ReportDocument) -> list[dict]:
-        # cabecalho no início; histórico antes dos anexos; anexos sempre por último.
-        start = [b for b in blocos if b["tipo"] == "cabecalho"]
-        historico = [b for b in blocos if b["tipo"] == "historico_versoes"]
-        anexos = [b for b in blocos if b["tipo"] == "anexos"]
-        middle = [b for b in blocos if b["tipo"] not in FIXED_SECTION_IDS]
-        if document.section_order:
-            order_index = {sid: idx for idx, sid in enumerate(document.section_order)}
-            middle.sort(key=lambda b: order_index.get(b["tipo"], 10_000))
-        ordered = start + middle + historico + anexos
-        return RealReportExporterAdapter._inject_custom_sections(ordered, document)
-
-    @staticmethod
-    def _inject_custom_sections(blocos: list[dict], document: ReportDocument) -> list[dict]:
-        if not document.custom_sections:
-            return blocos
-        deleted = set(document.deleted_section_ids)
-        custom_blocks = [
-            {"tipo": section["id"], "config": {"section_id": section["id"]}}
-            for section in document.custom_sections
-            if section.get("id") not in deleted
-        ]
-        if not custom_blocks:
-            return blocos
-        result: list[dict] = []
-        inserted = False
-        for bloco in blocos:
-            # Custom antes do histórico (e dos anexos, que ficam por último).
-            if bloco["tipo"] in {"historico_versoes", "anexos"} and not inserted:
-                result.extend(custom_blocks)
-                inserted = True
-            result.append(bloco)
-        if not inserted:
-            result.extend(custom_blocks)
-        return result
-
-    @staticmethod
-    def _montar_anexo_pdfs(document: ReportDocument) -> list[str]:
-        paths = list(document.attachment_pdf_paths or [])
-        if not paths and document.source_pdf_path:
-            paths = [document.source_pdf_path]
-        seen: set[str] = set()
-        result: list[str] = []
-        for path in paths:
-            key = str(Path(path).resolve()) if Path(path).exists() else str(path)
-            if key in seen:
-                continue
-            seen.add(key)
-            result.append(str(path))
-        return result
-
-    def _montar_fotos_secoes(self, document: ReportDocument) -> dict:
-        """Agrupa as ``ReportImage`` (já associadas a uma seção pela UI,
-        via drag-and-drop) no formato ``{"secao_id": [caminho, ...]}`` que
-        o ``ReportGenerator`` espera.
-        """
-        fotos_por_secao: dict[str, list[str]] = {}
-        for imagem in document.images:
-            fotos_por_secao.setdefault(imagem.section_id, []).append(str(imagem.image_path))
-        return fotos_por_secao
-
-    def _montar_foto_captions(self, document: ReportDocument) -> dict[str, str]:
-        """Legendas por path da foto (cada imagem pode ter a sua)."""
-        captions: dict[str, str] = {}
-        for imagem in document.images:
-            if imagem.caption:
-                captions[str(imagem.image_path)] = imagem.caption
-        return captions
-
-    def _versao_atual(self, document: ReportDocument) -> str:
-        if document.version_history:
-            return f"v{document.version_history[-1].version_number}"
-        return "v1.0"
-
-    def _montar_controle_tecnico(self, document: ReportDocument) -> dict:
-        info = document.control_info
-        if info is None:
-            return {}
-        return {
-            "measured_by": info.measured_by,
-            "reviewed_by": info.reviewed_by,
-            "approved_by": info.approved_by,
-            "role": info.role,
-            "institutional_email": info.institutional_email,
-            "timestamp_str": info.timestamp.strftime("%d/%m/%Y %H:%M"),
-        }
-
-    def _montar_historico_versoes(self, document: ReportDocument) -> list[dict]:
-        return [
-            {
-                "version_number": entrada.version_number,
-                "timestamp_str": entrada.timestamp.strftime("%d/%m/%Y %H:%M"),
-                "responsible_name": entrada.responsible_name,
-                "description": entrada.description,
-            }
-            for entrada in document.version_history
-        ]
-
-    def _montar_section_prose(self, document: ReportDocument, effective_dto) -> dict[str, dict]:
-        ctx = build_prose_context(effective_dto, document)
-        ctx["report_kind"] = self._report_kind(document)
-        result: dict[str, dict] = {}
-        section_ids = set(PROSE_TEMPLATES.keys()) | set(document.section_overrides.keys()) | set(SECTION_HEADING_DEFAULTS.keys())
-        if ctx["report_kind"] == "tomografia":
-            from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
-
-            section_ids |= set(TOMO_PROSE_DEFAULTS.keys())
-        for section_id in section_ids:
-            overrides = dict(document.section_overrides.get(section_id, {}))
-            merged = merge_section_prose(section_id, overrides, ctx)
-            merged["section_title"] = overrides.get(
-                "section_title", SECTION_HEADING_DEFAULTS.get(section_id, merged.get("section_title", ""))
-            )
-            if section_id == "introducao":
-                for key, default in INTRODUCAO_BLOCK_TITLES.items():
-                    merged.setdefault(key, overrides.get(key, default))
-                if not str(merged.get("nota") or "").strip():
-                    merged["nota"] = str(
-                        overrides.get("nota")
-                        or overrides.get("intro")
-                        or overrides.get("nota_deteccao")
-                        or merged.get("intro")
-                        or merged.get("nota_deteccao")
-                        or ""
-                    )
-                for row in overrides.get("table_rows") or []:
-                    row_id = row.get("id", "")
-                    if row_id in ("objetivo", "escopo", "referencia"):
-                        if not str(merged.get(row_id) or "").strip() and row.get("value"):
-                            merged[row_id] = str(row.get("value") or "")
-                        title_key = f"title_{row_id}"
-                        if row.get("label") and not str(overrides.get(title_key) or "").strip():
-                            merged[title_key] = str(row.get("label") or "")
-            result[section_id] = merged
-        return result
-
-    def _montar_table_rows(self, document: ReportDocument) -> dict[str, list]:
-        from src.core.domain.table_row_registry import (
-            apply_control_info_to_rows,
-            default_tomo_identificacao_rows,
-            merge_table_rows,
-            resolve_introducao_table_rows,
-        )
-
-        result: dict[str, list] = {}
-        kind = self._report_kind(document)
-
-        stored_ident = document.section_overrides.get("identificacao", {}).get("table_rows")
-        if kind == "tomografia" and not stored_ident:
-            result["identificacao"] = default_tomo_identificacao_rows()
-        else:
-            result["identificacao"] = merge_table_rows("identificacao", stored_ident)
-
-        stored_ctrl = document.section_overrides.get("controle_tecnico", {}).get("table_rows")
-        ctrl_rows = merge_table_rows("controle_tecnico", stored_ctrl)
-        if not stored_ctrl and document.control_info is not None:
-            ctrl_rows = apply_control_info_to_rows(ctrl_rows, document.control_info)
-        result["controle_tecnico"] = ctrl_rows
-
-        intro_overrides = document.section_overrides.get("introducao", {})
-        result["introducao"] = resolve_introducao_table_rows(
-            intro_overrides,
-            report_kind=kind,
-        )
-        return result
+        return resolve_template_blocks(document, self._template_repository)
