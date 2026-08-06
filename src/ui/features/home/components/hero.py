@@ -254,15 +254,6 @@ class HeroCommandBar(QWidget):
         actions_row = QHBoxLayout()
         actions_row.setSpacing(SPACING.md)
 
-        self._continue_card = _SpotlightCard(
-            icon_file_pdf(),
-            "Continuar",
-            "Retome seu último trabalho.",
-            accent="orange",
-        )
-        self._continue_card.hide()
-        self._continue_card.clicked.connect(self._on_continue_clicked)
-
         self._new_file_card = _SpotlightCard(
             icon_file_upload(),
             "Novo arquivo",
@@ -281,9 +272,18 @@ class HeroCommandBar(QWidget):
         )
         self._secondary_card.clicked.connect(self.new_template_requested.emit)
 
-        actions_row.addWidget(self._continue_card, stretch=1)
+        self._continue_card = _SpotlightCard(
+            icon_file_pdf(),
+            "Continuar",
+            "Retome seu último trabalho.",
+            accent="orange",
+        )
+        self._continue_card.hide()
+        self._continue_card.clicked.connect(self._on_continue_clicked)
+
         actions_row.addWidget(self._new_file_card, stretch=1)
         actions_row.addWidget(self._secondary_card, stretch=1)
+        actions_row.addWidget(self._continue_card, stretch=1)
 
         self.search_bar = SearchBar(
             "Buscar arquivos ou templates…  (Ctrl+K)",
