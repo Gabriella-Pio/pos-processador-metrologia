@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from src.core.application.template_preview import split_template_content_defaults
 from src.core.domain.ports import ReportDocument, TemplateRepository
-from src.core.domain.section_schema import is_custom_section_id
-
-_FIXED_SECTION_IDS = frozenset({"cabecalho", "historico_versoes", "anexos"})
+from src.core.domain.section_schema import FIXED_SECTION_IDS, is_custom_section_id
 
 
 def apply_template_layout(document: ReportDocument, template_repo: TemplateRepository | None) -> None:
@@ -27,11 +25,11 @@ def apply_template_layout(document: ReportDocument, template_repo: TemplateRepos
     )
     enabled = [
         sid for sid in ordered
-        if config[sid].get("enabled", True) and sid not in _FIXED_SECTION_IDS
+        if config[sid].get("enabled", True) and sid not in FIXED_SECTION_IDS
     ]
     disabled = [
         sid for sid in ordered
-        if not config[sid].get("enabled", True) and sid not in _FIXED_SECTION_IDS
+        if not config[sid].get("enabled", True) and sid not in FIXED_SECTION_IDS
     ]
     document.section_order = enabled
     document.deleted_section_ids = disabled

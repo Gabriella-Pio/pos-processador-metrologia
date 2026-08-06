@@ -45,6 +45,9 @@ SECTION_DEFINITIONS: tuple[SectionDefinition, ...] = (
 
 SECTION_TITLES: dict[str, str] = {s.id: s.label for s in SECTION_DEFINITIONS}
 
+# Seções com posição fixa no PDF (cabeçalho no início; histórico e anexos no fim).
+FIXED_SECTION_IDS: frozenset[str] = frozenset({"cabecalho", "historico_versoes", "anexos"})
+
 TEMPLATE_PADRAO_OFICIAL: list[dict] = [
     {"tipo": s.id, "config": {}}
     for s in SECTION_DEFINITIONS

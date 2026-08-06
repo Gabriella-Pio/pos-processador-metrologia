@@ -12,6 +12,7 @@ from typing import Optional
 from src.core.generator.constants import SECTION_TITLES, TEMPLATE_PADRAO_OFICIAL
 from src.core.domain.section_schema import (
     TEMPLATE_TOMOGRAFIA_OFICIAL,
+    FIXED_SECTION_IDS,
     is_tomography_template,
 )
 from src.core.generator.engine import ReportGenerator
@@ -23,7 +24,6 @@ from src.core.domain.table_row_registry import INTRODUCAO_BLOCK_TITLES, SECTION_
 from src.core.domain.ports import ReportDocument, TechnicalControlInfo
 from src.core.domain.section_schema import is_navigable_section, sections_config_to_blocks
 from src.core.domain.section_numbering import build_section_number_map
-from src.core.domain.table_row_registry import _FIXED_SECTION_IDS
 from src.core.infrastructure.template_repository import JSONTemplateRepository
 
 
@@ -165,7 +165,7 @@ class RealReportExporterAdapter:
         start = [b for b in blocos if b["tipo"] == "cabecalho"]
         historico = [b for b in blocos if b["tipo"] == "historico_versoes"]
         anexos = [b for b in blocos if b["tipo"] == "anexos"]
-        middle = [b for b in blocos if b["tipo"] not in _FIXED_SECTION_IDS]
+        middle = [b for b in blocos if b["tipo"] not in FIXED_SECTION_IDS]
         if document.section_order:
             order_index = {sid: idx for idx, sid in enumerate(document.section_order)}
             middle.sort(key=lambda b: order_index.get(b["tipo"], 10_000))

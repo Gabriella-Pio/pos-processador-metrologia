@@ -44,9 +44,6 @@ NUMBERED_SECTION_IDS: frozenset[str] = frozenset({
     "anexos",
 })
 
-# cabecalho no início; historico antes dos anexos; anexos sempre por último
-_FIXED_SECTION_IDS: frozenset[str] = frozenset({"cabecalho", "historico_versoes", "anexos"})
-
 INTRODUCAO_BLOCK_TITLES: dict[str, str] = {
     "title_objetivo": "OBJETIVO",
     "title_escopo": "ESCOPO DA ANÁLISE",

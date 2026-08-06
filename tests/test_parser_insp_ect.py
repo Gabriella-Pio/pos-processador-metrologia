@@ -10,12 +10,9 @@ from src.core.parser.insp_ect_parser import InspEctParser
 from src.core.parser.parser import PDFParserService
 from src.core.parser.source_kind import detect_source_kind, detect_source_kind_from_text
 
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "insp_ect_peca_uf.pdf"
 
-
-@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture INSP ECT ausente")
-def test_detect_insp_ect_from_fixture() -> None:
-    assert detect_source_kind(FIXTURE) == "insp_ect"
+def test_detect_insp_ect_from_fixture(require_insp_ect_fixture: Path) -> None:
+    assert detect_source_kind(require_insp_ect_fixture) == "insp_ect"
 
 
 def test_detect_from_text_markers() -> None:
@@ -23,9 +20,8 @@ def test_detect_from_text_markers() -> None:
     assert detect_source_kind_from_text("ZEISS CALYPSO 7.4 Protocolo de medição") == "calypso"
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture INSP ECT ausente")
-def test_insp_ect_extracts_volume_and_pores() -> None:
-    dto = InspEctParser.parse(str(FIXTURE))
+def test_insp_ect_extracts_volume_and_pores(require_insp_ect_fixture: Path) -> None:
+    dto = InspEctParser.parse(str(require_insp_ect_fixture))
     assert dto.source_kind == "insp_ect"
     assert dto.software.startswith("ZEISS INSP ECT")
     assert dto.pore_count == 370
@@ -37,16 +33,14 @@ def test_insp_ect_extracts_volume_and_pores() -> None:
     assert dto.equipamento_default.startswith("ZEISS BOSELLO")
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture INSP ECT ausente")
-def test_pdf_parser_service_dispatches_insp_ect() -> None:
-    dto = PDFParserService.extrair_dados_avancados(str(FIXTURE))
+def test_pdf_parser_service_dispatches_insp_ect(require_insp_ect_fixture: Path) -> None:
+    dto = PDFParserService.extrair_dados_avancados(str(require_insp_ect_fixture))
     assert getattr(dto, "source_kind") == "insp_ect"
     assert len(dto.itens_medicao) == 370
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture INSP ECT ausente")
-def test_adapter_sets_source_kind() -> None:
-    doc = RealReportParserAdapter().parse(FIXTURE)
+def test_adapter_sets_source_kind(require_insp_ect_fixture: Path) -> None:
+    doc = RealReportParserAdapter().parse(require_insp_ect_fixture)
     assert doc.source_kind == "insp_ect"
     assert doc.raw_parsed_data is not None
     assert doc.evaluated_component

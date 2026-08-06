@@ -13,11 +13,6 @@ from src.core.infrastructure.version_history_repository import SQLiteVersionHist
 from src.core.infrastructure.workspace_session_repository import SQLiteWorkspaceSessionRepository
 
 
-@pytest.fixture
-def db_path(tmp_path: Path) -> Path:
-    return tmp_path / "historico.db"
-
-
 def test_documentos_roundtrip(db_path: Path) -> None:
     db = DatabaseManager(str(db_path))
     recent = SQLiteRecentFilesAdapter(db)

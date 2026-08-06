@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.domain.ports import ReportImage
-from src.core.domain.section_schema import SECTION_DEFINITIONS
+from src.core.domain.section_schema import FIXED_SECTION_IDS, SECTION_DEFINITIONS
 from src.ui.components.icons import icon_edit, icon_plus, icon_trash
 from src.ui.shared.report_editor.sidebar_chrome import sidebar_section_header
 from src.ui.styles import SPACING, caption_style, sidebar_panel_style
@@ -26,9 +26,6 @@ _PROTECTED_IDS = frozenset(s.id for s in SECTION_DEFINITIONS)
 _ROW_HEIGHT = 52
 _ACCENT_WIDTH = 3
 _ACTIONS_WIDTH = 76
-
-
-_PROTECTED_TEMPLATE_IDS = frozenset({"cabecalho", "historico_versoes", "anexos"})
 
 
 class TemplateSectionRow(QFrame):
@@ -44,9 +41,9 @@ class TemplateSectionRow(QFrame):
         self.setMinimumWidth(0)
         self.section_id = section["id"]
         self._full_title = section.get("display_title") or section.get("title", section["id"])
-        self._protected = bool(section.get("protected")) or self.section_id in _PROTECTED_TEMPLATE_IDS
+        self._protected = bool(section.get("protected")) or self.section_id in FIXED_SECTION_IDS
         self._is_custom = bool(section.get("custom")) or (
-            self.section_id.startswith("custom_") and self.section_id not in _PROTECTED_TEMPLATE_IDS
+            self.section_id.startswith("custom_") and self.section_id not in FIXED_SECTION_IDS
         )
         enabled = section.get("enabled", True)
 

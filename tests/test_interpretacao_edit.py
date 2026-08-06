@@ -28,7 +28,7 @@ def test_mmc_bullet_count_matches_items_automatically() -> None:
     fields = build_interpretacao_editor_fields(dto, report_kind="mmc")
     assert "5 características" in fields["intro"]
     keys = [d.key for d in interpretacao_field_defs(fields)]
-    assert keys == ["intro", "bullet_1", "bullet_2", "bullet_3", "bullet_4", "bullet_5"]
+    assert keys == ["intro", "bullet_1", "bullet_2", "bullet_3", "bullet_4", "bullet_5", "nota"]
     assert "A" in fields["bullet_1"]
     assert "E" in fields["bullet_5"]
 
@@ -39,7 +39,7 @@ def test_scales_from_3_to_5_when_pdf_changes() -> None:
         _dto(("A", "Fora"), ("B", "Dentro"), ("C", "Dentro")),
         report_kind="mmc",
     )
-    assert len(interpretacao_field_defs(small)) == 4  # intro + 3
+    assert len(interpretacao_field_defs(small)) == 5  # intro + 3 bullets + nota
 
     larger = build_interpretacao_editor_fields(
         _dto(("A", "Fora"), ("B", "Dentro"), ("C", "Dentro"), ("D", "Fora"), ("E", "Dentro")),
@@ -47,7 +47,7 @@ def test_scales_from_3_to_5_when_pdf_changes() -> None:
         existing=small,  # simula campos antigos ainda no formulário
         user_overrides={},  # documento novo sem overrides
     )
-    assert len(interpretacao_field_defs(larger)) == 6  # intro + 5
+    assert len(interpretacao_field_defs(larger)) == 7  # intro + 5 bullets + nota
     assert "D" in larger["bullet_4"]
     assert "E" in larger["bullet_5"]
 
