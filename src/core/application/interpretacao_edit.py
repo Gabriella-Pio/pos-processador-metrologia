@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.core.domain.measurement_interpretation import format_item_bullet_plain
 from src.core.domain.report_field_registry import SectionFieldDef
-from src.core.parser.utils import ParserUtils
 
 _MAX_MMC_BULLETS = 80
 
@@ -54,7 +54,7 @@ def build_interpretacao_editor_fields(
             "Revise o PDF importado ou edite a tabela de resultados.",
         ]
     else:
-        generated = [_format_item_bullet(item) for item in items[:_MAX_MMC_BULLETS]]
+        generated = [format_item_bullet_plain(item) for item in items[:_MAX_MMC_BULLETS]]
 
     # Sincroniza 1..N com o PDF; remove órfãos além de N (exceto override do usuário)
     n = len(generated)
@@ -103,35 +103,3 @@ def interpretacao_field_defs(fields: dict[str, str] | None = None) -> tuple[Sect
 
 def interpretacao_bullet_keys(fields: dict[str, str] | None = None) -> list[str]:
     return [f.key for f in interpretacao_field_defs(fields) if f.key.startswith("bullet_")]
-
-
-def _format_item_bullet(item: Any) -> str:
-    caracteristica = getattr(item, "caracteristica", "") or "característica"
-    tipo = getattr(item, "tipo", "") or "—"
-    valor = getattr(item, "valor_medido", "") or "—"
-    status = getattr(item, "status", "") or ""
-    tem_tol = (
-        getattr(item, "tol_superior", "N/A") != "N/A"
-        and getattr(item, "tol_inferior", "N/A") != "N/A"
-    )
-    if not tem_tol:
-        return (
-            f"A característica {caracteristica}, do tipo {tipo}, apresentou valor medido de "
-            f"{valor}, sem valores de tolerância cadastrados no relatório de origem."
-        )
-    nominal = ParserUtils.converter_para_float(getattr(item, "nominal", "0"))
-    sup = ParserUtils.converter_para_float(getattr(item, "tol_superior", "0"))
-    inf = ParserUtils.converter_para_float(getattr(item, "tol_inferior", "0"))
-    limite_sup = nominal + (sup or 0)
-    limite_inf = nominal - abs(inf or 0)
-    if status == "Dentro":
-        return (
-            f"A característica {caracteristica}, do tipo {tipo}, apresentou valor medido de "
-            f"{valor}, permanecendo dentro dos limites cadastrados de "
-            f"{limite_inf:.4f} a {limite_sup:.4f}."
-        )
-    return (
-        f"A característica {caracteristica}, do tipo {tipo}, apresentou valor medido de "
-        f"{valor}, ficando fora dos limites cadastrados de "
-        f"{limite_inf:.4f} a {limite_sup:.4f}."
-    )
