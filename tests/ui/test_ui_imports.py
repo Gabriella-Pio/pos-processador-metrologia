@@ -614,6 +614,12 @@ def test_workspace_export_shortcut_and_hidden_banner() -> None:
 
     assert view._banner.isHidden()
     assert view._export_btn.toolTip() == "Exportar PDF (Ctrl+E)"
+    from PyQt6.QtGui import QKeySequence, QShortcut
+
+    shortcuts = view.findChildren(QShortcut)
+    sequences = {shortcut.key().toString() for shortcut in shortcuts}
+    assert "Ctrl+S" in sequences
+    assert "Ctrl+E" in sequences
     assert view._preview_menu is not None
     assert view._save_layout_action is not None
     assert view._template_selector is not None
