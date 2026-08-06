@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
@@ -16,6 +17,11 @@ from src.ui.features.workspace.document_commit import (
     refresh_export_validation,
 )
 from src.core.application.project_service import ProjectService
+from src.core.application.project_snapshot_serializer import (
+    apply_workspace_to_document,
+    deserialize_project_snapshot,
+)
+from src.core.application.version_snapshot_service import VersionSnapshotService
 from src.core.application.document_editing import (
     extract_global_field_values,
     get_measurement_rows,
@@ -30,7 +36,9 @@ from src.core.domain.ports import (
     ReportImage,
     ReportParser,
     TemplateRepository,
+    VersionEntry,
     VersionHistoryRepository,
+    VersionSnapshotPort,
     WorkspaceSessionPort,
 )
 from src.ui.features.workspace.commands.export_commands import ExportCommands
@@ -69,6 +77,8 @@ class WorkspaceViewModel(QObject):
     templates_list_ready = pyqtSignal(list)
     export_validation_ready = pyqtSignal(list)
     error_occurred = pyqtSignal(str, str, str)
+    version_timeline_changed = pyqtSignal(list)
+    version_status_changed = pyqtSignal(str)
 
     def __init__(
         self,
@@ -80,6 +90,7 @@ class WorkspaceViewModel(QObject):
         template_repo: TemplateRepository | None = None,
         session_repo: WorkspaceSessionPort | None = None,
         project_service: ProjectService | None = None,
+        version_snapshot_repo: VersionSnapshotPort | None = None,
     ) -> None:
         super().__init__()
         self._app_state = app_state
@@ -90,6 +101,10 @@ class WorkspaceViewModel(QObject):
         self._template_repo = template_repo
         self._session_repo = session_repo
         self._project_service = project_service
+        self._snapshot_service = VersionSnapshotService(version_snapshot_repo)
+        self._last_registered_version: int | None = None
+        self._editing_from_version: int | None = None
+        self._viewing_version: int | None = None
         self._doc_service = DocumentSessionService(parser, template_repo, version_history_repo)
         self._template_service = TemplateWorkspaceService(template_repo, exporter)
         self._presenter = SectionSummaryPresenter(exporter)
@@ -536,9 +551,35 @@ class WorkspaceViewModel(QObject):
 
     def register_new_version(self, responsible_name: str, description: str) -> None:
         document = self._active_document()
-        if document is None:
+        session = self._app_state.project_session
+        if document is None or session is None:
             return
-        entry = VersionCommands.create_entry(document, responsible_name, description)
+
+        self._flush_pending_saves()
+
+        if self._snapshot_service is not None and session.project_id:
+            snapshot = self._snapshot_service.create_snapshot(
+                session, responsible_name, description
+            )
+            if snapshot is None:
+                self.error_occurred.emit(
+                    "Não foi possível registrar a versão",
+                    "O serviço de snapshots não está disponível.",
+                    "",
+                )
+                return
+            entry = VersionEntry(
+                version_number=snapshot.version_number,
+                timestamp=snapshot.created_at or datetime.now(),
+                responsible_name=responsible_name,
+                description=description,
+            )
+            self._last_registered_version = snapshot.version_number
+            self._editing_from_version = None
+            self._viewing_version = None
+        else:
+            entry = VersionCommands.create_entry(document, responsible_name, description)
+
         if self._version_history_repo is not None:
             self._version_history_repo.append(
                 str(document.source_pdf_path),
@@ -547,6 +588,164 @@ class WorkspaceViewModel(QObject):
                 entry,
             )
         self._app_state.register_version(entry)
+        self.version_timeline_changed.emit(self.list_version_timeline())
+        self.version_status_changed.emit(self.version_status_text())
+        self.schedule_preview()
+
+    def list_version_timeline(self) -> list[VersionEntry]:
+        session = self._app_state.project_session
+        if session is not None and session.project_id:
+            entries = self._snapshot_service.list_timeline_entries(session.project_id)
+            if entries:
+                return entries
+        document = self._active_document()
+        return list(document.version_history) if document is not None else []
+
+    def version_status_text(self) -> str:
+        if self._viewing_version is not None:
+            return f"Visualizando versão v{self._viewing_version}"
+        if self._editing_from_version is not None:
+            return f"Editando a partir da v{self._editing_from_version}"
+        if self._last_registered_version is not None:
+            return f"Versão v{self._last_registered_version} registrada"
+        return "Rascunho salvo"
+
+    def restore_version(self, version_number: int) -> bool:
+        session = self._app_state.project_session
+        if session is None or not session.project_id:
+            return False
+        snapshot = self._snapshot_service.get_snapshot(session.project_id, version_number)
+        if snapshot is None:
+            self.error_occurred.emit(
+                "Versão não encontrada",
+                f"A versão v{version_number} não existe para este projeto.",
+                "",
+            )
+            return False
+
+        self._flush_pending_saves()
+        try:
+            restored, workspaces, histories = deserialize_project_snapshot(
+                snapshot.snapshot_json
+            )
+        except (ValueError, TypeError) as exc:
+            self.error_occurred.emit(
+                "Snapshot inválido",
+                "Não foi possível ler os dados desta versão.",
+                str(exc),
+            )
+            return False
+
+        restored.project_id = session.project_id
+        self._app_state.set_project_session(restored)
+        self.project_loaded.emit(restored)
+
+        for index in range(len(restored.documents)):
+            if not self._parse_slot(restored, index):
+                return False
+            slot = restored.documents[index]
+            document = slot.document
+            if document is None:
+                continue
+            key = str(slot.source_pdf_path)
+            if key in workspaces:
+                apply_workspace_to_document(document, workspaces[key])
+            if key in histories:
+                document.version_history = histories[key]
+            if self._session_repo is not None:
+                self._session_repo.save(document)
+
+        ProjectCommands.ensure_project_attachment_paths(restored)
+        self._persist_project()
+        self._editing_from_version = version_number
+        self._viewing_version = None
+        self._last_registered_version = None
+        active = min(max(restored.active_index, 0), len(restored.documents) - 1)
+        self.switch_document(active)
+        self.version_timeline_changed.emit(self.list_version_timeline())
+        self.version_status_changed.emit(self.version_status_text())
+        return True
+
+    def preview_version(self, version_number: int) -> bool:
+        document = self._document_from_snapshot(version_number)
+        if document is None:
+            self.error_occurred.emit(
+                "Não foi possível visualizar",
+                f"A versão v{version_number} não pôde ser carregada para preview.",
+                "",
+            )
+            return False
+        self._viewing_version = version_number
+        self.version_status_changed.emit(self.version_status_text())
+        try:
+            pages = self._preview_service.render_pages(document)
+            anchor_map: dict = {}
+            if hasattr(self._exporter, "_last_section_anchor_map"):
+                anchor_map = dict(getattr(self._exporter, "_last_section_anchor_map", {}))
+            self.preview_ready.emit(pages)
+            self.preview_metadata_ready.emit(anchor_map)
+        except Exception:
+            logger.exception("Falha ao gerar preview da versão v%s", version_number)
+            self.error_occurred.emit(
+                "Preview indisponível",
+                f"Não foi possível gerar o preview da versão v{version_number}.",
+                "",
+            )
+            return False
+        return True
+
+    def export_version_snapshot(self, version_number: int, output_path: Path) -> None:
+        document = self._document_from_snapshot(version_number)
+        outcome = self._export_commands.export_document(document, output_path)
+        if not outcome.success:
+            self.error_occurred.emit(
+                outcome.error_title,
+                outcome.error_message,
+                outcome.error_details,
+            )
+            return
+        assert outcome.path is not None
+        self.export_finished.emit(outcome.path)
+
+    def clear_version_view_state(self) -> None:
+        self._viewing_version = None
+        self.version_status_changed.emit(self.version_status_text())
+        self.schedule_preview()
+
+    def _flush_pending_saves(self) -> None:
+        if self._session_timer.isActive():
+            self._session_timer.stop()
+            persist_session(self)
+        self._persist_project()
+
+    def _document_from_snapshot(self, version_number: int) -> ReportDocument | None:
+        session = self._app_state.project_session
+        if session is None or not session.project_id:
+            return None
+        snapshot = self._snapshot_service.get_snapshot(session.project_id, version_number)
+        if snapshot is None:
+            return None
+        try:
+            restored, workspaces, histories = deserialize_project_snapshot(
+                snapshot.snapshot_json
+            )
+        except (ValueError, TypeError):
+            return None
+        if not restored.documents:
+            return None
+        index = min(max(session.active_index, 0), len(restored.documents) - 1)
+        if not self._doc_service.parse_slot(restored, index)[0]:
+            return None
+        slot = restored.documents[index]
+        document = slot.document
+        if document is None:
+            return None
+        key = str(slot.source_pdf_path)
+        if key in workspaces:
+            apply_workspace_to_document(document, workspaces[key])
+        if key in histories:
+            document.version_history = histories[key]
+        return document
 
     def export_document(self, output_path: Path) -> None:
         outcome = self._export_commands.export_document(self._active_document(), output_path)

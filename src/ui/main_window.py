@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
             template_repo,
             workspace_session_repo,
             project_service,
+            version_snapshot_repo,
         )
         self._template_editor_vm = TemplateEditorViewModel(template_repo, report_exporter)
         self._nav_controller = NavigationController()

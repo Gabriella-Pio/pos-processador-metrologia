@@ -181,6 +181,9 @@ class WorkspaceView(QWidget):
         self._section_editor.add_custom_section_requested.connect(self._on_add_custom_section)
         self._section_editor.sections_reordered.connect(self._vm.reorder_sections)
         self._section_editor.new_version_requested.connect(self._on_register_version)
+        self._section_editor.version_preview_requested.connect(self._on_preview_version)
+        self._section_editor.version_restore_requested.connect(self._on_restore_version)
+        self._section_editor.version_export_requested.connect(self._on_export_version)
         self._section_editor.image_dropped.connect(self._on_image_dropped)
         self._section_editor.image_remove_requested.connect(self._on_image_remove)
         self._section_editor.image_caption_changed.connect(self._on_image_caption_changed)
@@ -203,9 +206,14 @@ class WorkspaceView(QWidget):
         self._vm.templates_list_ready.connect(self._populate_template_combo)
         self._vm.preview_metadata_ready.connect(self._on_preview_metadata)
         self._preview_panel.page_clicked.connect(self._on_preview_page_clicked)
-        self._vm.export_validation_ready.connect(self._on_export_validation)
+        self._vm.version_timeline_changed.connect(self._on_version_timeline_changed)
+        self._vm.version_status_changed.connect(self._on_version_status_changed)
 
     def _setup_shortcuts(self) -> None:
+        save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        save_shortcut.activated.connect(self._on_register_version)
+
         export_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
         export_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         export_shortcut.activated.connect(self._on_export_clicked)
@@ -306,6 +314,7 @@ class WorkspaceView(QWidget):
         self._project_tabs.setCurrentIndex(session.active_index)
         self._project_tabs.blockSignals(False)
         self._update_export_options_visibility()
+        self._refresh_versions()
 
     def _on_project_changed(self, session) -> None:
         if session is None:
@@ -367,7 +376,10 @@ class WorkspaceView(QWidget):
         self._section_editor.render_global_fields(values, overridden)
 
     def _on_preview_generating(self, generating: bool) -> None:
-        self._preview_status_label.setText("Atualizando preview…" if generating else "")
+        if generating:
+            self._preview_status_label.setText("Atualizando preview…")
+        else:
+            self._on_version_status_changed(self._vm.version_status_text())
         self._preview_panel.set_status_text("Atualizando preview…" if generating else "")
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
@@ -449,9 +461,36 @@ class WorkspaceView(QWidget):
             self._section_editor.render_images(document.images)
 
     def _refresh_versions(self) -> None:
+        self._section_editor.render_versions(self._vm.list_version_timeline())
+
+    def _on_version_timeline_changed(self, entries: list) -> None:
+        self._section_editor.render_versions(entries)
+
+    def _on_version_status_changed(self, text: str) -> None:
+        if text and not self._preview_status_label.text().startswith("Atualizando"):
+            self._preview_status_label.setText(text)
+
+    def _on_preview_version(self, version_number: int) -> None:
+        self._vm.preview_version(version_number)
+
+    def _on_restore_version(self, version_number: int) -> None:
+        if not self._vm.restore_version(version_number):
+            return
+        self._on_version_status_changed(self._vm.version_status_text())
+
+    def _on_export_version(self, version_number: int) -> None:
         document = self._app_state.active_document
+        default_name = "relatorio.pdf"
         if document is not None:
-            self._section_editor.render_versions(document.version_history)
+            default_name = f"{document.evaluated_component}_v{version_number}.pdf"
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            f"Exportar versão v{version_number}",
+            default_name,
+            "PDF (*.pdf)",
+        )
+        if path:
+            self._vm.export_version_snapshot(version_number, Path(path))
 
     def _on_sections_summary_ready(self, sections: list[dict]) -> None:
         self._section_anchor_map = {s["id"]: s for s in sections}
