@@ -2,10 +2,20 @@
 Fonte única de verdade para IDs, rótulos e ordem das seções do relatório.
 
 Usado por: generator, adapters, TemplateEditor e Workspace.
+Metadados canônicos em ``section_catalog``; este módulo expõe wrappers e helpers.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from src.core.domain.section_catalog import (
+    SECTION_CATALOG,
+    TEMPLATE_PROFILE_TOMOGRAFIA,
+    default_enabled_blocks,
+    fixed_section_ids,
+    section_titles,
+    tomography_blocks,
+)
 
 # Variáveis disponíveis em templates (modo editor)
 TEMPLATE_VARIABLES = [
@@ -25,69 +35,27 @@ class SectionDefinition:
     navigable: bool = True
 
 
-SECTION_DEFINITIONS: tuple[SectionDefinition, ...] = (
-    SectionDefinition("cabecalho", "Cabeçalho institucional", navigable=False),
-    SectionDefinition("introducao", "Introdução"),
-    SectionDefinition("identificacao", "Identificação e condições de medição"),
-    SectionDefinition("metodo_escopo", "Método e escopo da avaliação", enabled_by_default=False),
-    SectionDefinition("registro_componente", "Registro do componente", enabled_by_default=False),
-    SectionDefinition("controle_tecnico", "Controle técnico"),
-    SectionDefinition("resultados", "Resultados dimensionais"),
-    SectionDefinition("grafica", "Análise gráfica dos resultados"),
-    SectionDefinition("tomografia", "Inspeção tomográfica", enabled_by_default=False),
-    SectionDefinition("resultados_inspecao", "Resultados da inspeção", enabled_by_default=False),
-    SectionDefinition("interpretacao", "Interpretação dos resultados"),
-    SectionDefinition("conclusao", "Conclusão"),
-    SectionDefinition("observacoes_limitacoes", "Observações e limitações", enabled_by_default=False),
-    SectionDefinition("historico_versoes", "Histórico de versões"),
-    SectionDefinition("anexos", "Anexos"),
+SECTION_DEFINITIONS: tuple[SectionDefinition, ...] = tuple(
+    SectionDefinition(
+        id=meta.id,
+        label=meta.label,
+        enabled_by_default=meta.enabled_by_default,
+        navigable=meta.navigable,
+    )
+    for meta in SECTION_CATALOG
 )
 
-SECTION_TITLES: dict[str, str] = {s.id: s.label for s in SECTION_DEFINITIONS}
+SECTION_TITLES: dict[str, str] = section_titles()
 
 # Seções com posição fixa no PDF (cabeçalho no início; histórico e anexos no fim).
-FIXED_SECTION_IDS: frozenset[str] = frozenset({"cabecalho", "historico_versoes", "anexos"})
+FIXED_SECTION_IDS: frozenset[str] = fixed_section_ids()
 
-TEMPLATE_PADRAO_OFICIAL: list[dict] = [
-    {"tipo": s.id, "config": {}}
-    for s in SECTION_DEFINITIONS
-    if s.enabled_by_default
-]
+TEMPLATE_PADRAO_OFICIAL: list[dict] = default_enabled_blocks()
 
 # Template oficial de inspeção tomográfica (modelo CEMSZ / Bosello).
-TEMPLATE_TOMOGRAFIA_OFICIAL: list[dict] = [
-    {"tipo": "cabecalho", "config": {}},
-    {"tipo": "introducao", "config": {"variant": "tomografia"}},
-    {"tipo": "identificacao", "config": {}},
-    {"tipo": "metodo_escopo", "config": {}},
-    {"tipo": "registro_componente", "config": {}},
-    {"tipo": "tomografia", "config": {}},
-    {"tipo": "resultados_inspecao", "config": {}},
-    {"tipo": "interpretacao", "config": {}},
-    {"tipo": "conclusao", "config": {}},
-    {"tipo": "observacoes_limitacoes", "config": {}},
-    {"tipo": "controle_tecnico", "config": {}},
-    {"tipo": "historico_versoes", "config": {}},
-    {"tipo": "anexos", "config": {}},
-]
+TEMPLATE_TOMOGRAFIA_OFICIAL: list[dict] = tomography_blocks()
 
-TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG: dict[str, dict] = {
-    "cabecalho": {"enabled": True, "order": 0},
-    "introducao": {"enabled": True, "order": 1},
-    "identificacao": {"enabled": True, "order": 2},
-    "metodo_escopo": {"enabled": True, "order": 3},
-    "registro_componente": {"enabled": True, "order": 4},
-    "controle_tecnico": {"enabled": True, "order": 5},
-    "resultados": {"enabled": False, "order": 6},
-    "grafica": {"enabled": False, "order": 7},
-    "tomografia": {"enabled": True, "order": 8},
-    "resultados_inspecao": {"enabled": True, "order": 9},
-    "interpretacao": {"enabled": True, "order": 10},
-    "conclusao": {"enabled": True, "order": 11},
-    "observacoes_limitacoes": {"enabled": True, "order": 12},
-    "historico_versoes": {"enabled": True, "order": 13},
-    "anexos": {"enabled": True, "order": 14},
-}
+TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG: dict[str, dict] = dict(TEMPLATE_PROFILE_TOMOGRAFIA)
 
 _NAVIGABLE_IDS = frozenset(s.id for s in SECTION_DEFINITIONS if s.navigable)
 

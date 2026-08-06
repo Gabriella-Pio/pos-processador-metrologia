@@ -18,6 +18,7 @@ from .sections.tomo_extra_sections import (
 )
 
 class ReportGenerator:
+    # Chaves devem existir em ``section_catalog.SECTION_CATALOG`` (ver test_section_catalog).
     REGISTRY_SECOES = {
         "cabecalho": CabecalhoSection,
         "introducao": IntroducaoSection,

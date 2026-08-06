@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.core.domain.section_catalog import numbered_section_ids, section_heading_defaults
+
 
 @dataclass(frozen=True)
 class TableRowDef:
@@ -11,38 +13,9 @@ class TableRowDef:
     default_value: str
 
 
-SECTION_HEADING_DEFAULTS: dict[str, str] = {
-    "introducao": "RELATÓRIO TÉCNICO — ANÁLISE DIMENSIONAL E TOMOGRÁFICA",
-    "identificacao": "IDENTIFICAÇÃO E CONDIÇÕES DE MEDIÇÃO",
-    "metodo_escopo": "MÉTODO E ESCOPO DA AVALIAÇÃO",
-    "registro_componente": "REGISTRO DO COMPONENTE",
-    "resultados": "RESULTADOS DIMENSIONAIS",
-    "grafica": "ANÁLISE GRÁFICA DOS RESULTADOS",
-    "tomografia": "INSPEÇÃO TOMOGRÁFICA",
-    "resultados_inspecao": "RESULTADOS DA INSPEÇÃO",
-    "interpretacao": "INTERPRETAÇÃO DOS RESULTADOS",
-    "conclusao": "CONCLUSÃO",
-    "observacoes_limitacoes": "OBSERVAÇÕES E LIMITAÇÕES",
-    "controle_tecnico": "CONTROLE TÉCNICO",
-    "historico_versoes": "HISTÓRICO DE VERSÕES",
-    "anexos": "ANEXOS",
-}
+SECTION_HEADING_DEFAULTS: dict[str, str] = section_heading_defaults()
 
-NUMBERED_SECTION_IDS: frozenset[str] = frozenset({
-    "identificacao",
-    "metodo_escopo",
-    "registro_componente",
-    "resultados",
-    "grafica",
-    "tomografia",
-    "resultados_inspecao",
-    "interpretacao",
-    "conclusao",
-    "observacoes_limitacoes",
-    "controle_tecnico",
-    "historico_versoes",
-    "anexos",
-})
+NUMBERED_SECTION_IDS: frozenset[str] = numbered_section_ids()
 
 INTRODUCAO_BLOCK_TITLES: dict[str, str] = {
     "title_objetivo": "OBJETIVO",
