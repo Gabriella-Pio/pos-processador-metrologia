@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import copy
 import logging
-import traceback
 
-from PyQt6.QtCore import QObject, QRunnable, QThreadPool, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, pyqtSignal
 
 from src.core.application.template_preview import (
     build_template_preview_document,
@@ -17,41 +16,9 @@ from src.core.domain.ports import ReportDocument, ReportExporter, TemplateReposi
 from src.core.domain.section_schema import is_custom_section_id, merge_saved_template_config
 from src.core.domain.report_field_registry import GLOBAL_FIELDS, effective_media_kinds
 from src.ui.features.workspace.services.preview_service import PreviewService
+from src.ui.shared.report_editor.preview_worker import DebouncedPreviewRunner
 
 logger = logging.getLogger(__name__)
-_PREVIEW_DEBOUNCE_MS = 600
-
-
-class _PreviewWorkerSignals(QObject):
-    finished = pyqtSignal(int, list, dict)
-    failed = pyqtSignal(int, str)
-
-
-class _PreviewWorker(QRunnable):
-    def __init__(
-        self,
-        generation: int,
-        document: ReportDocument,
-        preview_service: PreviewService,
-    ) -> None:
-        super().__init__()
-        self._generation = generation
-        self._document = document
-        self._preview_service = preview_service
-        self.signals = _PreviewWorkerSignals()
-
-    @pyqtSlot()
-    def run(self) -> None:
-        try:
-            pages = self._preview_service.render_pages(self._document)
-            anchor_map = {}
-            exporter = self._preview_service._exporter
-            if hasattr(exporter, "_last_section_anchor_map"):
-                anchor_map = dict(getattr(exporter, "_last_section_anchor_map", {}))
-            self.signals.finished.emit(self._generation, pages, anchor_map)
-        except Exception:
-            logger.exception("Falha ao gerar preview do template")
-            self.signals.failed.emit(self._generation, traceback.format_exc())
 
 
 class TemplateEditorViewModel(QObject):
@@ -74,11 +41,11 @@ class TemplateEditorViewModel(QObject):
         super().__init__()
         self._repo = template_repo
         self._preview_service = PreviewService(report_exporter)
-        self._preview_generation = 0
-        self._preview_timer = QTimer(self)
-        self._preview_timer.setSingleShot(True)
-        self._preview_timer.setInterval(_PREVIEW_DEBOUNCE_MS)
-        self._preview_timer.timeout.connect(self._run_preview)
+        self._preview_runner = DebouncedPreviewRunner(self._preview_service, parent=self)
+        self._preview_runner.set_document_getter(self._build_preview_document)
+        self._preview_runner.generating.connect(self.preview_generating.emit)
+        self._preview_runner.finished.connect(self._on_preview_finished)
+        self._preview_runner.failed.connect(self._on_preview_failed)
 
         self._template_id = "new"
         self._template_name = ""
@@ -285,33 +252,20 @@ class TemplateEditorViewModel(QObject):
         return True
 
     def schedule_preview(self) -> None:
-        self.preview_generating.emit(True)
-        self._preview_timer.start()
+        self._preview_runner.schedule()
 
-    def _run_preview(self) -> None:
-        document = build_template_preview_document(
+    def _build_preview_document(self) -> ReportDocument:
+        return build_template_preview_document(
             self._template_id,
             self._sections_config,
             merge_template_content_defaults(self._content_defaults, self._global_defaults),
         )
-        self._preview_generation += 1
-        generation = self._preview_generation
-        worker = _PreviewWorker(generation, document, self._preview_service)
-        worker.signals.finished.connect(self._on_preview_finished)
-        worker.signals.failed.connect(self._on_preview_failed)
-        QThreadPool.globalInstance().start(worker)
 
-    def _on_preview_finished(self, generation: int, pages: list[bytes], anchor_map: dict) -> None:
-        if generation != self._preview_generation:
-            return
-        self.preview_generating.emit(False)
+    def _on_preview_finished(self, pages: list[bytes], anchor_map: dict) -> None:
         self.preview_ready.emit(pages)
         self.preview_metadata_ready.emit(anchor_map)
 
-    def _on_preview_failed(self, generation: int, details: str) -> None:
-        if generation != self._preview_generation:
-            return
-        self.preview_generating.emit(False)
+    def _on_preview_failed(self, details: str) -> None:
         self.error_occurred.emit(
             "Preview indisponível",
             "Não foi possível gerar o preview do template.",

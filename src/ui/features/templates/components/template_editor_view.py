@@ -10,8 +10,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
-    QSplitter,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -21,6 +19,7 @@ from src.ui.components.feedback import confirm_action, show_friendly_error, show
 from src.ui.components.icons import icon_ellipsis, icon_edit
 from src.ui.features.templates.components.template_sidebar_panel import TemplateSidebarPanel
 from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
+from src.ui.shared.report_editor.editor_shell import build_editor_column, create_three_column_splitter
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
 from src.ui.styles import SPACING, caption_style
 
@@ -76,14 +75,25 @@ class TemplateEditorView(QWidget):
         outer.setSpacing(0)
         outer.addWidget(self._build_global_strip())
 
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(self._sidebar)
-        splitter.addWidget(self._build_editor_column())
-        splitter.addWidget(self._build_preview_column())
-        splitter.setSizes([240, 320, 800])
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
-        splitter.setStretchFactor(2, 3)
+        context = QWidget()
+        context.setObjectName("WorkspacePreviewContextBar")
+        context_layout = QHBoxLayout(context)
+        context_layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
+        context_layout.addWidget(self._section_title_label)
+        context_layout.addStretch(1)
+
+        self._edit_container, self._edit_stack = build_editor_column(
+            self._edit_placeholder,
+            self._sidebar.edit_view,
+            header=context,
+        )
+        self._edit_container.setVisible(False)
+
+        splitter = create_three_column_splitter(
+            self._sidebar,
+            self._edit_container,
+            self._build_preview_column(),
+        )
         self._main_splitter = splitter
         outer.addWidget(splitter, stretch=1)
 
@@ -118,30 +128,6 @@ class TemplateEditorView(QWidget):
     def _show_menu(self) -> None:
         self._discard_action.setEnabled(self._vm.is_dirty())
         self._menu.popup(self._more_btn.mapToGlobal(QPoint(0, self._more_btn.height())))
-
-    def _build_editor_column(self) -> QWidget:
-        container = QWidget()
-        container.setObjectName("WorkspaceEditorColumn")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        context = QWidget()
-        context.setObjectName("WorkspacePreviewContextBar")
-        context_layout = QHBoxLayout(context)
-        context_layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
-        context_layout.addWidget(self._section_title_label)
-        context_layout.addStretch(1)
-        layout.addWidget(context)
-
-        self._edit_stack = QStackedWidget()
-        self._edit_stack.setObjectName("WorkspaceEditorStack")
-        self._edit_stack.addWidget(self._edit_placeholder)
-        self._edit_stack.addWidget(self._sidebar.edit_view)
-        layout.addWidget(self._edit_stack)
-        self._edit_container = container
-        self._edit_container.setVisible(False)
-        return container
 
     def _build_preview_column(self) -> QWidget:
         container = QWidget()

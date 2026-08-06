@@ -16,8 +16,6 @@ from PyQt6.QtWidgets import (
     QMenu,
     QPushButton,
     QScrollArea,
-    QSplitter,
-    QStackedWidget,
     QTabBar,
     QVBoxLayout,
     QWidget,
@@ -40,6 +38,7 @@ from src.ui.styles import SPACING, caption_style
 from src.ui.controllers.app_state import AppState
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from src.ui.features.workspace.components.section_editor_panel import SectionEditorPanel
+from src.ui.shared.report_editor.editor_shell import build_editor_stack, create_three_column_splitter
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
 
 
@@ -105,16 +104,27 @@ class WorkspaceView(QWidget):
         self._project_tabs_strip = self._build_project_tabs_row()
         outer.addWidget(self._project_tabs_strip)
 
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(self._section_editor)
-        splitter.addWidget(self._build_editor_column())
-        splitter.addWidget(self._build_preview_panel())
-        splitter.setSizes([240, 320, 800])
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
-        splitter.setStretchFactor(2, 3)
-        self._main_splitter = splitter
+        self._edit_placeholder = QLabel(
+            "Selecione uma seção no sumário.\n"
+            "Duplo-clique ou use o ícone de edição para abrir o formulário."
+        )
+        self._edit_placeholder.setObjectName("WorkspaceEditorPlaceholder")
+        self._edit_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._edit_placeholder.setWordWrap(True)
+
+        self._edit_container, self._edit_stack = build_editor_stack(
+            self._edit_placeholder,
+            self._section_editor.edit_view,
+        )
+        self._edit_container.setObjectName("WorkspaceEditorPanel")
         self._edit_container.setVisible(False)
+
+        splitter = create_three_column_splitter(
+            self._section_editor,
+            self._edit_container,
+            self._build_preview_panel(),
+        )
+        self._main_splitter = splitter
         outer.addWidget(splitter, stretch=1)
 
     def _build_project_tabs_row(self) -> QWidget:
@@ -197,28 +207,6 @@ class WorkspaceView(QWidget):
         export_opts_layout.addWidget(self._export_individual_cb)
         export_opts_layout.addWidget(self._export_merged_cb)
         return self._action_bar
-
-    def _build_editor_column(self) -> QWidget:
-        self._edit_container = QFrame()
-        self._edit_container.setObjectName("WorkspaceEditorPanel")
-        layout = QVBoxLayout(self._edit_container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        self._edit_placeholder = QLabel(
-            "Selecione uma seção no sumário.\n"
-            "Duplo-clique ou use o ícone de edição para abrir o formulário."
-        )
-        self._edit_placeholder.setObjectName("WorkspaceEditorPlaceholder")
-        self._edit_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._edit_placeholder.setWordWrap(True)
-
-        self._edit_stack = QStackedWidget()
-        self._edit_stack.setObjectName("WorkspaceEditorStack")
-        self._edit_stack.addWidget(self._edit_placeholder)
-        self._edit_stack.addWidget(self._section_editor.edit_view)
-        layout.addWidget(self._edit_stack)
-        return self._edit_container
 
     def _build_preview_panel(self) -> QWidget:
         container = QWidget()
