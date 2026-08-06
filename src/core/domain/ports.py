@@ -206,3 +206,31 @@ class WorkspaceSessionPort(ABC):
     @abstractmethod
     def load(self, document: ReportDocument) -> bool:
         ...
+
+
+class ProjectRepositoryPort(ABC):
+    """Porta de persistência de projetos em edição (multi-PDF)."""
+
+    @abstractmethod
+    def save(self, workspace) -> None:
+        ...
+
+    @abstractmethod
+    def get(self, project_id: str):
+        ...
+
+    @abstractmethod
+    def list_recent(self, limit: int = 50) -> list:
+        ...
+
+
+class VersionSnapshotPort(ABC):
+    """Porta de snapshots de versão por projeto (Fase 4)."""
+
+    @abstractmethod
+    def append(self, snapshot) -> int:
+        ...
+
+    @abstractmethod
+    def list_for_project(self, project_id: str) -> list:
+        ...

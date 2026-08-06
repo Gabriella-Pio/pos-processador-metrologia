@@ -30,6 +30,7 @@ class ProjectSession:
     report_mode: ReportMode = "mixed"
     documents: list[ProjectDocumentSlot] = field(default_factory=list)
     active_index: int = 0
+    project_id: str | None = None
 
     @property
     def active_slot(self) -> ProjectDocumentSlot | None:
