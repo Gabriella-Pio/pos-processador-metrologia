@@ -67,7 +67,7 @@ python main.py
 ## Testes UI
 
 ```bash
-python -m pytest tests/test_ui_imports.py -v
+python -m pytest tests/ui/test_ui_imports.py -v
 ```
 
 ## Cronograma

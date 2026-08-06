@@ -2,7 +2,7 @@ import sys
 import os
 
 # Garante que a pasta src está no path de execução
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src')))
 
 from core.parser.parser import PDFParserService
 from core.generator import ReportGenerator

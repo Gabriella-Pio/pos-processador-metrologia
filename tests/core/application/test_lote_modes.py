@@ -16,7 +16,7 @@ from src.core.domain.ports import ReportDocument
 from src.core.infrastructure.adapters import RealReportParserAdapter
 from src.ui.features.workspace.services.document_session_service import DocumentSessionService
 
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "insp_ect_peca_uf.pdf"
+FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "insp_ect_peca_uf.pdf"
 
 
 def test_infer_report_mode() -> None:

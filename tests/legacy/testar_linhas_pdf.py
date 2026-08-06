@@ -9,9 +9,7 @@ def inspecionar_linhas_pdf(caminho_pdf: str):
     print(f"\n[Diagnóstico] Analisando o arquivo: {caminho_pdf}")
     doc = fitz.open(caminho_pdf)
     
-    # Cria um arquivo de log para histórico e acompanhamento
-    os.makedirs("tests", exist_ok=True)
-    log_path = "tests/diagnostico_saida.txt"
+    log_path = os.path.join(os.path.dirname(__file__), "diagnostico_saida.txt")
     
     with open(log_path, "w", encoding="utf-8") as log_file:
         for num_pag, pagina in enumerate(doc):
