@@ -1,0 +1,103 @@
+"""Comandos de carregamento e navegação de projeto no workspace."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from src.core.application.session import load_workspace_session
+from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
+from src.core.domain.ports import RecentFilesRepository, ReportDocument, WorkspaceSessionPort
+from src.ui.features.workspace.services.document_session_service import DocumentSessionService
+
+
+@dataclass(frozen=True)
+class RecentFileResolution:
+    ok: bool
+    pdf_path: Path | None = None
+    client_project: str = ""
+    evaluated_component: str = ""
+    error_title: str = ""
+    error_message: str = ""
+
+
+class ProjectCommands:
+    @staticmethod
+    def append_document_slots(
+        session: ProjectSession,
+        paths: list[Path],
+        default_component: str,
+    ) -> int:
+        start_index = len(session.documents)
+        for pdf_path in paths:
+            session.documents.append(
+                ProjectDocumentSlot(
+                    source_pdf_path=pdf_path,
+                    evaluated_component=default_component,
+                )
+            )
+        return start_index
+
+    @staticmethod
+    def parse_slot(
+        doc_service: DocumentSessionService,
+        session_repo: WorkspaceSessionPort | None,
+        session: ProjectSession,
+        index: int,
+    ) -> tuple[bool, str]:
+        ok, details = doc_service.parse_slot(session, index)
+        if not ok:
+            return False, details
+        slot_doc = session.documents[index].document
+        if slot_doc is not None and session_repo is not None:
+            load_workspace_session(session_repo, slot_doc)
+        return True, ""
+
+    @staticmethod
+    def activate_document(
+        session: ProjectSession,
+        index: int,
+        doc_service: DocumentSessionService,
+        session_repo: WorkspaceSessionPort | None,
+    ) -> ReportDocument | None:
+        session.set_active_index(index)
+        document = session.active_document
+        if document is None:
+            return None
+        doc_service.load_versions_for_document(document)
+        if session_repo is not None:
+            load_workspace_session(session_repo, document)
+        return document
+
+    @staticmethod
+    def resolve_recent_file(
+        recent_files_repo: RecentFilesRepository | None,
+        file_id: str,
+    ) -> RecentFileResolution:
+        if recent_files_repo is None:
+            return RecentFileResolution(
+                ok=False,
+                error_title="Histórico indisponível",
+                error_message="O repositório de arquivos recentes não está configurado.",
+            )
+        record = recent_files_repo.get_by_id(file_id)
+        if record is None:
+            return RecentFileResolution(
+                ok=False,
+                error_title="Arquivo não encontrado",
+                error_message="Este registro não existe mais no histórico local.",
+            )
+        pdf_path = Path(record["file_path"])
+        if not pdf_path.exists():
+            return RecentFileResolution(
+                ok=False,
+                error_title="Arquivo ausente",
+                error_message=f"O PDF não foi encontrado em:\n{pdf_path}",
+            )
+        return RecentFileResolution(
+            ok=True,
+            pdf_path=pdf_path,
+            client_project=record.get("client_project", "Projeto"),
+            evaluated_component=record.get(
+                "evaluated_component", record.get("file_name", "Componente")
+            ),
+        )

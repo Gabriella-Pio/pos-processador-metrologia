@@ -4,26 +4,23 @@ ViewModel do Workspace de edição — ponte entre a UI e o core (parser/exporta
 from __future__ import annotations
 
 import logging
-import traceback
-from datetime import datetime
+from collections.abc import Callable
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
-from src.core.application.session import load_workspace_session, save_workspace_session
-from src.core.application.export_report import validate_export
+from src.ui.features.workspace.document_commit import (
+    commit_document_change,
+    emit_dirty_state,
+    persist_session,
+    refresh_export_validation,
+)
 from src.core.application.document_editing import (
-    build_effective_document_dto,
     extract_global_field_values,
     get_measurement_rows,
-    sync_measured_by,
-    sync_operador,
 )
-from src.core.application.template_layout import (
-    document_has_data_changes,
-    document_has_layout_changes,
-)
-from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
+from src.core.application.template_layout import document_has_data_changes
+from src.core.domain.project_session import ProjectSession
 from src.core.domain.ports import (
     Annotation,
     RecentFilesRepository,
@@ -31,17 +28,22 @@ from src.core.domain.ports import (
     ReportExporter,
     ReportImage,
     ReportParser,
-    TechnicalControlInfo,
     TemplateRepository,
-    VersionEntry,
     VersionHistoryRepository,
     WorkspaceSessionPort,
 )
-from src.core.infrastructure.workspace_session_repository import SQLiteWorkspaceSessionRepository
+from src.ui.features.workspace.commands.export_commands import ExportCommands
+from src.ui.features.workspace.commands.media_commands import MediaCommands
+from src.ui.features.workspace.commands.parsed_field_commands import ParsedFieldCommands
+from src.ui.features.workspace.commands.project_commands import ProjectCommands
+from src.ui.features.workspace.commands.section_edit_commands import SectionEditCommands
+from src.ui.features.workspace.commands.template_commands import TemplateCommands
+from src.ui.features.workspace.commands.version_commands import VersionCommands
 from src.ui.features.workspace.presenters.section_summary_presenter import SectionSummaryPresenter
 from src.ui.features.workspace.services.document_session_service import DocumentSessionService
 from src.ui.features.workspace.services.preview_service import PreviewService
 from src.ui.features.workspace.services.template_workspace_service import TemplateWorkspaceService
+from src.ui.features.workspace.undo_stack import DocumentUndoStack
 from src.ui.controllers.app_state import AppState
 from src.ui.shared.report_editor.preview_worker import DebouncedPreviewRunner
 
@@ -83,7 +85,7 @@ class WorkspaceViewModel(QObject):
         self._recent_files_repo = recent_files_repo
         self._version_history_repo = version_history_repo
         self._template_repo = template_repo
-        self._session_repo = session_repo or SQLiteWorkspaceSessionRepository()
+        self._session_repo = session_repo
         self._doc_service = DocumentSessionService(parser, template_repo, version_history_repo)
         self._template_service = TemplateWorkspaceService(template_repo, exporter)
         self._presenter = SectionSummaryPresenter(exporter)
@@ -93,92 +95,76 @@ class WorkspaceViewModel(QObject):
         self._preview_runner.generating.connect(self.preview_generating.emit)
         self._preview_runner.finished.connect(self._on_preview_finished)
         self._preview_runner.failed.connect(self._on_preview_failed)
-        self._undo_stack: list[tuple[str, dict]] = []
+        self._undo_stack = DocumentUndoStack()
+        self._export_commands = ExportCommands(exporter, recent_files_repo)
 
         self._session_timer = QTimer(self)
         self._session_timer.setSingleShot(True)
         self._session_timer.setInterval(_SESSION_SAVE_DEBOUNCE_MS)
-        self._session_timer.timeout.connect(self._persist_session)
+        self._session_timer.timeout.connect(lambda: persist_session(self))
 
     # ------------------------------------------------------------------ commit
 
-    def _commit_document_change(
-        self,
-        *,
-        preview: bool = True,
-        summary: bool = True,
-        layout_dirty: bool = False,
-        data_dirty_flag: bool = False,
-        globals_refresh: bool = False,
-        persist: bool = True,
-    ) -> None:
-        if globals_refresh:
-            self.refresh_global_fields()
-        if summary:
-            self.refresh_sections_summary()
-        if preview:
-            self.schedule_preview()
-        if layout_dirty or data_dirty_flag:
-            self._emit_dirty_state()
-        if persist:
-            self._schedule_session_save()
-        self._refresh_export_validation()
+    def _commit_document_change(self, **kwargs: bool | object) -> None:
+        commit_document_change(self, **kwargs)
 
     def _emit_dirty_state(self) -> None:
-        layout = self.is_layout_dirty()
-        data = self.is_data_dirty()
-        self.layout_dirty_changed.emit(layout)
-        self.data_dirty_changed.emit(data)
-        self.template_dirty_changed.emit(layout)
+        emit_dirty_state(self)
 
     def _schedule_session_save(self) -> None:
         self._session_timer.start()
 
     def _persist_session(self) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        try:
-            save_workspace_session(self._session_repo, document)
-        except Exception:
-            logger.exception("Falha ao persistir sessão do workspace")
+        persist_session(self)
 
     def _refresh_export_validation(self) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        issues = validate_export(document)
-        self.export_validation_ready.emit([
-            {"level": i.level, "message": i.message} for i in issues
-        ])
+        refresh_export_validation(self)
 
     def _active_document(self) -> ReportDocument | None:
         return self._app_state.active_document
+
+    def _mutate_document(
+        self,
+        mutate: Callable[[ReportDocument], None],
+        **commit: bool | object,
+    ) -> bool:
+        document = self._active_document()
+        if document is None:
+            return False
+        mutate(document)
+        self._commit_document_change(**commit)
+        return True
+
+    def _mutate_layout(self, mutate: Callable[[ReportDocument], None]) -> bool:
+        return self._mutate_document(
+            mutate, preview=True, summary=True, layout_dirty=True
+        )
+
+    def _mutate_data(
+        self,
+        mutate: Callable[[ReportDocument], None],
+        *,
+        globals_refresh: bool = False,
+        summary: bool = True,
+    ) -> bool:
+        return self._mutate_document(
+            mutate,
+            preview=True,
+            summary=summary,
+            data_dirty_flag=True,
+            globals_refresh=globals_refresh,
+        )
 
     def push_undo_snapshot(self, label: str) -> None:
         document = self._active_document()
         if document is None:
             return
-        snapshot = {
-            "section_overrides": {
-                k: dict(v) if isinstance(v, dict) else v
-                for k, v in document.section_overrides.items()
-            },
-            "parsed_overrides": dict(document.parsed_overrides),
-            "section_order": list(document.section_order) if document.section_order else None,
-        }
-        self._undo_stack.append((label, snapshot))
-        if len(self._undo_stack) > 1:
-            self._undo_stack = self._undo_stack[-1:]
+        self._undo_stack.push(document, label)
 
     def undo_last_change(self) -> bool:
         document = self._active_document()
-        if document is None or not self._undo_stack:
+        if document is None or not self._undo_stack.undo(document):
             return False
-        _, snapshot = self._undo_stack.pop()
-        document.section_overrides = snapshot["section_overrides"]
-        document.parsed_overrides = snapshot["parsed_overrides"]
-        document.section_order = snapshot["section_order"]
         self._commit_document_change(
             preview=True, summary=True, layout_dirty=True, data_dirty_flag=True, globals_refresh=True
         )
@@ -232,14 +218,7 @@ class WorkspaceViewModel(QObject):
         session = self._app_state.project_session
         if session is None or not paths:
             return
-        start_index = len(session.documents)
-        for pdf_path in paths:
-            session.documents.append(
-                ProjectDocumentSlot(
-                    source_pdf_path=pdf_path,
-                    evaluated_component=default_component,
-                )
-            )
+        start_index = ProjectCommands.append_document_slots(session, paths, default_component)
         for index in range(start_index, len(session.documents)):
             if not self._parse_slot(session, index):
                 return
@@ -249,12 +228,11 @@ class WorkspaceViewModel(QObject):
         session = self._app_state.project_session
         if session is None:
             return
-        session.set_active_index(index)
-        document = session.active_document
+        document = ProjectCommands.activate_document(
+            session, index, self._doc_service, self._session_repo
+        )
         if document is None:
             return
-        self._doc_service.load_versions_for_document(document)
-        load_workspace_session(self._session_repo, document)
         self._app_state.set_active_document(document)
         self.document_loaded.emit(document)
         self._commit_document_change(
@@ -273,16 +251,9 @@ class WorkspaceViewModel(QObject):
         document = self._active_document()
         if session is None or document is None or self._template_repo is None:
             return
-        slot = session.active_slot
-        if session.report_mode == "mixed" and slot is not None:
-            slot.template_id = template_id
-            self._template_service.apply_template_change(document, template_id)
-        else:
-            session.template_id = template_id
-            for project_slot in session.documents:
-                if project_slot.document is not None:
-                    project_slot.template_id = template_id
-                    self._template_service.apply_template_change(project_slot.document, template_id)
+        TemplateCommands.apply_template_change(
+            session, document, template_id, self._template_service
+        )
         self._commit_document_change(
             preview=True, summary=True, layout_dirty=True, data_dirty_flag=False, globals_refresh=True
         )
@@ -292,57 +263,42 @@ class WorkspaceViewModel(QObject):
         session = self._app_state.project_session
         if document is None or session is None or not name.strip():
             return None
-        template_id = self._template_service.save_as_template(document, name, create_new)
+        template_id = TemplateCommands.save_and_link_template(
+            session, document, name, create_new, self._template_service
+        )
         if template_id is None:
             return None
-        session.template_id = template_id
-        for slot in session.documents:
-            if slot.document is not None:
-                slot.document.template_id = template_id
         self._emit_templates_list()
         self._emit_dirty_state()
         return template_id
 
     def reorder_sections(self, ordered_ids: list[str]) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        self.push_undo_snapshot("reorder")
-        document.section_order = list(ordered_ids)
-        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+        def mutate(document: ReportDocument) -> None:
+            self.push_undo_snapshot("reorder")
+            document.section_order = list(ordered_ids)
+
+        self._mutate_layout(mutate)
 
     def load_from_recent(self, file_id: str) -> None:
-        if self._recent_files_repo is None:
+        resolution = ProjectCommands.resolve_recent_file(self._recent_files_repo, file_id)
+        if not resolution.ok:
             self.error_occurred.emit(
-                "Histórico indisponível",
-                "O repositório de arquivos recentes não está configurado.",
+                resolution.error_title,
+                resolution.error_message,
                 "",
             )
             return
-        record = self._recent_files_repo.get_by_id(file_id)
-        if record is None:
-            self.error_occurred.emit(
-                "Arquivo não encontrado",
-                "Este registro não existe mais no histórico local.",
-                "",
-            )
-            return
-        pdf_path = Path(record["file_path"])
-        if not pdf_path.exists():
-            self.error_occurred.emit(
-                "Arquivo ausente",
-                f"O PDF não foi encontrado em:\n{pdf_path}",
-                "",
-            )
-            return
+        assert resolution.pdf_path is not None
         self.load_from_pdf(
-            pdf_path,
-            record.get("client_project", "Projeto"),
-            record.get("evaluated_component", record.get("file_name", "Componente")),
+            resolution.pdf_path,
+            resolution.client_project,
+            resolution.evaluated_component,
         )
 
     def _parse_slot(self, session: ProjectSession, index: int) -> bool:
-        ok, details = self._doc_service.parse_slot(session, index)
+        ok, details = ProjectCommands.parse_slot(
+            self._doc_service, self._session_repo, session, index
+        )
         if not ok:
             self.error_occurred.emit(
                 "Não foi possível ler o PDF",
@@ -350,9 +306,6 @@ class WorkspaceViewModel(QObject):
                 details,
             )
             return False
-        slot_doc = session.documents[index].document
-        if slot_doc is not None:
-            load_workspace_session(self._session_repo, slot_doc)
         return True
 
     # ------------------------------------------------------------------ fields
@@ -371,51 +324,24 @@ class WorkspaceViewModel(QObject):
         return get_measurement_rows(document)
 
     def update_parsed_field(self, key: str, value: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        if key in ("client_project", "evaluated_component"):
-            if key == "client_project":
-                document.client_project = value
-            else:
-                document.evaluated_component = value
-        elif key == "operador":
-            sync_operador(document, value)
-        else:
-            document.parsed_overrides.setdefault("scalar", {})[key] = value
-        self._commit_document_change(
-            preview=True, summary=True, data_dirty_flag=True, globals_refresh=True
+        self._mutate_data(
+            lambda doc: ParsedFieldCommands.update_parsed_field(doc, key, value),
+            globals_refresh=True,
         )
 
     def restore_parsed_field(self, key: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        if key in ("client_project", "evaluated_component"):
-            raw = document.raw_parsed_data
-            if key == "client_project":
-                document.client_project = getattr(raw, "cliente_projeto", "Projeto")
-            else:
-                document.evaluated_component = getattr(raw, "componente", "Componente")
-        else:
-            document.parsed_overrides.get("scalar", {}).pop(key, None)
-        self._commit_document_change(
-            preview=True, summary=True, data_dirty_flag=True, globals_refresh=True
+        self._mutate_data(
+            lambda doc: ParsedFieldCommands.restore_parsed_field(doc, key),
+            globals_refresh=True,
         )
 
     def update_itens_medicao(self, rows: list[dict[str, str]]) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        document.parsed_overrides["itens_medicao"] = rows
-        self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
+        self._mutate_data(
+            lambda doc: ParsedFieldCommands.update_itens_medicao(doc, rows),
+        )
 
     def restore_itens_medicao(self) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        document.parsed_overrides.pop("itens_medicao", None)
-        self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
+        self._mutate_data(ParsedFieldCommands.restore_itens_medicao)
 
     def refresh_sections_summary(self) -> None:
         document = self._active_document()
@@ -428,118 +354,51 @@ class WorkspaceViewModel(QObject):
             logger.exception("Falha ao montar o sumário de seções")
 
     def update_section_field(self, section_id: str, field: str, value: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        control_fields = {
-            "measured_by", "reviewed_by", "approved_by", "role", "institutional_email"
-        }
-        if section_id == "controle_tecnico" and field in control_fields:
-            if document.control_info is None:
-                document.control_info = TechnicalControlInfo(measured_by="", reviewed_by="")
-            setattr(document.control_info, field, value)
-            if field == "measured_by":
-                sync_measured_by(document, value)
-        else:
-            document.section_overrides.setdefault(section_id, {})[field] = value
-        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+        self._mutate_layout(
+            lambda doc: SectionEditCommands.update_section_field(doc, section_id, field, value)
+        )
 
     def restore_section_block(self, section_id: str, title_key: str, body_key: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        section_ov = document.section_overrides.get(section_id, {})
-        section_ov.pop(title_key, None)
-        if body_key:
-            section_ov.pop(body_key, None)
-        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+        self._mutate_layout(
+            lambda doc: SectionEditCommands.restore_section_block(doc, section_id, title_key, body_key)
+        )
 
     def restore_section(self, section_id: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        document.section_overrides.pop(section_id, None)
-        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+        self._mutate_layout(
+            lambda doc: SectionEditCommands.restore_section(doc, section_id)
+        )
 
     def restore_section_field(self, section_id: str, field: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        from src.core.domain.report_field_registry import INTRODUCAO_BODY_TITLE_KEYS
-
-        section_ov = document.section_overrides.get(section_id, {})
-        section_ov.pop(field, None)
-        # Restaurar bloco inteiro: texto + título (Objetivo / Escopo / …)
-        title_key = INTRODUCAO_BODY_TITLE_KEYS.get(field)
-        if title_key:
-            section_ov.pop(title_key, None)
-        else:
-            for body_key, paired_title in INTRODUCAO_BODY_TITLE_KEYS.items():
-                if field == paired_title:
-                    section_ov.pop(body_key, None)
-                    break
-        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+        self._mutate_layout(
+            lambda doc: SectionEditCommands.restore_section_field(doc, section_id, field)
+        )
 
     def update_section_table_rows(self, section_id: str, rows: list[dict[str, str]]) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        document.section_overrides.setdefault(section_id, {})["table_rows"] = rows
-        if section_id == "controle_tecnico":
-            self._sync_control_info_from_table_rows(document, rows)
-        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+        self._mutate_layout(
+            lambda doc: SectionEditCommands.update_section_table_rows(doc, section_id, rows)
+        )
 
     def restore_section_table_rows(self, section_id: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        document.section_overrides.get(section_id, {}).pop("table_rows", None)
-        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
-
-    def _sync_control_info_from_table_rows(self, document, rows: list[dict[str, str]]) -> None:
-        from src.core.domain.table_row_registry import control_info_updates_from_rows
-
-        updates = control_info_updates_from_rows(rows)
-        if not updates:
-            return
-        if document.control_info is None:
-            document.control_info = TechnicalControlInfo(
-                measured_by=updates.get("measured_by", ""),
-                reviewed_by=updates.get("reviewed_by", ""),
-            )
-        for field, value in updates.items():
-            setattr(document.control_info, field, value)
-        if "measured_by" in updates:
-            sync_measured_by(document, updates["measured_by"])
+        self._mutate_layout(
+            lambda doc: SectionEditCommands.restore_section_table_rows(doc, section_id)
+        )
 
     def delete_section(self, section_id: str) -> bool:
         document = self._active_document()
         if document is None:
             return False
-        is_custom = section_id.startswith("custom_") or any(
-            s.get("id") == section_id for s in document.custom_sections
-        )
-        if not is_custom:
+        if not SectionEditCommands.delete_section(document, section_id):
             return False
-        document.custom_sections = [
-            s for s in document.custom_sections if s.get("id") != section_id
-        ]
-        if section_id not in document.deleted_section_ids:
-            document.deleted_section_ids.append(section_id)
-        document.section_overrides.pop(section_id, None)
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
         return True
 
     def add_custom_section(self, title: str) -> str | None:
         document = self._active_document()
-        if document is None or not title.strip():
+        if document is None:
             return None
-        next_index = len(document.custom_sections) + 1
-        section_id = f"custom_{next_index}"
-        while any(s.get("id") == section_id for s in document.custom_sections):
-            next_index += 1
-            section_id = f"custom_{next_index}"
-        document.custom_sections.append({"id": section_id, "title": title.strip(), "custom": True})
+        section_id = SectionEditCommands.add_custom_section(document, title)
+        if section_id is None:
+            return None
         self._commit_document_change(preview=True, summary=True, layout_dirty=True, persist=False)
         return section_id
 
@@ -577,46 +436,23 @@ class WorkspaceViewModel(QObject):
     # ------------------------------------------------------------------ media
 
     def add_image_to_section(self, image_path: Path, section_id: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        document.images.append(ReportImage(image_path=image_path, section_id=section_id))
-        self._app_state.notify_images_changed()
-        self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
+        if self._mutate_data(
+            lambda doc: MediaCommands.add_image(doc, image_path, section_id),
+        ):
+            self._app_state.notify_images_changed()
 
     def remove_image(self, image: ReportImage) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        document.images = [
-            img for img in document.images
-            if not (
-                img.section_id == image.section_id
-                and str(img.image_path) == str(image.image_path)
-            )
-        ]
-        self._app_state.notify_images_changed()
-        self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
+        if self._mutate_data(lambda doc: MediaCommands.remove_image(doc, image)):
+            self._app_state.notify_images_changed()
 
     def update_image_caption(self, image: ReportImage, caption: str) -> None:
-        document = self._active_document()
-        if document is None:
-            return
-        for img in document.images:
-            if (
-                img.section_id == image.section_id
-                and str(img.image_path) == str(image.image_path)
-            ):
-                img.caption = caption
-                break
-        # Não dispara images_changed: reconstrói a lista e reseta o cursor da legenda.
-        # Preview/PDF ainda atualiza via schedule_preview.
-        self._commit_document_change(
-            preview=True, summary=False, data_dirty_flag=True,
+        self._mutate_data(
+            lambda doc: MediaCommands.update_image_caption(doc, image, caption),
+            summary=False,
         )
 
     def add_annotation(self, image: ReportImage, annotation: Annotation) -> None:
-        image.annotations.append(annotation)
+        MediaCommands.add_annotation(image, annotation)
         self._app_state.notify_images_changed()
         self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
 
@@ -624,14 +460,7 @@ class WorkspaceViewModel(QObject):
         document = self._active_document()
         if document is None:
             return
-        existing = document.version_history
-        next_number = max((entry.version_number for entry in existing), default=0) + 1
-        entry = VersionEntry(
-            version_number=next_number,
-            timestamp=datetime.now(),
-            responsible_name=responsible_name,
-            description=description,
-        )
+        entry = VersionCommands.create_entry(document, responsible_name, description)
         if self._version_history_repo is not None:
             self._version_history_repo.append(
                 str(document.source_pdf_path),
@@ -642,61 +471,21 @@ class WorkspaceViewModel(QObject):
         self._app_state.register_version(entry)
 
     def export_document(self, output_path: Path) -> None:
-        document = self._active_document()
-        if document is None:
+        outcome = self._export_commands.export_document(self._active_document(), output_path)
+        if not outcome.success:
             self.error_occurred.emit(
-                "Nenhum documento aberto",
-                "Importe um relatório antes de exportar.",
-                "",
+                outcome.error_title,
+                outcome.error_message,
+                outcome.error_details,
             )
             return
-        issues = validate_export(document)
-        errors = [i for i in issues if i.level == "error"]
-        if errors:
-            self.error_occurred.emit(
-                "Exportação bloqueada",
-                errors[0].message,
-                "",
-            )
-            return
-        try:
-            final_path = self._exporter.export(document, output_path)
-        except Exception:
-            logger.exception("Falha ao exportar o PDF para: %s", output_path)
-            if output_path.exists():
-                try:
-                    output_path.unlink()
-                except OSError:
-                    pass
-            self.error_occurred.emit(
-                "Falha ao exportar o PDF",
-                "Ocorreu um erro ao gerar o documento final.",
-                traceback.format_exc(),
-            )
-            return
-
-        if self._recent_files_repo is not None:
-            try:
-                self._recent_files_repo.save(document, str(final_path))
-            except Exception:
-                logger.exception("Falha ao registrar %s no histórico", final_path)
-
-        self.export_finished.emit(final_path)
+        assert outcome.path is not None
+        self.export_finished.emit(outcome.path)
 
     def export_all_documents(self, output_dir: Path) -> list[Path]:
-        session = self._app_state.project_session
-        if session is None or not session.documents:
-            return []
-        output_dir.mkdir(parents=True, exist_ok=True)
-        exported: list[Path] = []
-        original_index = session.active_index
-        for index, slot in enumerate(session.documents):
-            if slot.document is None:
-                continue
-            self.switch_document(index)
-            safe_name = slot.evaluated_component.replace(" ", "_")[:40]
-            out_path = output_dir / f"{safe_name}_{index + 1}.pdf"
-            self.export_document(out_path)
-            exported.append(out_path)
-        self.switch_document(original_index)
-        return exported
+        return self._export_commands.export_all_documents(
+            self._app_state.project_session,
+            output_dir,
+            switch_document=self.switch_document,
+            export_document=self.export_document,
+        )

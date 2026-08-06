@@ -15,6 +15,7 @@ from src.core.domain.ports import (
     ReportParser,
     TemplateRepository,
     VersionHistoryRepository,
+    WorkspaceSessionPort,
 )
 from src.ui.accessibility import AppearanceManager
 from src.ui.components.feedback import confirm_action, show_friendly_error
@@ -41,6 +42,7 @@ class MainWindow(QMainWindow):
         recent_files_repo: RecentFilesRepository,
         template_repo: TemplateRepository,
         version_history_repo: VersionHistoryRepository | None = None,
+        workspace_session_repo: WorkspaceSessionPort | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Pós-processamento de Relatórios de Metrologia — SENAI × ZEISS")
@@ -59,6 +61,7 @@ class MainWindow(QMainWindow):
             recent_files_repo,
             version_history_repo,
             template_repo,
+            workspace_session_repo,
         )
         self._template_editor_vm = TemplateEditorViewModel(template_repo, report_exporter)
         self._nav_controller = NavigationController()

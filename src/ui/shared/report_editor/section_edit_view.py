@@ -5,7 +5,6 @@ from pathlib import Path
 
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -18,13 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.core.domain.report_field_registry import (
-    INTRODUCAO_BODY_TITLE_KEYS,
-    SectionFieldDef,
-    effective_media_kinds,
-    get_edit_fields,
-    get_media_blocks,
-)
+from src.core.domain.report_field_registry import get_edit_fields, get_media_blocks
 from src.core.application.interpretacao_edit import interpretacao_field_defs
 from src.core.domain.ports import ReportImage
 from src.core.domain.table_row_registry import (
@@ -33,91 +26,18 @@ from src.core.domain.table_row_registry import (
     TABLE_SECTIONS,
 )
 from src.ui.components.buttons import IconButton, SecondaryButton
-from src.ui.components.icons import icon_chart, icon_close, icon_edit, icon_help, icon_image, icon_table
+from src.ui.components.icons import icon_close, icon_help
 from src.ui.components.panels import AnnotationToolbar, ImageManagerPanel
 from src.ui.components.placeholder_field import PlaceholderTextEdit
 from src.ui.shared.report_editor.sidebar_chrome import editor_panel_header
 from src.ui.styles import SPACING, caption_style, sidebar_panel_style
 from src.ui.shared.report_editor.draggable_table_rows_editor import DraggableTableRowsEditor
+from src.ui.shared.report_editor.section_form_builder import SectionFormBuilder
+from src.ui.shared.report_editor.section_tabs_builder import SectionTabPages, SectionTabsBuilder
+from src.ui.shared.report_editor.template_layout_panel import TemplateLayoutPanel
 from src.ui.features.workspace.components.edit_help import build_help_text
 from src.ui.features.workspace.components.medicoes_table_editor import MedicoesTableEditor
-from src.ui.features.workspace.components.section_field_schema import (
-    default_field_values,
-)
-
-
-class _TemplateLayoutPanel(QFrame):
-    """Configuração de layout — fotos, gráficos e tabelas no template."""
-
-    kinds_changed = pyqtSignal(list)
-
-    _OPTIONS = (
-        ("photos", "Fotografias", "Reserva espaço para imagens nesta seção do PDF."),
-        ("graphics", "Gráficos", "Reserva espaço para gráficos analíticos."),
-        ("tables", "Tabela", "Inclui bloco de tabela nesta seção."),
-    )
-
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self._checkboxes: dict[str, QCheckBox] = {}
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
-        layout.setSpacing(SPACING.sm)
-
-        hint = QLabel(
-            "Marque os blocos que esta seção deve reservar no relatório. "
-            "No workspace, o usuário preenche fotos, gráficos e dados reais."
-        )
-        hint.setWordWrap(True)
-        hint.setObjectName("SidebarHint")
-        hint.setStyleSheet(caption_style())
-        layout.addWidget(hint)
-
-        for kind, label, tooltip in self._OPTIONS:
-            card = QFrame()
-            card.setObjectName("GlobalFieldCard")
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, SPACING.sm)
-            card_layout.setSpacing(SPACING.xs)
-            cb = QCheckBox(label)
-            cb.setToolTip(tooltip)
-            cb.stateChanged.connect(self._emit_kinds)
-            card_layout.addWidget(cb)
-            self._checkboxes[kind] = cb
-            layout.addWidget(card)
-
-        self._tables_host = QWidget()
-        self._tables_host_layout = QVBoxLayout(self._tables_host)
-        self._tables_host_layout.setContentsMargins(0, 0, 0, 0)
-        self._tables_host_layout.setSpacing(SPACING.sm)
-        self._tables_host.setVisible(False)
-        layout.addWidget(self._tables_host)
-        layout.addStretch(1)
-
-    def set_table_widget(self, widget: QWidget | None) -> None:
-        while self._tables_host_layout.count():
-            item = self._tables_host_layout.takeAt(0)
-            child = item.widget()
-            if child is not None:
-                child.setParent(None)
-        if widget is not None:
-            self._tables_host_layout.addWidget(widget)
-            self._tables_host.setVisible(True)
-        else:
-            self._tables_host.setVisible(False)
-
-    def set_kinds(self, kinds: list[str]) -> None:
-        active = set(kinds)
-        for kind, cb in self._checkboxes.items():
-            cb.blockSignals(True)
-            cb.setChecked(kind in active)
-            cb.blockSignals(False)
-
-    def current_kinds(self) -> list[str]:
-        return [kind for kind, cb in self._checkboxes.items() if cb.isChecked()]
-
-    def _emit_kinds(self, *_args) -> None:
-        self.kinds_changed.emit(self.current_kinds())
+from src.ui.features.workspace.components.section_field_schema import default_field_values
 
 
 class SectionEditView(QFrame):
@@ -185,6 +105,14 @@ class SectionEditView(QFrame):
         self._fields_layout = QVBoxLayout(self._fields_host)
         self._fields_layout.setContentsMargins(0, 0, 0, 0)
         self._fields_layout.setSpacing(SPACING.sm)
+        self._form_builder = SectionFormBuilder(
+            self._fields_host,
+            self._fields_layout,
+            defaults_mode=False,
+            on_field_changed=self._on_field_changed,
+            on_line_finished=self._on_line_finished,
+            on_field_restore=lambda sid, key: self.section_field_restore_requested.emit(sid, key),
+        )
 
         self._medicoes_editor = MedicoesTableEditor()
         self._medicoes_editor.rows_changed.connect(self.itens_medicao_changed.emit)
@@ -230,8 +158,9 @@ class SectionEditView(QFrame):
         self._tables_layout.setSpacing(SPACING.sm)
         self._tables_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        self._layout_panel = _TemplateLayoutPanel()
+        self._layout_panel = TemplateLayoutPanel()
         self._layout_panel.kinds_changed.connect(self._on_template_media_kinds_changed)
+        self._tabs_builder = SectionTabsBuilder()
 
         self._delete_btn = SecondaryButton("Excluir seção")
         self._delete_btn.clicked.connect(self._on_delete)
@@ -266,6 +195,7 @@ class SectionEditView(QFrame):
 
     def set_defaults_mode(self, enabled: bool) -> None:
         self._defaults_mode = enabled
+        self._form_builder.set_defaults_mode(enabled)
         self._delete_btn.setVisible(not enabled)
         self._restore_section_btn.setVisible(not enabled)
         self._close_btn.setToolTip("Fechar edição" if not enabled else "Voltar ao sumário")
@@ -406,155 +336,26 @@ class SectionEditView(QFrame):
         self._table_rows_editor.set_rows(rows)
 
     def _rebuild_fields(self, section_id: str, overrides: dict, is_custom: bool) -> None:
-        while self._fields_layout.count():
-            item = self._fields_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-        self._field_widgets.clear()
-
-        if section_id == "interpretacao":
-            fields = list(interpretacao_field_defs(overrides))
-        else:
-            fields = list(get_edit_fields(section_id, defaults_mode=self._defaults_mode))
-            if not self._defaults_mode:
-                fields = [f for f in fields if f.editable]
-        if not fields:
-            self._fields_host.setVisible(False)
-            return
-        self._fields_host.setVisible(True)
-
-        prose_header = QLabel("Blocos de texto")
-        prose_header.setObjectName("GlobalFieldLabel")
-        self._fields_layout.addWidget(prose_header)
-        if section_id == "introducao":
-            prose_hint = QLabel(
-                "O título (ex.: OBJETIVO) e o texto de cada bloco aparecem no preview/PDF."
-            )
-            prose_hint.setWordWrap(True)
-            prose_hint.setObjectName("SidebarHint")
-            prose_hint.setStyleSheet(caption_style())
-            self._fields_layout.addWidget(prose_hint)
-
-        defaults = default_field_values(section_id)
-        for field_def in fields:
-            card = QFrame()
-            card.setObjectName("GlobalFieldCard")
-            row_layout = QVBoxLayout(card)
-            row_layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, SPACING.sm)
-            row_layout.setSpacing(SPACING.xs)
-
-            title_key = INTRODUCAO_BODY_TITLE_KEYS.get(field_def.key) if section_id == "introducao" else None
-
-            header = QHBoxLayout()
-            if title_key is None:
-                label = QLabel(field_def.label)
-                label.setObjectName("GlobalFieldLabel")
-                header.addWidget(label, stretch=1)
-            else:
-                title_caption = QLabel("Título no PDF")
-                title_caption.setObjectName("GlobalFieldLabel")
-                header.addWidget(title_caption, stretch=1)
-            if not self._defaults_mode:
-                restore = QLabel('<a href="restore">Restaurar</a>')
-                restore.setObjectName("FieldRestoreLink")
-                restore.setTextFormat(Qt.TextFormat.RichText)
-                restore.setOpenExternalLinks(False)
-                fkey = field_def.key
-                restore.linkActivated.connect(
-                    lambda _href, sid=section_id, k=fkey: self.section_field_restore_requested.emit(sid, k)
-                )
-                header.addWidget(restore, alignment=Qt.AlignmentFlag.AlignRight)
-            row_layout.addLayout(header)
-
-            if title_key is not None:
-                title_default = INTRODUCAO_BLOCK_TITLES.get(title_key, field_def.label.upper())
-                title_edit = PlaceholderTextEdit(multiline=False)
-                title_edit.set_text(str(overrides.get(title_key, title_default)))
-                title_edit.text_changed.connect(
-                    lambda text, k=title_key: self._on_field_changed(k, text)
-                )
-                row_layout.addWidget(title_edit)
-                self._field_widgets[title_key] = title_edit
-                body_caption = QLabel("Texto")
-                body_caption.setObjectName("GlobalFieldLabel")
-                row_layout.addWidget(body_caption)
-
-            value = overrides.get(field_def.key, defaults.get(field_def.key, ""))
-            if is_custom and field_def.field_type != "textarea":
-                widget: PlaceholderTextEdit | QLineEdit = QLineEdit()
-                widget.setObjectName("GlobalFieldInput")
-                widget.setMinimumHeight(36)
-                widget.setText(value)
-                widget.editingFinished.connect(
-                    lambda k=field_def.key, w=widget: self._on_line_finished(k, w)
-                )
-            else:
-                widget = PlaceholderTextEdit(multiline=field_def.field_type == "textarea")
-                widget.set_text(value)
-                widget.text_changed.connect(
-                    lambda text, k=field_def.key: self._on_field_changed(k, text)
-                )
-            row_layout.addWidget(widget)
-            self._fields_layout.addWidget(card)
-            self._field_widgets[field_def.key] = widget
+        self._field_widgets = self._form_builder.rebuild(section_id, overrides, is_custom)
 
     def _rebuild_editor_tabs(self, section_id: str) -> None:
-        while self._tabs.count():
-            self._tabs.removeTab(0)
-
-        self._tabs.addTab(self._content_scroll, "Conteúdo")
-        self._tabs.setTabIcon(0, icon_edit())
-
-        if self._defaults_mode:
-            self._layout_panel.set_kinds(
-                effective_media_kinds(section_id, self._section_overrides)
-            )
-            if section_id in TABLE_SECTIONS and "tables" in self._layout_panel.current_kinds():
-                self._layout_panel.set_table_widget(self._table_rows_editor)
-            else:
-                self._layout_panel.set_table_widget(None)
-            layout_index = self._tabs.addTab(self._layout_panel, "Layout")
-            self._tabs.setTabIcon(layout_index, icon_image())
-            self._tabs.tabBar().setVisible(True)
-            return
-
-        media_blocks = get_media_blocks(
-            section_id,
-            effective_media_kinds(section_id, self._section_overrides),
+        self._tabs_builder.rebuild(
+            self._tabs,
+            section_id=section_id,
+            section_overrides=self._section_overrides,
+            defaults_mode=self._defaults_mode,
+            pages=SectionTabPages(
+                content_scroll=self._content_scroll,
+                layout_panel=self._layout_panel,
+                photos_page=self._photos_page,
+                graphics_page=self._graphics_page,
+                tables_page=self._tables_page,
+                tables_layout=self._tables_layout,
+                table_rows_editor=self._table_rows_editor,
+                medicoes_editor=self._medicoes_editor,
+                annotation_toolbar=self._annotation_toolbar,
+            ),
         )
-        tab_defs: list[tuple[str, str, QWidget]] = []
-        for media in media_blocks:
-            if media.kind == "photos":
-                tab_defs.append(("photos", "Fotografias", self._photos_page))
-            elif media.kind == "graphics":
-                tab_defs.append(("graphics", "Gráficos", self._graphics_page))
-            elif media.kind == "tables":
-                while self._tables_layout.count():
-                    item = self._tables_layout.takeAt(0)
-                    widget = item.widget()
-                    if widget is not None:
-                        widget.setParent(None)
-                if section_id in TABLE_SECTIONS:
-                    self._tables_layout.addWidget(self._table_rows_editor, 0)
-                else:
-                    self._tables_layout.addWidget(self._medicoes_editor, 0)
-                self._tables_layout.addStretch(1)
-                tab_defs.append(("tables", "Tabela", self._tables_page))
-
-        icons = {"photos": icon_image, "graphics": icon_chart, "tables": icon_table}
-        labels = {"photos": "Fotografias", "graphics": "Gráficos", "tables": "Tabela"}
-        seen: set[str] = set()
-        for kind, _label, page in tab_defs:
-            if kind in seen:
-                continue
-            seen.add(kind)
-            index = self._tabs.addTab(page, labels.get(kind, kind))
-            self._tabs.setTabIcon(index, icons[kind]())
-
-        has_photos = any(b.kind == "photos" for b in media_blocks)
-        self._annotation_toolbar.setVisible(has_photos)
-        self._tabs.tabBar().setVisible(self._tabs.count() > 1)
 
     def _current_overrides(self) -> dict:
         if self._section_id is None:
