@@ -43,7 +43,27 @@ def resolve_template_blocks(
             if not config_salva
             else sections_config_to_blocks(config_salva)
         )
-    return apply_section_order(blocos, document)
+    ordered = apply_section_order(blocos, document)
+    return ordered
+
+
+def resolve_active_template_blocks(
+    document: ReportDocument,
+    template_repository: JSONTemplateRepository | None = None,
+) -> list[dict]:
+    """Blocos que entram no PDF — omite seções desativadas no workspace."""
+    return apply_deleted_sections(
+        resolve_template_blocks(document, template_repository),
+        document,
+    )
+
+
+def apply_deleted_sections(blocos: list[dict], document: ReportDocument) -> list[dict]:
+    """Remove seções desativadas no workspace (``deleted_section_ids``)."""
+    deleted = set(document.deleted_section_ids)
+    if not deleted:
+        return blocos
+    return [b for b in blocos if b["tipo"] not in deleted]
 
 
 def apply_section_order(blocos: list[dict], document: ReportDocument) -> list[dict]:

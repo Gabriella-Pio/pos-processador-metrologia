@@ -50,7 +50,7 @@ class SectionsListPanel(QFrame):
         self._hint = QLabel(
             "Marque as seções e clique para editar defaults"
             if self._mode == "template"
-            else "Clique para ir ao preview · duplo-clique para editar"
+            else "Marque para incluir no relatório · clique no preview · duplo-clique para editar"
         )
         self._hint.setObjectName("SidebarHint")
         self._hint.setWordWrap(True)
@@ -107,9 +107,10 @@ class SectionsListPanel(QFrame):
                 "marque e clique para editar defaults"
             )
         else:
+            enabled_count = sum(1 for s in sections if s.get("enabled", True))
             self._hint.setText(
-                f"{count} seção{'ões' if count != 1 else ''} · "
-                "clique para ir ao preview · duplo-clique para editar"
+                f"{enabled_count} de {count} seção{'ões' if count != 1 else ''} ativas · "
+                "marque para incluir no PDF · clique para preview · duplo-clique para editar"
             )
         self._rebuild_rows()
 
@@ -134,10 +135,11 @@ class SectionsListPanel(QFrame):
                 row.delete_requested.connect(self.section_delete_requested.emit)
             else:
                 photos = len(self._images_by_section.get(section_id, []))
-                row = SectionSummaryRow(section, photos)
+                row = SectionSummaryRow(section, photos, show_enable_toggle=True)
                 row.click_requested.connect(self._on_row_clicked)
                 row.edit_requested.connect(self._on_row_edit_requested)
                 row.delete_requested.connect(self.section_delete_requested.emit)
+                row.enabled_changed.connect(self.section_enabled_changed.emit)
             row.set_active(section_id == self._active_section_id)
             item = QListWidgetItem()
             item.setFlags(

@@ -22,6 +22,8 @@ class SectionSummaryItem:
     anchor_rect: dict | None = None
     global_fields: list[dict[str, str]] = field(default_factory=list)
     override_keys: list[str] = field(default_factory=list)
+    enabled: bool = True
+    protected: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -41,4 +43,6 @@ class SectionSummaryItem:
             "anchor_rect": self.anchor_rect,
             "global_fields": self.global_fields,
             "override_keys": self.override_keys,
+            "enabled": self.enabled,
+            "protected": self.protected,
         }

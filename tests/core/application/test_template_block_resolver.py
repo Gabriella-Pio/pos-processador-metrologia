@@ -6,6 +6,7 @@ from pathlib import Path
 from src.core.application.template_block_resolver import (
     apply_section_order,
     inject_custom_sections,
+    resolve_active_template_blocks,
     resolve_template_blocks,
 )
 from src.core.domain.ports import ReportDocument
@@ -116,6 +117,21 @@ def test_inject_custom_sections_skips_deleted() -> None:
     tipos = [b["tipo"] for b in result]
     assert "custom_a" not in tipos
     assert "custom_b" in tipos
+
+
+def test_resolve_active_template_blocks_skips_deleted_standard_sections() -> None:
+    doc = _doc(deleted_section_ids=["resultados", "grafica"])
+    tipos = [b["tipo"] for b in resolve_active_template_blocks(doc)]
+    assert "resultados" not in tipos
+    assert "grafica" not in tipos
+    assert "introducao" in tipos
+    assert "anexos" in tipos
+
+
+def test_resolve_template_blocks_keeps_deleted_for_summary() -> None:
+    doc = _doc(deleted_section_ids=["resultados"])
+    tipos = [b["tipo"] for b in resolve_template_blocks(doc)]
+    assert "resultados" in tipos
 
 
 def test_tomography_official_block_count_matches_constant() -> None:

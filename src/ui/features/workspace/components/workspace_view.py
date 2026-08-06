@@ -8,7 +8,6 @@ from pathlib import Path
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QCursor, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QFileDialog,
     QLabel,
     QPushButton,
@@ -31,6 +30,7 @@ from src.ui.features.workspace.dialogs.save_template_dialog import SaveTemplateD
 from src.ui.features.workspace.dialogs.version_register_dialog import VersionRegisterDialog
 from src.ui.styles import SPACING
 from src.ui.controllers.app_state import AppState
+from src.ui.features.workspace.commands.project_commands import ProjectCommands
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from src.ui.features.workspace.components.section_editor_panel import SectionEditorPanel
 from src.ui.features.workspace.components.workspace_export_flow import (
@@ -78,13 +78,6 @@ class WorkspaceView(QWidget):
         self._banner = InlineBanner("", level=FeedbackLevel.INFO)
         self._banner.sync_visibility()
 
-        self._export_individual_cb = QCheckBox("Exportar PDFs individuais")
-        self._export_individual_cb.setChecked(True)
-        self._export_merged_cb = QCheckBox("Exportar um único PDF")
-        self._export_merged_cb.setChecked(True)
-        self._export_merged_cb.setEnabled(False)
-        self._export_merged_cb.setToolTip("Em breve — mescla seções institucionais")
-
         self._build_ui()
         self._section_editor.bind_view_model(self._vm)
         self._connect_signals()
@@ -119,8 +112,6 @@ class WorkspaceView(QWidget):
             on_export_clicked=self._on_export_clicked,
             on_save_layout=self._on_save_template_clicked,
             on_change_layout=self._focus_template_combo,
-            export_individual_cb=self._export_individual_cb,
-            export_merged_cb=self._export_merged_cb,
         )
         self._save_layout_action = self._project_tabs_strip._save_layout_action
         self._export_individual_action = self._project_tabs_strip._export_individual_action
@@ -149,8 +140,6 @@ class WorkspaceView(QWidget):
             self._document_title_label,
             self._active_section_label,
             self._template_selector,
-            self._export_individual_cb,
-            self._export_merged_cb,
         )
         self._meta_sep_before_section = self._action_bar._meta_sep_before_section
         self._meta_sep_before_layout = self._action_bar._meta_sep_before_layout
@@ -320,11 +309,13 @@ class WorkspaceView(QWidget):
             f"{document.client_project} — {document.evaluated_component}"
         )
         session = self._app_state.project_session
-        if session and session.documents:
-            paths = [s.source_pdf_path for s in session.documents]
+        if session is not None:
+            paths = ProjectCommands.sync_attachment_paths(document, session)
         else:
-            paths = [document.source_pdf_path] if document.source_pdf_path else []
-        document.attachment_pdf_paths = list(paths)
+            paths = list(document.attachment_pdf_paths)
+            if not paths and document.source_pdf_path:
+                paths = [document.source_pdf_path]
+                document.attachment_pdf_paths = list(paths)
         self._section_editor.set_source_attachments(paths)
         self._section_editor.update_document_context(document)
         self._refresh_images()
@@ -483,8 +474,8 @@ class WorkspaceView(QWidget):
             self,
             self._vm,
             self._app_state,
-            export_individual_cb=self._export_individual_cb,
-            export_merged_cb=self._export_merged_cb,
+            export_individual=self._export_individual_action.isChecked(),
+            export_merged=self._export_merged_action.isChecked(),
         )
 
     def _on_export_finished(self, final_path: Path) -> None:

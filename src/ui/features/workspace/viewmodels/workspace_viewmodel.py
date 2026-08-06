@@ -205,6 +205,7 @@ class WorkspaceViewModel(QObject):
         for index in range(len(session.documents)):
             if not self._parse_slot(session, index):
                 return
+        ProjectCommands.ensure_project_attachment_paths(session)
         self.switch_document(0)
 
     def load_from_pdf(self, pdf_path: Path, client_project: str, evaluated_component: str) -> None:
@@ -222,6 +223,7 @@ class WorkspaceViewModel(QObject):
         for index in range(start_index, len(session.documents)):
             if not self._parse_slot(session, index):
                 return
+        ProjectCommands.ensure_project_attachment_paths(session)
         self.project_loaded.emit(session)
 
     def switch_document(self, index: int) -> None:
@@ -391,6 +393,13 @@ class WorkspaceViewModel(QObject):
             return False
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
         return True
+
+    def set_section_enabled(self, section_id: str, enabled: bool) -> None:
+        document = self._active_document()
+        if document is None:
+            return
+        SectionEditCommands.set_section_enabled(document, section_id, enabled)
+        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
 
     def add_custom_section(self, title: str) -> str | None:
         document = self._active_document()

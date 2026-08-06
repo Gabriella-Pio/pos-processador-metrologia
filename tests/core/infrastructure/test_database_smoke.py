@@ -57,6 +57,8 @@ def test_workspace_sessions_roundtrip(db_path: Path) -> None:
     repo = SQLiteWorkspaceSessionRepository(str(db_path))
     img_path = db_path.parent / "foto.jpg"
     img_path.write_bytes(b"fake")
+    original_a = Path("/tmp/zeiss_a.pdf")
+    original_b = Path("/tmp/zeiss_b.pdf")
     doc = ReportDocument(
         source_pdf_path=Path("/tmp/source.pdf"),
         client_project="Cliente",
@@ -66,6 +68,9 @@ def test_workspace_sessions_roundtrip(db_path: Path) -> None:
         parsed_overrides={"operador": "João"},
         section_order=["introducao", "conclusao"],
         images=[ReportImage(image_path=img_path, section_id="identificacao")],
+        custom_sections=[{"id": "custom_1", "title": "Extra"}],
+        deleted_section_ids=["grafica"],
+        attachment_pdf_paths=[original_a, original_b],
     )
     repo.save(doc)
 
@@ -82,6 +87,9 @@ def test_workspace_sessions_roundtrip(db_path: Path) -> None:
     assert len(restored.images) == 1
     assert restored.images[0].section_id == "identificacao"
     assert restored.images[0].image_path == img_path
+    assert restored.custom_sections == [{"id": "custom_1", "title": "Extra"}]
+    assert restored.deleted_section_ids == ["grafica"]
+    assert restored.attachment_pdf_paths == [original_a, original_b]
 
 
 def test_database_manager_creates_required_tables(db_path: Path) -> None:

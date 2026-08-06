@@ -13,6 +13,7 @@ from src.core.domain.report_field_registry import (
     section_has_overrides,
 )
 from src.core.domain.section_numbering import strip_number_prefix
+from src.core.domain.section_schema import FIXED_SECTION_IDS
 from src.core.domain.table_row_registry import (
     SECTION_HEADING_DEFAULTS,
     TABLE_SECTIONS,
@@ -44,8 +45,7 @@ class SectionSummaryPresenter:
 
         for section in secoes:
             section_id = section["id"]
-            if section_id in deleted:
-                continue
+            is_disabled = section_id in deleted
             overrides = document.section_overrides.get(section_id, {})
             prose = default_prose_values(section_id, ctx)
             field_overrides = {
@@ -146,16 +146,20 @@ class SectionSummaryPresenter:
                     for f in get_global_fields_for_section(section_id)
                 ],
                 override_keys=override_keys,
+                enabled=not is_disabled,
+                protected=section_id in FIXED_SECTION_IDS,
             ))
 
         seen_ids = {item.id for item in merged}
         for custom in document.custom_sections:
             section_id = custom["id"]
-            if section_id in deleted or section_id in seen_ids:
+            if section_id in seen_ids:
                 continue
+            is_disabled = section_id in deleted
             overrides = document.section_overrides.get(section_id, {})
             title = overrides.get("title", custom.get("title", "Seção personalizada"))
             img_count = sum(1 for img in document.images if img.section_id == section_id)
+            stored_rows = overrides.get("table_rows")
             merged.append(SectionSummaryItem(
                 id=section_id,
                 display_title=title,
@@ -163,10 +167,13 @@ class SectionSummaryPresenter:
                 has_overrides=bool(overrides),
                 fields=dict(overrides),
                 custom=True,
-                subtitle=overrides.get("subtitle", ""),
+                subtitle=overrides.get("nota", overrides.get("subtitle", "")),
                 body=overrides.get("body", ""),
+                table_rows=merge_table_rows(section_id, stored_rows),
                 image_count=img_count,
                 has_images=img_count > 0,
                 override_keys=list(overrides.keys()),
+                enabled=not is_disabled,
+                protected=False,
             ))
         return merged

@@ -34,7 +34,22 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     UNIQUE(source_pdf_path, client_project, evaluated_component)
                 )
             """)
+            self._migrate_columns(conn)
             conn.commit()
+
+    def _migrate_columns(self, conn: sqlite3.Connection) -> None:
+        cursor = conn.execute("PRAGMA table_info(workspace_sessions)")
+        existing = {row[1] for row in cursor.fetchall()}
+        migrations = {
+            "custom_sections": "TEXT NOT NULL DEFAULT '[]'",
+            "deleted_section_ids": "TEXT NOT NULL DEFAULT '[]'",
+            "attachment_pdf_paths": "TEXT NOT NULL DEFAULT '[]'",
+        }
+        for column, definition in migrations.items():
+            if column not in existing:
+                conn.execute(
+                    f"ALTER TABLE workspace_sessions ADD COLUMN {column} {definition}"
+                )
 
     def save(self, document: ReportDocument) -> None:
         key = (
@@ -50,14 +65,16 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
             }
             for img in document.images
         ]
+        attachment_paths = [str(path) for path in document.attachment_pdf_paths]
         with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO workspace_sessions (
                     source_pdf_path, client_project, evaluated_component,
                     template_id, section_overrides, parsed_overrides,
-                    section_order, images, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    section_order, images, custom_sections, deleted_section_ids,
+                    attachment_pdf_paths, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(source_pdf_path, client_project, evaluated_component)
                 DO UPDATE SET
                     template_id=excluded.template_id,
@@ -65,6 +82,9 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     parsed_overrides=excluded.parsed_overrides,
                     section_order=excluded.section_order,
                     images=excluded.images,
+                    custom_sections=excluded.custom_sections,
+                    deleted_section_ids=excluded.deleted_section_ids,
+                    attachment_pdf_paths=excluded.attachment_pdf_paths,
                     updated_at=datetime('now')
                 """,
                 (
@@ -74,6 +94,9 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     json.dumps(document.parsed_overrides, ensure_ascii=False),
                     json.dumps(document.section_order) if document.section_order else None,
                     json.dumps(images, ensure_ascii=False),
+                    json.dumps(document.custom_sections, ensure_ascii=False),
+                    json.dumps(document.deleted_section_ids, ensure_ascii=False),
+                    json.dumps(attachment_paths, ensure_ascii=False),
                 ),
             )
             conn.commit()
@@ -82,7 +105,8 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT template_id, section_overrides, parsed_overrides, section_order, images
+                SELECT template_id, section_overrides, parsed_overrides, section_order,
+                       images, custom_sections, deleted_section_ids, attachment_pdf_paths
                 FROM workspace_sessions
                 WHERE source_pdf_path=? AND client_project=? AND evaluated_component=?
                 """,
@@ -109,4 +133,8 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
             for item in images_raw
             if item.get("path") and item.get("section_id")
         ]
+        document.custom_sections = json.loads(row[5] or "[]")
+        document.deleted_section_ids = json.loads(row[6] or "[]")
+        attachment_raw = json.loads(row[7] or "[]")
+        document.attachment_pdf_paths = [Path(path) for path in attachment_raw if path]
         return True

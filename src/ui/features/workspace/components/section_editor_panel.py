@@ -61,6 +61,7 @@ class SectionEditorPanel(BaseSidebarPanel):
 
     def bind_view_model(self, view_model) -> None:
         super().bind_view_model(view_model)
+        self._sections_panel.section_enabled_changed.connect(view_model.set_section_enabled)
         self._edit_view.section_field_changed.connect(view_model.update_section_field)
         self._edit_view.section_field_restore_requested.connect(view_model.restore_section_field)
         self._edit_view.table_rows_changed.connect(view_model.update_section_table_rows)

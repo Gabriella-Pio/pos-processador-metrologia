@@ -124,6 +124,7 @@ def build_section_prose(
     ctx["report_kind"] = report_kind
     result: dict[str, dict] = {}
     section_ids = set(PROSE_TEMPLATES.keys()) | set(document.section_overrides.keys()) | set(SECTION_HEADING_DEFAULTS.keys())
+    section_ids |= {s["id"] for s in document.custom_sections if s.get("id")}
     if report_kind == "tomografia":
         from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
 
@@ -185,4 +186,11 @@ def build_table_rows(document: ReportDocument, report_kind: str) -> dict[str, li
         intro_overrides,
         report_kind=report_kind,
     )
+    for custom in document.custom_sections:
+        section_id = custom.get("id", "")
+        if not section_id:
+            continue
+        stored = document.section_overrides.get(section_id, {}).get("table_rows")
+        if stored:
+            result[section_id] = merge_table_rows(section_id, stored)
     return result

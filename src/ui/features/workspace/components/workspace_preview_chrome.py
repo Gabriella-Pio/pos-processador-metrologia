@@ -20,8 +20,6 @@ def build_workspace_project_tabs_strip(
     on_export_clicked,
     on_save_layout,
     on_change_layout,
-    export_individual_cb,
-    export_merged_cb,
 ) -> tuple[QWidget, QLabel, QLabel, ChromeIconButton, PrimaryButton, QMenu]:
     """Faixa superior com abas de PDF, status e ações de export."""
     row = QWidget()
@@ -59,15 +57,11 @@ def build_workspace_project_tabs_strip(
     export_individual_action = preview_menu.addAction("Exportar PDFs individuais")
     export_individual_action.setCheckable(True)
     export_individual_action.setChecked(True)
-    export_individual_action.toggled.connect(export_individual_cb.setChecked)
     export_merged_action = preview_menu.addAction("Exportar um único PDF")
     export_merged_action.setCheckable(True)
-    export_merged_action.setChecked(True)
+    export_merged_action.setChecked(False)
     export_merged_action.setEnabled(False)
     export_merged_action.setToolTip("Em breve — mescla seções institucionais")
-    export_merged_action.toggled.connect(export_merged_cb.setChecked)
-    export_individual_cb.toggled.connect(export_individual_action.setChecked)
-    export_merged_cb.toggled.connect(export_merged_action.setChecked)
 
     row._preview_menu = preview_menu  # type: ignore[attr-defined]
     row._save_layout_action = save_layout_action  # type: ignore[attr-defined]
@@ -80,8 +74,6 @@ def build_workspace_action_bar(
     document_title_label: QLabel,
     active_section_label: QLabel,
     template_selector: LayoutTemplateSelector,
-    export_individual_cb,
-    export_merged_cb,
 ) -> QWidget:
     """Barra de contexto acima do preview (título, seção ativa, template)."""
     action_bar = QWidget()
@@ -100,16 +92,8 @@ def build_workspace_action_bar(
     meta_sep_before_layout.setObjectName("WorkspaceMetaSeparator")
     row.addWidget(meta_sep_before_layout)
 
-    template_combo = template_selector.combo
     row.addWidget(template_selector)
     row.addStretch(1)
-
-    export_options = QWidget()
-    export_opts_layout = QHBoxLayout(export_options)
-    export_opts_layout.setContentsMargins(0, 0, 0, 0)
-    export_opts_layout.setSpacing(SPACING.md)
-    export_opts_layout.addWidget(export_individual_cb)
-    export_opts_layout.addWidget(export_merged_cb)
 
     action_bar._meta_sep_before_section = meta_sep_before_section  # type: ignore[attr-defined]
     action_bar._meta_sep_before_layout = meta_sep_before_layout  # type: ignore[attr-defined]

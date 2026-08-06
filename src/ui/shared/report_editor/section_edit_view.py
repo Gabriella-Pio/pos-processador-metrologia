@@ -25,6 +25,7 @@ from src.core.domain.table_row_registry import (
     SECTION_HEADING_DEFAULTS,
     TABLE_SECTIONS,
 )
+from src.core.domain.section_schema import is_custom_section_id
 from src.ui.components.buttons import IconButton, SecondaryButton
 from src.ui.components.icons import icon_close, icon_help
 from src.ui.components.panels import AnnotationToolbar, ImageManagerPanel
@@ -307,7 +308,7 @@ class SectionEditView(QFrame):
             elif isinstance(widget, QLineEdit):
                 widget.setText(value)
 
-        if section_id in TABLE_SECTIONS and table_rows is not None:
+        if (section_id in TABLE_SECTIONS or is_custom_section_id(section_id)) and table_rows is not None:
             self._table_rows_editor.set_rows(table_rows)
         if section_id == "resultados" and itens_medicao is not None:
             self._medicoes_editor.set_rows(itens_medicao)
@@ -331,7 +332,7 @@ class SectionEditView(QFrame):
         self._section_title_edit.set_text(overrides.get("section_title", default))
 
     def _rebuild_table_rows(self, section_id: str, rows: list[dict[str, str]]) -> None:
-        if section_id not in TABLE_SECTIONS:
+        if section_id not in TABLE_SECTIONS and not is_custom_section_id(section_id):
             return
         self._table_rows_editor.set_rows(rows)
 

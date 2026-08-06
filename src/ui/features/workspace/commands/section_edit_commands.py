@@ -71,6 +71,14 @@ class SectionEditCommands:
         document.section_overrides.get(section_id, {}).pop("table_rows", None)
 
     @staticmethod
+    def set_section_enabled(document: ReportDocument, section_id: str, enabled: bool) -> None:
+        if enabled:
+            if section_id in document.deleted_section_ids:
+                document.deleted_section_ids.remove(section_id)
+        elif section_id not in document.deleted_section_ids:
+            document.deleted_section_ids.append(section_id)
+
+    @staticmethod
     def delete_section(document: ReportDocument, section_id: str) -> bool:
         is_custom = section_id.startswith("custom_") or any(
             s.get("id") == section_id for s in document.custom_sections
@@ -95,6 +103,8 @@ class SectionEditCommands:
             next_index += 1
             section_id = f"custom_{next_index}"
         document.custom_sections.append({"id": section_id, "title": title.strip(), "custom": True})
+        document.section_overrides.setdefault(section_id, {})["media_kinds"] = ["photos", "tables", "graphics"]
+        document.section_overrides[section_id].setdefault("title", title.strip())
         return section_id
 
     @staticmethod

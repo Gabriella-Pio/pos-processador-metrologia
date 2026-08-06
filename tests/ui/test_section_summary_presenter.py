@@ -43,3 +43,17 @@ def test_presenter_builds_display_title_with_overrides() -> None:
     intro = next(i for i in items if i.id == "introducao")
     assert intro.display_title == "Intro custom"
     assert intro.has_overrides
+
+
+def test_presenter_keeps_disabled_sections_in_summary() -> None:
+    doc = ReportDocument(
+        source_pdf_path=Path("/tmp/x.pdf"),
+        client_project="Cliente",
+        evaluated_component="Peça",
+    )
+    doc.raw_parsed_data = RelatorioCalypsoDto(componente="Peça")
+    doc.deleted_section_ids = ["identificacao"]
+    presenter = SectionSummaryPresenter(_FakeExporter())
+    items = presenter.build(doc)
+    ident = next(i for i in items if i.id == "identificacao")
+    assert ident.enabled is False

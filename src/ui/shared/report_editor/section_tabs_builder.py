@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QScrollArea, QTabWidget, QVBoxLayout, QWidget
 
 from src.core.domain.report_field_registry import effective_media_kinds, get_media_blocks
 from src.core.domain.table_row_registry import TABLE_SECTIONS
+from src.core.domain.section_schema import is_custom_section_id
 from src.ui.components.icons import icon_chart, icon_edit, icon_image, icon_table
 from src.ui.shared.report_editor.template_layout_panel import TemplateLayoutPanel
 
@@ -69,7 +70,7 @@ class SectionTabsBuilder:
                     widget = item.widget()
                     if widget is not None:
                         widget.setParent(None)
-                if section_id in TABLE_SECTIONS:
+                if section_id in TABLE_SECTIONS or is_custom_section_id(section_id):
                     pages.tables_layout.addWidget(pages.table_rows_editor, 0)
                 else:
                     pages.tables_layout.addWidget(pages.medicoes_editor, 0)

@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Optional
 
 from src.core.application.export_context_builder import build_export_context
-from src.core.application.template_block_resolver import resolve_template_blocks
+from src.core.application.template_block_resolver import (
+    resolve_active_template_blocks,
+    resolve_template_blocks,
+)
 from src.core.domain.section_numbering import build_section_number_map
 from src.core.domain.section_schema import is_navigable_section
 from src.core.domain.ports import ReportDocument, TechnicalControlInfo
@@ -58,7 +61,7 @@ class RealReportExporterAdapter:
     def export(self, document: ReportDocument, output_path: Path) -> Path:
         section_anchor_map: dict[str, dict] = {}
         ctx = build_export_context(document)
-        template_config = resolve_template_blocks(document, self._template_repository)
+        template_config = resolve_active_template_blocks(document, self._template_repository)
         ReportGenerator.gerar_relatorio_enriquecido(
             dados_parseados=ctx.effective_dto,
             caminho_saida=str(output_path),
@@ -115,4 +118,4 @@ class RealReportExporterAdapter:
         return resultado
 
     def get_export_blocks(self, document: ReportDocument) -> list[dict]:
-        return resolve_template_blocks(document, self._template_repository)
+        return resolve_active_template_blocks(document, self._template_repository)

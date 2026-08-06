@@ -50,6 +50,8 @@ class DatabaseManager:
             cursor.execute("ALTER TABLE documentos ADD COLUMN nome_arquivo TEXT NOT NULL DEFAULT ''")
         if "cliente_projeto" not in colunas_existentes:
             cursor.execute("ALTER TABLE documentos ADD COLUMN cliente_projeto TEXT NOT NULL DEFAULT ''")
+        if "source_pdf_path" not in colunas_existentes:
+            cursor.execute("ALTER TABLE documentos ADD COLUMN source_pdf_path TEXT NOT NULL DEFAULT ''")
         conn.commit()
 
     def salvar_registro(
@@ -61,13 +63,20 @@ class DatabaseManager:
         data_hora: str,
         responsavel: str,
         caminho: str,
+        source_pdf_path: str = "",
     ) -> int:
         with self._conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO documentos (nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho_arquivo)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho))
+                INSERT INTO documentos (
+                    nome_arquivo, cliente_projeto, versao, componente,
+                    data_hora, responsavel, caminho_arquivo, source_pdf_path
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                nome_arquivo, cliente_projeto, versao, componente,
+                data_hora, responsavel, caminho, source_pdf_path,
+            ))
             conn.commit()
             return cursor.lastrowid
 
@@ -75,7 +84,8 @@ class DatabaseManager:
         with self._conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho_arquivo
+                SELECT id, nome_arquivo, cliente_projeto, versao, componente,
+                       data_hora, responsavel, caminho_arquivo, source_pdf_path
                 FROM documentos ORDER BY id DESC LIMIT ?
             """, (limite,))
             return cursor.fetchall()
@@ -129,7 +139,8 @@ class DatabaseManager:
         with self._conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho_arquivo
+                SELECT id, nome_arquivo, cliente_projeto, versao, componente,
+                       data_hora, responsavel, caminho_arquivo, source_pdf_path
                 FROM documentos WHERE id = ?
             """, (doc_id,))
             return cursor.fetchone()

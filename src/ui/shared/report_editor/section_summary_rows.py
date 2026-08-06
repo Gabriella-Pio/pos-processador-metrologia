@@ -169,8 +169,16 @@ class SectionSummaryRow(QFrame):
     click_requested = pyqtSignal(str)
     edit_requested = pyqtSignal(str)
     delete_requested = pyqtSignal(str)
+    enabled_changed = pyqtSignal(str, bool)
 
-    def __init__(self, section: dict, photo_count: int, parent=None) -> None:
+    def __init__(
+        self,
+        section: dict,
+        photo_count: int,
+        *,
+        show_enable_toggle: bool = False,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("SectionSummaryRow")
         self.setMinimumWidth(0)
@@ -178,6 +186,9 @@ class SectionSummaryRow(QFrame):
         self._photo_count = photo_count
         self._full_title = section.get("display_title") or section.get("title", section["id"])
         self._has_modified_dot = bool(section.get("has_overrides"))
+        self._show_enable_toggle = show_enable_toggle
+        self._protected = bool(section.get("protected")) or self.section_id in FIXED_SECTION_IDS
+        enabled = section.get("enabled", True)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, SPACING.sm, 0)
@@ -193,6 +204,18 @@ class SectionSummaryRow(QFrame):
         body_layout = QHBoxLayout(body)
         body_layout.setContentsMargins(SPACING.sm, SPACING.xs, SPACING.xs, SPACING.xs)
         body_layout.setSpacing(SPACING.sm)
+
+        self._enabled_cb = None
+        if show_enable_toggle:
+            self._enabled_cb = QCheckBox()
+            self._enabled_cb.setObjectName("SectionSummaryEnabled")
+            self._enabled_cb.setChecked(enabled)
+            self._enabled_cb.setEnabled(not self._protected)
+            self._enabled_cb.setToolTip(
+                "Seção fixa do relatório" if self._protected else "Incluir seção no relatório"
+            )
+            self._enabled_cb.stateChanged.connect(self._on_enabled_changed)
+            body_layout.addWidget(self._enabled_cb)
 
         text_col = QWidget()
         text_col.setMinimumWidth(0)
@@ -283,9 +306,14 @@ class SectionSummaryRow(QFrame):
         self._apply_active(False)
         self._elide_title()
 
+    def _on_enabled_changed(self, _state: int) -> None:
+        if self._enabled_cb is not None:
+            self.enabled_changed.emit(self.section_id, self._enabled_cb.isChecked())
+
     def _elide_title(self) -> None:
         dot_w = 12 if self._has_modified_dot else 0
-        margins = SPACING.sm * 3 + _ACCENT_WIDTH
+        checkbox_w = 28 if self._enabled_cb is not None else 0
+        margins = SPACING.sm * 3 + _ACCENT_WIDTH + checkbox_w
         available = max(48, self.width() - margins - _ACTIONS_WIDTH - dot_w)
         metrics = QFontMetrics(self._title_label.font())
         self._title_label.setText(
@@ -319,6 +347,9 @@ class SectionSummaryRow(QFrame):
             child = self.childAt(event.position().toPoint())
             widget = child
             while widget is not None and widget is not self:
+                if isinstance(widget, QCheckBox):
+                    super().mousePressEvent(event)
+                    return
                 if isinstance(widget, QToolButton):
                     super().mousePressEvent(event)
                     return
