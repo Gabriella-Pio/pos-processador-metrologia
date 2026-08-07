@@ -15,21 +15,74 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.domain.section_schema import FIXED_SECTION_IDS, SECTION_DEFINITIONS
-from src.ui.components.icons import icon_edit, icon_plus, icon_trash
+from src.ui.components.icons import icon_edit, icon_grip, icon_lock, icon_plus, icon_trash
+from src.ui.shared.report_editor.section_order_rules import is_sidebar_section_draggable
 from src.ui.styles import SPACING
 
 _PROTECTED_IDS = frozenset(s.id for s in SECTION_DEFINITIONS)
 _ROW_HEIGHT = 52
 _ACCENT_WIDTH = 3
 _ACTIONS_WIDTH = 76
+_GRIP_WIDTH = 16
 
 
-class TemplateSectionRow(QFrame):
+def _repolish(widget: QWidget) -> None:
+    style = widget.style()
+    style.unpolish(widget)
+    style.polish(widget)
+
+
+def _summary_list_parent(widget: QWidget):
+    parent = widget.parentWidget()
+    while parent is not None:
+        if parent.objectName() == "SectionSummaryList":
+            return parent
+        parent = parent.parentWidget()
+    return None
+
+
+class _SummaryRowChromeMixin:
+    """Hover/ativo via propriedades — :hover em QSS falha em itemWidget de QListWidget."""
+
+    def _init_summary_row_chrome(self) -> None:
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setProperty("hovered", "false")
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        parent_list = _summary_list_parent(self)
+        if parent_list is None or not parent_list.property("dragging"):
+            self.setProperty("hovered", "true")
+            _repolish(self)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self.setProperty("hovered", "false")
+        _repolish(self)
+        super().leaveEvent(event)
+
+
+def _drag_handle(section_id: str) -> QWidget:
+    if is_sidebar_section_draggable(section_id):
+        grip = QLabel()
+        grip.setPixmap(icon_grip().pixmap(14, 14))
+        grip.setObjectName("SectionSummaryGrip")
+        grip.setToolTip("Arraste para reordenar")
+        grip.setFixedSize(_GRIP_WIDTH, 24)
+        grip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return grip
+    spacer = QWidget()
+    spacer.setFixedSize(_GRIP_WIDTH, 24)
+    return spacer
+
+
+class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
     """Linha do sumário no modo template — toggle enabled + seleção para editar."""
 
     click_requested = pyqtSignal(str)
     enabled_changed = pyqtSignal(str, bool)
     delete_requested = pyqtSignal(str)
+    protected_toggle_blocked = pyqtSignal()
 
     def __init__(self, section: dict, parent=None) -> None:
         super().__init__(parent)
@@ -50,6 +103,7 @@ class TemplateSectionRow(QFrame):
         self._accent = QFrame()
         self._accent.setObjectName("SectionSummaryAccent")
         self._accent.setFixedWidth(_ACCENT_WIDTH)
+        self._accent.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         body = QWidget()
         body.setMinimumWidth(0)
@@ -58,14 +112,26 @@ class TemplateSectionRow(QFrame):
         body_layout.setContentsMargins(SPACING.sm, SPACING.xs, SPACING.xs, SPACING.xs)
         body_layout.setSpacing(SPACING.sm)
 
-        self._enabled_cb = QCheckBox()
-        self._enabled_cb.setObjectName("SectionSummaryEnabled")
-        self._enabled_cb.setChecked(enabled)
-        self._enabled_cb.setEnabled(not self._protected)
-        self._enabled_cb.setToolTip(
-            "Seção fixa do relatório" if self._protected else "Incluir seção no template"
-        )
-        self._enabled_cb.stateChanged.connect(self._on_enabled_changed)
+        body_layout.addWidget(_drag_handle(self.section_id))
+
+        if self._protected:
+            self._enabled_cb = None
+            lock_btn = QToolButton()
+            lock_btn.setObjectName("SectionSummaryLock")
+            lock_btn.setAutoRaise(True)
+            lock_btn.setFixedSize(24, 24)
+            lock_btn.setIcon(icon_lock())
+            lock_btn.setToolTip("Sempre incluída no relatório — clique para saber mais")
+            lock_btn.clicked.connect(self.protected_toggle_blocked.emit)
+            body_layout.addWidget(lock_btn)
+            self.setProperty("fixed", "true")
+        else:
+            self._enabled_cb = QCheckBox()
+            self._enabled_cb.setObjectName("SectionSummaryEnabled")
+            self._enabled_cb.setChecked(enabled)
+            self._enabled_cb.setToolTip("Incluir seção no template")
+            self._enabled_cb.stateChanged.connect(self._on_enabled_changed)
+            body_layout.addWidget(self._enabled_cb)
 
         self._title_label = QLabel(self._full_title)
         self._title_label.setToolTip(self._full_title)
@@ -85,12 +151,15 @@ class TemplateSectionRow(QFrame):
         title_row.setSpacing(SPACING.xs)
         title_row.addWidget(self._title_label, stretch=1)
         text_layout.addLayout(title_row)
-        if not enabled and not self._protected:
+        if self._protected:
+            meta = QLabel("Obrigatória")
+            meta.setObjectName("SectionSummaryMeta")
+            text_layout.addWidget(meta)
+        elif not enabled:
             meta = QLabel("Desativada")
             meta.setObjectName("SectionSummaryMeta")
             text_layout.addWidget(meta)
 
-        body_layout.addWidget(self._enabled_cb)
         body_layout.addWidget(text_col, stretch=1)
 
         if self._is_custom:
@@ -106,22 +175,29 @@ class TemplateSectionRow(QFrame):
         root.addWidget(self._accent)
         root.addWidget(body, stretch=1)
 
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self._init_summary_row_chrome()
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._apply_active(False)
+        if self._protected:
+            self.style().unpolish(self)
+            self.style().polish(self)
         self._elide_title()
 
     def _on_enabled_changed(self, _state: int) -> None:
+        if self._enabled_cb is None:
+            return
         self.enabled_changed.emit(self.section_id, self._enabled_cb.isChecked())
 
     def set_enabled(self, enabled: bool) -> None:
+        if self._enabled_cb is None:
+            return
         self._enabled_cb.blockSignals(True)
         self._enabled_cb.setChecked(enabled)
         self._enabled_cb.blockSignals(False)
 
     def _elide_title(self) -> None:
-        checkbox_w = 28
-        margins = SPACING.sm * 3 + _ACCENT_WIDTH + checkbox_w
+        control_w = 24 if self._protected else 28
+        margins = SPACING.sm * 3 + _ACCENT_WIDTH + control_w + _GRIP_WIDTH
         available = max(48, self.width() - margins)
         metrics = QFontMetrics(self._title_label.font())
         self._title_label.setText(
@@ -163,13 +239,14 @@ class TemplateSectionRow(QFrame):
         return QSize(super().sizeHint().width(), _ROW_HEIGHT)
 
 
-class SectionSummaryRow(QFrame):
+class SectionSummaryRow(_SummaryRowChromeMixin, QFrame):
     """Linha do sumário — clique navega; duplo-clique ou lápis edita."""
 
     click_requested = pyqtSignal(str)
     edit_requested = pyqtSignal(str)
     delete_requested = pyqtSignal(str)
     enabled_changed = pyqtSignal(str, bool)
+    protected_toggle_blocked = pyqtSignal()
 
     def __init__(
         self,
@@ -197,6 +274,7 @@ class SectionSummaryRow(QFrame):
         self._accent = QFrame()
         self._accent.setObjectName("SectionSummaryAccent")
         self._accent.setFixedWidth(_ACCENT_WIDTH)
+        self._accent.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         body = QWidget()
         body.setMinimumWidth(0)
@@ -205,18 +283,29 @@ class SectionSummaryRow(QFrame):
         body_layout.setContentsMargins(SPACING.sm, SPACING.xs, SPACING.xs, SPACING.xs)
         body_layout.setSpacing(SPACING.sm)
 
+        body_layout.addWidget(_drag_handle(self.section_id))
+
         self._enabled_cb = None
         if show_enable_toggle:
-            self._enabled_cb = QCheckBox()
-            self._enabled_cb.setObjectName("SectionSummaryEnabled")
-            self._enabled_cb.setChecked(enabled)
-            self._enabled_cb.setEnabled(not self._protected)
-            self._enabled_cb.setToolTip(
-                "Seção fixa do relatório" if self._protected else "Incluir seção no relatório"
-            )
-            self._enabled_cb.stateChanged.connect(self._on_enabled_changed)
-            body_layout.addWidget(self._enabled_cb)
+            if self._protected:
+                lock_btn = QToolButton()
+                lock_btn.setObjectName("SectionSummaryLock")
+                lock_btn.setAutoRaise(True)
+                lock_btn.setFixedSize(24, 24)
+                lock_btn.setIcon(icon_lock())
+                lock_btn.setToolTip("Sempre incluída no relatório — clique para saber mais")
+                lock_btn.clicked.connect(self.protected_toggle_blocked.emit)
+                body_layout.addWidget(lock_btn)
+                self.setProperty("fixed", "true")
+            else:
+                self._enabled_cb = QCheckBox()
+                self._enabled_cb.setObjectName("SectionSummaryEnabled")
+                self._enabled_cb.setChecked(enabled)
+                self._enabled_cb.setToolTip("Incluir seção no relatório")
+                self._enabled_cb.stateChanged.connect(self._on_enabled_changed)
+                body_layout.addWidget(self._enabled_cb)
 
+        self._title_label = QLabel(self._full_title)
         text_col = QWidget()
         text_col.setMinimumWidth(0)
         text_col.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -237,7 +326,6 @@ class SectionSummaryRow(QFrame):
             )
             title_row.addWidget(dot)
 
-        self._title_label = QLabel(self._full_title)
         self._title_label.setToolTip(self._full_title)
         self._title_label.setObjectName("SectionSummaryTitle")
         self._title_label.setWordWrap(False)
@@ -247,6 +335,8 @@ class SectionSummaryRow(QFrame):
         text_layout.addLayout(title_row)
 
         meta_parts: list[str] = []
+        if self._protected:
+            meta_parts.append("Obrigatória")
         if photo_count > 0:
             meta_parts.append(f"{photo_count} foto{'s' if photo_count != 1 else ''}")
         if section.get("custom") or str(section["id"]).startswith("custom_"):
@@ -301,19 +391,23 @@ class SectionSummaryRow(QFrame):
         root.addWidget(self._accent)
         root.addWidget(body, stretch=1)
 
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self._init_summary_row_chrome()
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._apply_active(False)
+        if self._protected:
+            self.style().unpolish(self)
+            self.style().polish(self)
         self._elide_title()
 
     def _on_enabled_changed(self, _state: int) -> None:
-        if self._enabled_cb is not None:
-            self.enabled_changed.emit(self.section_id, self._enabled_cb.isChecked())
+        if self._enabled_cb is None:
+            return
+        self.enabled_changed.emit(self.section_id, self._enabled_cb.isChecked())
 
     def _elide_title(self) -> None:
         dot_w = 12 if self._has_modified_dot else 0
-        checkbox_w = 28 if self._enabled_cb is not None else 0
-        margins = SPACING.sm * 3 + _ACCENT_WIDTH + checkbox_w
+        control_w = 24 if self._protected and self._show_enable_toggle else (28 if self._enabled_cb is not None else 0)
+        margins = SPACING.sm * 3 + _ACCENT_WIDTH + control_w + _GRIP_WIDTH
         available = max(48, self.width() - margins - _ACTIONS_WIDTH - dot_w)
         metrics = QFontMetrics(self._title_label.font())
         self._title_label.setText(
@@ -367,9 +461,11 @@ class AddSectionRow(QFrame):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("SectionSummaryAddRow")
+        self.setMinimumHeight(_ROW_HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, SPACING.sm)
+        layout.setContentsMargins(SPACING.sm, SPACING.xs, SPACING.sm, SPACING.xs)
         layout.setSpacing(SPACING.sm)
         icon = QLabel()
         icon.setPixmap(icon_plus().pixmap(16, 16))
@@ -385,4 +481,4 @@ class AddSectionRow(QFrame):
         super().mousePressEvent(event)
 
     def sizeHint(self) -> QSize:
-        return QSize(200, 44)
+        return QSize(200, _ROW_HEIGHT)

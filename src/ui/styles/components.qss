@@ -336,7 +336,7 @@ QListWidget#SectionSummaryList::item {{
     background: transparent;
     border: none;
     padding: 0;
-    margin: 0 0 2px 0;
+    margin: 0 0 6px 0;
 }}
 QListWidget#SectionSummaryList::item:selected {{
     background: transparent;
@@ -344,19 +344,49 @@ QListWidget#SectionSummaryList::item:selected {{
 QListWidget#SectionSummaryList::item:hover {{
     background: transparent;
 }}
+QListWidget#SectionSummaryList[dragging="true"]::item:hover {{
+    background: transparent;
+}}
+QListWidget#SectionSummaryList[dragging="true"] QFrame#SectionSummaryRow:hover {{
+    background: transparent;
+    border-color: transparent;
+}}
+QWidget#SectionDropLine {{
+    background: transparent;
+    border: none;
+}}
 QFrame#SectionSummaryRow {{
     background: transparent;
     border: 1px solid transparent;
     border-radius: {radius_sm}px;
     min-height: 48px;
 }}
-QFrame#SectionSummaryRow:hover {{
+QFrame#SectionSummaryRow:hover,
+QFrame#SectionSummaryRow[hovered="true"] {{
     background: {bg_surface_alt};
     border-color: {border_subtle};
 }}
 QFrame#SectionSummaryRow[active="true"] {{
     background: rgba(74, 111, 212, 0.14);
     border-color: rgba(74, 111, 212, 0.45);
+}}
+QFrame#SectionSummaryRow[fixed="true"] {{
+    background: rgba(255, 255, 255, 0.02);
+}}
+QFrame#SectionSummaryRow[fixed="true"] QLabel#SectionSummaryTitle {{
+    color: {text_muted};
+}}
+QLabel#SectionSummaryGrip {{
+    background: transparent;
+}}
+QToolButton#SectionSummaryLock {{
+    background: transparent;
+    border: none;
+    padding: 2px;
+    border-radius: {radius_sm}px;
+}}
+QToolButton#SectionSummaryLock:hover {{
+    background: rgba(74, 111, 212, 0.12);
 }}
 QFrame#SectionSummaryAccent {{
     background: transparent;
@@ -401,6 +431,7 @@ QFrame#SectionSummaryAddRow {{
     background: transparent;
     border: 1px dashed {border_subtle};
     border-radius: {radius_sm}px;
+    min-height: 52px;
 }}
 QFrame#SectionSummaryAddRow:hover {{
     border-color: {senai_blue_light};
