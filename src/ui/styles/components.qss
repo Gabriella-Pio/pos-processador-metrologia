@@ -364,6 +364,22 @@ QFrame#GlobalFieldCard {{
 QFrame#GlobalFieldCard:hover {{
     border-color: {border_strong};
 }}
+QFrame#GlobalFieldCard[locked="true"] {{
+    background: {bg_surface_alt};
+    border-color: {border_subtle};
+}}
+QFrame#GlobalFieldCard[locked="true"] QCheckBox,
+QCheckBox[locked="true"] {{
+    color: {text_muted};
+}}
+QCheckBox[locked="true"]::indicator:checked {{
+    background-color: {text_muted};
+    border: 1px solid {border_strong};
+}}
+QCheckBox[locked="true"]::indicator {{
+    background-color: {bg_elevated};
+    border: 1px solid {border};
+}}
 QLabel#GlobalFieldLabel {{
     color: {text_primary};
     font-size: {size_caption}px;
