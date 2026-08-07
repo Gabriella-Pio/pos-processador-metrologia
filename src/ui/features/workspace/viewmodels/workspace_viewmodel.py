@@ -22,6 +22,11 @@ from src.core.application.project_snapshot_serializer import (
     apply_workspace_to_document,
     deserialize_project_snapshot,
 )
+from src.core.application.template_media import (
+    locked_workspace_media_kinds,
+    merge_workspace_media_kinds,
+    sanitize_workspace_media_kinds,
+)
 from src.core.application.version_snapshot_service import VersionSnapshotService
 from src.core.application.document_editing import (
     extract_global_field_values,
@@ -483,8 +488,27 @@ class WorkspaceViewModel(QObject):
         document = self._active_document()
         if document is None:
             return
+        from src.core.domain.section_schema import FIXED_SECTION_IDS
+
+        if section_id in FIXED_SECTION_IDS:
+            return
         SectionEditCommands.set_section_enabled(document, section_id, enabled)
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+
+    def update_section_media_kinds(self, section_id: str, kinds: list[str]) -> None:
+        document = self._active_document()
+        if document is None:
+            return
+        locked = locked_workspace_media_kinds(section_id, document, self._template_repo)
+        merged = sanitize_workspace_media_kinds(section_id, locked, kinds)
+        SectionEditCommands.update_section_media_kinds(document, section_id, merged)
+        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+
+    def locked_media_kinds(self, section_id: str) -> list[str]:
+        document = self._active_document()
+        if document is None:
+            return []
+        return locked_workspace_media_kinds(section_id, document, self._template_repo)
 
     def add_custom_section(self, title: str) -> str | None:
         document = self._active_document()

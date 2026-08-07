@@ -67,6 +67,7 @@ class SectionEditView(QFrame):
         self._defaults_mode = False
         self._section_overrides: dict = {}
         self._version_entries: list[VersionEntry] = []
+        self._locked_media_kinds: list[str] = []
         self._field_widgets: dict[str, PlaceholderTextEdit | QLineEdit] = {}
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -164,6 +165,7 @@ class SectionEditView(QFrame):
 
         self._layout_panel = TemplateLayoutPanel()
         self._layout_panel.kinds_changed.connect(self._on_template_media_kinds_changed)
+        self._layout_panel.blocked_action.connect(self._on_layout_blocked)
         self._tabs_builder = SectionTabsBuilder()
 
         self._delete_btn = SecondaryButton("Excluir seção")
@@ -237,6 +239,7 @@ class SectionEditView(QFrame):
         table_rows: list[dict[str, str]] | None = None,
         itens_medicao: list[dict[str, str]] | None = None,
         version_entries: list[VersionEntry] | None = None,
+        locked_media_kinds: list[str] | None = None,
     ) -> None:
         # Interpretação muda de quantidade por PDF — se os campos diferem, reconstrói.
         if (
@@ -252,6 +255,8 @@ class SectionEditView(QFrame):
         self._section_overrides = dict(overrides)
         if version_entries is not None:
             self._version_entries = list(version_entries)
+        if locked_media_kinds is not None:
+            self._locked_media_kinds = list(locked_media_kinds)
         # Limpa fotos da seção anterior até o painel reaplicar o filtro.
         self._image_panel.render_images([])
         is_custom = section.get("custom", False) or section_id.startswith("custom_")
@@ -342,6 +347,11 @@ class SectionEditView(QFrame):
             return
         self._table_rows_editor.set_rows(rows)
 
+    def set_locked_media_kinds(self, kinds: list[str]) -> None:
+        self._locked_media_kinds = list(kinds)
+        if self._section_id is not None:
+            self._rebuild_editor_tabs(self._section_id)
+
     def set_version_entries(self, entries: list[VersionEntry]) -> None:
         self._version_entries = list(entries)
         if self._section_id == "historico_versoes" and not self._defaults_mode:
@@ -377,6 +387,7 @@ class SectionEditView(QFrame):
                 medicoes_editor=self._medicoes_editor,
                 annotation_toolbar=self._annotation_toolbar,
             ),
+            locked_media_kinds=self._locked_media_kinds,
         )
 
     def _current_overrides(self) -> dict:
@@ -393,15 +404,31 @@ class SectionEditView(QFrame):
                 values[key] = widget.text()
         return values
 
+    def _on_layout_blocked(self, message: str) -> None:
+        self._layout_panel.show_blocked_notice(message)
+
     def _on_template_media_kinds_changed(self, kinds: list[str]) -> None:
         if self._section_id is None:
             return
-        if self._section_id in TABLE_SECTIONS:
+        if self._defaults_mode and self._section_id in TABLE_SECTIONS:
             if "tables" in kinds:
                 self._layout_panel.set_table_widget(self._table_rows_editor)
             else:
                 self._layout_panel.set_table_widget(None)
+        if not self._defaults_mode:
+            removed_locked = set(self._locked_media_kinds) - set(kinds)
+            if removed_locked:
+                self._layout_panel.show_blocked_notice(
+                    "Este bloco faz parte do layout padrão da seção e não pode ser desativado aqui. "
+                    "Para um relatório diferente, crie uma seção personalizada."
+                )
+                kinds = list(dict.fromkeys([*self._locked_media_kinds, *kinds]))
         self.media_kinds_changed.emit(self._section_id, kinds)
+        if not self._defaults_mode:
+            merged = list(dict.fromkeys([*self._locked_media_kinds, *kinds]))
+            self._section_overrides = dict(self._section_overrides)
+            self._section_overrides["media_kinds"] = merged
+            self._rebuild_editor_tabs(self._section_id)
 
     def _on_insert_photo(self) -> None:
         from PyQt6.QtWidgets import QFileDialog

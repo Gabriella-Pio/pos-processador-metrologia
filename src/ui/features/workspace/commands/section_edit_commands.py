@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from src.core.application.document_editing import sync_measured_by
 from src.core.domain.ports import ReportDocument, TechnicalControlInfo
+from src.core.domain.section_schema import FIXED_SECTION_IDS
 
 
 class SectionEditCommands:
@@ -71,12 +72,30 @@ class SectionEditCommands:
         document.section_overrides.get(section_id, {}).pop("table_rows", None)
 
     @staticmethod
+    def update_section_media_kinds(
+        document: ReportDocument,
+        section_id: str,
+        kinds: list[str],
+    ) -> None:
+        document.section_overrides.setdefault(section_id, {})["media_kinds"] = list(kinds)
+
+    @staticmethod
     def set_section_enabled(document: ReportDocument, section_id: str, enabled: bool) -> None:
+        if section_id in FIXED_SECTION_IDS:
+            return
         if enabled:
             if section_id in document.deleted_section_ids:
                 document.deleted_section_ids.remove(section_id)
         elif section_id not in document.deleted_section_ids:
             document.deleted_section_ids.append(section_id)
+
+    @staticmethod
+    def ensure_fixed_sections_enabled(document: ReportDocument) -> None:
+        if not document.deleted_section_ids:
+            return
+        document.deleted_section_ids = [
+            sid for sid in document.deleted_section_ids if sid not in FIXED_SECTION_IDS
+        ]
 
     @staticmethod
     def delete_section(document: ReportDocument, section_id: str) -> bool:

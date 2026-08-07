@@ -80,6 +80,7 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._edit_view.itens_medicao_changed.connect(view_model.update_itens_medicao)
         self._edit_view.section_restore_requested.connect(view_model.restore_section)
         self._edit_view.manage_versions_requested.connect(self._show_historico_tab)
+        self._edit_view.media_kinds_changed.connect(view_model.update_section_media_kinds)
         self._dados_panel.field_changed.connect(view_model.update_parsed_field)
         self._dados_panel.restore_field_requested.connect(view_model.restore_parsed_field)
 

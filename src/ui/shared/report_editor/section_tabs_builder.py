@@ -5,6 +5,10 @@ from dataclasses import dataclass
 
 from PyQt6.QtWidgets import QScrollArea, QTabWidget, QVBoxLayout, QWidget
 
+from src.core.application.template_media import (
+    sanitize_workspace_media_kinds,
+    workspace_addable_media_kinds,
+)
 from src.core.domain.report_field_registry import effective_media_kinds, get_media_blocks
 from src.core.domain.table_row_registry import TABLE_SECTIONS
 from src.core.domain.section_schema import is_custom_section_id
@@ -34,6 +38,7 @@ class SectionTabsBuilder:
         section_overrides: dict,
         defaults_mode: bool,
         pages: SectionTabPages,
+        locked_media_kinds: list[str] | None = None,
     ) -> None:
         while tabs.count():
             tabs.removeTab(0)
@@ -41,7 +46,10 @@ class SectionTabsBuilder:
         tabs.addTab(pages.content_scroll, "Conteúdo")
         tabs.setTabIcon(0, icon_edit())
 
+        available_media = get_media_blocks(section_id)
         if defaults_mode:
+            pages.layout_panel.set_workspace_mode(False)
+            pages.layout_panel.set_locked_kinds([])
             pages.layout_panel.set_kinds(
                 effective_media_kinds(section_id, section_overrides)
             )
@@ -54,9 +62,26 @@ class SectionTabsBuilder:
             tabs.tabBar().setVisible(True)
             return
 
+        locked = list(locked_media_kinds or [])
+        effective_kinds = effective_media_kinds(section_id, section_overrides)
+        if not defaults_mode:
+            effective_kinds = sanitize_workspace_media_kinds(section_id, locked, effective_kinds)
+
+        if available_media or (not defaults_mode and not is_custom_section_id(section_id)):
+            pages.layout_panel.set_workspace_mode(not defaults_mode)
+            pages.layout_panel.set_locked_kinds([] if defaults_mode else locked)
+            pages.layout_panel.set_addable_kinds(
+                ["photos", "graphics", "tables"] if defaults_mode
+                else workspace_addable_media_kinds(section_id)
+            )
+            pages.layout_panel.set_kinds(effective_kinds)
+            pages.layout_panel.set_table_widget(None)
+            layout_index = tabs.addTab(pages.layout_panel, "Layout")
+            tabs.setTabIcon(layout_index, icon_image())
+
         media_blocks = get_media_blocks(
             section_id,
-            effective_media_kinds(section_id, section_overrides),
+            effective_kinds,
         )
         tab_defs: list[tuple[str, str, QWidget]] = []
         for media in media_blocks:
@@ -70,10 +95,10 @@ class SectionTabsBuilder:
                     widget = item.widget()
                     if widget is not None:
                         widget.setParent(None)
-                if section_id in TABLE_SECTIONS or is_custom_section_id(section_id):
-                    pages.tables_layout.addWidget(pages.table_rows_editor, 0)
-                else:
+                if section_id == "resultados":
                     pages.tables_layout.addWidget(pages.medicoes_editor, 0)
+                elif section_id in TABLE_SECTIONS or is_custom_section_id(section_id):
+                    pages.tables_layout.addWidget(pages.table_rows_editor, 0)
                 pages.tables_layout.addStretch(1)
                 tab_defs.append(("tables", "Tabela", pages.tables_page))
 

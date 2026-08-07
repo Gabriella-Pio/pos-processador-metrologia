@@ -64,6 +64,10 @@ class BaseSidebarPanel(QFrame):
         self._set_sections_panel_active(section_id)
         section = self._sections_map.get(section_id, {"id": section_id, "title": section_id})
         overrides = dict(section.get("fields") or {})
+        locked_media_kinds: list[str] = []
+        if self._vm is not None and hasattr(self._vm, "locked_media_kinds"):
+            locked_media_kinds = self._vm.locked_media_kinds(section_id)
+        self._edit_view.set_locked_media_kinds(locked_media_kinds)
         self._edit_view.open_section(
             section_id,
             section,
@@ -71,6 +75,7 @@ class BaseSidebarPanel(QFrame):
             section.get("table_rows"),
             itens_medicao,
             self._version_entries,
+            locked_media_kinds,
         )
         self._after_edit_opened(section_id)
         self._edit_open = True
