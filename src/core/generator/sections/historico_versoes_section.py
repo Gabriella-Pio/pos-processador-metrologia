@@ -2,7 +2,8 @@ from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
-from ..prose_helpers import get_section_heading
+from ..prose_helpers import append_section_prose_paragraph, get_section_heading
+from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 
 
@@ -31,6 +32,15 @@ class HistoricoVersoesSection(BaseSection):
                 "historico_versoes",
                 contexto_extra.get("section_anchor_map"),
             )
+        )
+        append_section_prose_paragraph(
+            story,
+            styles,
+            contexto_extra,
+            "historico_versoes",
+            "intro",
+            PROSE_TEMPLATES.get("historico_versoes", {}).get("intro", ""),
+            spacer_after=8,
         )
 
         if not entradas:
