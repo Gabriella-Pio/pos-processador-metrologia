@@ -89,8 +89,15 @@ class ExportCommands:
             if slot.document is None:
                 continue
             switch_document(index)
-            safe_name = slot.evaluated_component.replace(" ", "_")[:40]
-            out_path = output_dir / f"{safe_name}_{index + 1}.pdf"
+            stem = (
+                slot.source_pdf_path.stem
+                if slot.source_pdf_path
+                else f"relatorio_{index + 1}"
+            )
+            safe_name = stem.replace(" ", "_")[:40]
+            out_path = output_dir / f"{safe_name}.pdf"
+            if out_path.exists():
+                out_path = output_dir / f"{safe_name}_{index + 1}.pdf"
             export_document(out_path)
             exported.append(out_path)
         switch_document(original_index)

@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from src.core.application.project_serializer import resolved_display_name
 from src.core.domain.ports import ReportDocument
+from src.core.domain.project_session import ProjectDocumentSlot
 from src.ui.components.inputs import LayoutTemplateSelector
 from src.ui.components.icons import icon_plus
 from src.ui.components.feedback import (
@@ -46,6 +47,38 @@ from src.ui.features.workspace.components.workspace_preview_chrome import (
 )
 from src.ui.shared.report_editor.editor_shell import build_editor_stack, create_three_column_splitter
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
+
+
+def _document_tab_label(slot: ProjectDocumentSlot) -> str:
+    """Rótulo da aba — usa o nome do arquivo de entrada, não o componente avaliado."""
+    stem = slot.source_pdf_path.stem[:20] or "PDF"
+    kind = getattr(slot, "source_kind", "") or (
+        slot.document.source_kind if slot.document else ""
+    )
+    badge = "Tomo" if kind == "insp_ect" else "MMC"
+    return f"{stem} [{badge}]"
+
+
+def _document_tab_tooltip(slot: ProjectDocumentSlot) -> str:
+    path = slot.source_pdf_path.resolve()
+    kind = getattr(slot, "source_kind", "") or (
+        slot.document.source_kind if slot.document else ""
+    )
+    lines = [path.name, str(path), f"Origem: {kind or 'desconhecida'}"]
+    component = slot.evaluated_component.strip()
+    if component and component != path.stem:
+        lines.append(f"Componente avaliado: {component}")
+    if slot.template_id:
+        lines.append(f"Template: {slot.template_id}")
+    return "\n".join(lines)
+
+
+def _document_header_label(document: ReportDocument, session) -> str:
+    base = f"{document.client_project} — {document.evaluated_component}"
+    if session is not None and len(session.documents) > 1:
+        slot = session.documents[session.active_index]
+        return f"{slot.source_pdf_path.name} · {base}"
+    return base
 
 
 class WorkspaceView(QWidget):
@@ -299,18 +332,9 @@ class WorkspaceView(QWidget):
         while self._project_tabs.count():
             self._project_tabs.removeTab(0)
         for index, slot in enumerate(session.documents):
-            base = slot.evaluated_component[:20] or slot.source_pdf_path.stem[:20]
-            kind = getattr(slot, "source_kind", "") or (
-                slot.document.source_kind if slot.document else ""
-            )
-            badge = "Tomo" if kind == "insp_ect" else "MMC"
-            label = f"{base} [{badge}]"
+            label = _document_tab_label(slot)
             self._project_tabs.addTab(label)
-            path = slot.source_pdf_path.resolve()
-            tip = f"{path.name}\n{path}\nOrigem: {kind or 'desconhecida'}"
-            if slot.template_id:
-                tip += f"\nTemplate: {slot.template_id}"
-            self._project_tabs.setTabToolTip(index, tip)
+            self._project_tabs.setTabToolTip(index, _document_tab_tooltip(slot))
         self._project_tabs.setCurrentIndex(session.active_index)
         self._project_tabs.blockSignals(False)
         self._update_export_options_visibility()
@@ -351,7 +375,7 @@ class WorkspaceView(QWidget):
             self._section_editor.update_document_context(None)
             return
         self._document_title_label.setText(
-            f"{document.client_project} — {document.evaluated_component}"
+            _document_header_label(document, self._app_state.project_session)
         )
         session = self._app_state.project_session
         if session is not None:
