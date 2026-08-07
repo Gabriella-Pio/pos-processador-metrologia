@@ -5,6 +5,7 @@ from .constants import ReportTheme, TEMPLATE_PADRAO_OFICIAL
 from .prose_helpers import append_section_footer_note
 from src.core.domain.section_numbering import build_section_number_map
 from .components.pdf_annex import append_source_pdfs
+from .components.photo_grid import append_section_photos_if_any
 from .sections import (
     CabecalhoSection, IntroducaoSection, IdentificacaoSection, ControleTecnicoSection,
     ResultadosSection, GraficaSection, TomografiaSection, InterpretacaoSection,
@@ -36,6 +37,13 @@ class ReportGenerator:
         "historico_versoes": HistoricoVersoesSection,
         "anexos": AnexosSection,
     }
+
+    _SECTIONS_WITH_NATIVE_PHOTOS = frozenset({
+        "introducao",
+        "grafica",
+        "tomografia",
+        "registro_componente",
+    })
 
     @classmethod
     def gerar_relatorio_enriquecido(
@@ -105,12 +113,15 @@ class ReportGenerator:
                 secao_classe = cls.REGISTRY_SECOES[tipo]
                 instancia_secao = secao_classe(config)
                 instancia_secao.render(story, styles, dados_parseados, contexto_extra)
+                if tipo not in cls._SECTIONS_WITH_NATIVE_PHOTOS:
+                    append_section_photos_if_any(story, styles, tipo, contexto_extra)
                 append_section_footer_note(story, styles, tipo, contexto_extra)
             elif tipo.startswith("custom_"):
                 from .sections.custom_section import CustomSection
                 CustomSection({**config, "section_id": tipo}).render(
                     story, styles, dados_parseados, contexto_extra
                 )
+                append_section_photos_if_any(story, styles, tipo, contexto_extra)
                 append_section_footer_note(story, styles, tipo, contexto_extra)
 
         doc.build(story, onFirstPage=cls._adicionar_rodape, onLaterPages=cls._adicionar_rodape)

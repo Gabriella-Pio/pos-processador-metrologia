@@ -5,7 +5,7 @@ from src.core.generator.sections.custom_section import CustomSection
 from src.core.generator.styles import ReportStyles
 
 
-def test_custom_section_renders_body_and_footer_note() -> None:
+def test_custom_section_renders_body_without_inline_footer() -> None:
     section = CustomSection({"section_id": "custom_1"})
     story: list = []
     styles = ReportStyles.criar_estilos()
@@ -26,4 +26,7 @@ def test_custom_section_renders_body_and_footer_note() -> None:
             "placeholder_context": {},
         },
     )
-    assert len(story) >= 3
+    assert len(story) >= 2
+    rendered = " ".join(getattr(item, "text", str(item)) for item in story)
+    assert "Conteúdo da seção" in rendered
+    assert rendered.count("Nota de rodapé") == 0
