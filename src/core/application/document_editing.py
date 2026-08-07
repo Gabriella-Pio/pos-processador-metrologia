@@ -1,6 +1,7 @@
 """Casos de uso de edição de campos e overrides."""
 from __future__ import annotations
 
+from src.core.domain.field_definitions import GLOBAL_FIELDS
 from src.core.domain.field_sync import sync_measured_by_to_operador, sync_operador_control_info
 from src.core.domain.parsed_overrides import (
     build_effective_dto,
@@ -37,13 +38,12 @@ def extract_global_field_values(document: ReportDocument) -> tuple[dict[str, str
         "evaluated_component": document.evaluated_component,
     }
     overridden: set[str] = set()
+    session_keys = {field.key for field in GLOBAL_FIELDS if field.source == "session"}
     for key in scalars:
+        if key in session_keys:
+            continue
         if is_scalar_overridden(key, document.parsed_overrides):
             overridden.add(key)
-    if document.client_project != getattr(document.raw_parsed_data, "cliente_projeto", document.client_project):
-        overridden.add("client_project")
-    if document.evaluated_component != getattr(document.raw_parsed_data, "componente", document.evaluated_component):
-        overridden.add("evaluated_component")
     return values, overridden
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from src.core.domain.parsed_overrides import get_dto_scalar, get_itens_medicao_as_dicts, is_itens_overridden
 from src.core.domain.ports import ReportDocument, TemplateRepository
 
 
@@ -47,15 +48,21 @@ def is_layout_dirty_vs_template(
 
 
 def is_data_dirty(document: ReportDocument) -> bool:
-    if document.parsed_overrides:
-        return True
-    if document.images:
-        return True
+    """Dados de medição alterados em relação ao PDF de origem (não layout/prosa)."""
     raw = document.raw_parsed_data
-    if raw is None:
-        return False
-    if document.client_project != getattr(raw, "cliente_projeto", document.client_project):
+
+    scalar = document.parsed_overrides.get("scalar", {})
+    for key, value in scalar.items():
+        if str(value) != get_dto_scalar(raw, key):
+            return True
+
+    if is_itens_overridden(document.parsed_overrides):
+        current = document.parsed_overrides.get("itens_medicao")
+        baseline = get_itens_medicao_as_dicts(raw)
+        if current != baseline:
+            return True
+
+    if any(img.annotations for img in document.images):
         return True
-    if document.evaluated_component != getattr(raw, "componente", document.evaluated_component):
-        return True
+
     return False

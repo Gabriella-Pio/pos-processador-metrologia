@@ -60,7 +60,7 @@ def resolve_active_template_blocks(
 
 def apply_deleted_sections(blocos: list[dict], document: ReportDocument) -> list[dict]:
     """Remove seções desativadas no workspace (``deleted_section_ids``)."""
-    deleted = set(document.deleted_section_ids)
+    deleted = set(document.deleted_section_ids) - FIXED_SECTION_IDS
     if not deleted:
         return blocos
     return [b for b in blocos if b["tipo"] not in deleted]

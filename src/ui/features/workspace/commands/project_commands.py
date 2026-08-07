@@ -7,6 +7,7 @@ from pathlib import Path
 from src.core.application.session import load_workspace_session
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.ports import RecentFilesRepository, ReportDocument, WorkspaceSessionPort
+from src.ui.features.workspace.commands.section_edit_commands import SectionEditCommands
 from src.ui.features.workspace.services.document_session_service import DocumentSessionService
 
 
@@ -87,6 +88,8 @@ class ProjectCommands:
         if slot_doc is not None and session_repo is not None:
             load_workspace_session(session_repo, slot_doc)
             ProjectCommands.sync_attachment_paths(slot_doc, session)
+        if slot_doc is not None:
+            SectionEditCommands.ensure_fixed_sections_enabled(slot_doc)
         return True, ""
 
     @staticmethod
@@ -104,6 +107,7 @@ class ProjectCommands:
         if session_repo is not None:
             load_workspace_session(session_repo, document)
         ProjectCommands.sync_attachment_paths(document, session)
+        SectionEditCommands.ensure_fixed_sections_enabled(document)
         return document
 
     @staticmethod
