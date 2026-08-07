@@ -28,7 +28,9 @@ class SQLiteRecentFilesAdapter(RecentFilesRepository):
     def list_recent(self, limit: int = 20) -> list[dict]:
         linhas = self._db.buscar_todos(limite=limit)
         resultado = []
-        for (id_, nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho) in linhas:
+        for (
+            id_, nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho, source_pdf_path
+        ) in linhas:
             resultado.append({
                 "id": str(id_),
                 "file_name": nome_arquivo or Path(caminho).name,
@@ -36,6 +38,7 @@ class SQLiteRecentFilesAdapter(RecentFilesRepository):
                 "evaluated_component": componente or "",
                 "version": versao,
                 "updated_at": self._parse_data(data_hora),
+                "source_pdf_path": source_pdf_path or "",
             })
         return resultado
 
@@ -63,6 +66,7 @@ class SQLiteRecentFilesAdapter(RecentFilesRepository):
             data_hora=datetime.now().strftime(self._FORMATO_DATA),
             responsavel=responsavel,
             caminho=str(output_path),
+            source_pdf_path=str(document.source_pdf_path) if document.source_pdf_path else "",
         )
         return str(novo_id)
 
@@ -74,7 +78,7 @@ class SQLiteRecentFilesAdapter(RecentFilesRepository):
         linha = self._db.buscar_por_id(doc_id)
         if linha is None:
             return None
-        id_, nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho = linha
+        id_, nome_arquivo, cliente_projeto, versao, componente, data_hora, responsavel, caminho, source_pdf_path = linha
         return {
             "id": str(id_),
             "file_name": nome_arquivo or Path(caminho).name,
@@ -83,6 +87,7 @@ class SQLiteRecentFilesAdapter(RecentFilesRepository):
             "version": versao,
             "updated_at": self._parse_data(data_hora),
             "file_path": caminho,
+            "source_pdf_path": source_pdf_path or "",
             "responsible": responsavel,
         }
 

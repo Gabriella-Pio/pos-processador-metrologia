@@ -152,8 +152,8 @@ class GlobalFieldsPanel(QFrame):
                 field_def,
                 value,
                 used_count,
-                field_def.key in overridden_keys,
-                show_restore=show_restore,
+                field_def.source != "session" and field_def.key in overridden_keys,
+                show_restore=show_restore and field_def.source != "session",
             )
             row.value_changed.connect(self.field_changed.emit)
             row.restore_requested.connect(self.restore_field_requested.emit)

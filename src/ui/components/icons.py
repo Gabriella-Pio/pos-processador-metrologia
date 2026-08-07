@@ -16,8 +16,16 @@ def app_icon(name: str, *, color: str | None = None, scale: float = 1.0) -> QIco
     )
 
 
+def icon_lock() -> QIcon:
+    return app_icon("lock", color=PALETTE.text_muted, scale=0.9)
+
+
 def icon_file_pdf() -> QIcon:
     return app_icon("file-pdf", color=PALETTE.senai_orange)
+
+
+def icon_layers() -> QIcon:
+    return app_icon("layer-group", color=PALETTE.senai_blue_light)
 
 
 def icon_file_upload() -> QIcon:

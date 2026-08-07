@@ -133,10 +133,14 @@ GLOBAL_FIELDS: tuple[GlobalFieldDef, ...] = (
 
 _CUSTOM_DEFAULT_FIELDS = (
     SectionFieldDef("title", "Título"),
-    SectionFieldDef("subtitle", "Subtítulo"),
     SectionFieldDef("body", "Conteúdo", "textarea"),
+    _SECTION_FOOTER_NOTE,
 )
-_CUSTOM_DEFAULT_MEDIA = (SectionMediaDef("photos", "Fotografias"),)
+_CUSTOM_DEFAULT_MEDIA = (
+    SectionMediaDef("photos", "Fotografias"),
+    SectionMediaDef("tables", "Tabela"),
+    SectionMediaDef("graphics", "Gráficos"),
+)
 
 MEDICAO_COLUMNS: tuple[tuple[str, str], ...] = (
     ("caracteristica", "Característica"),

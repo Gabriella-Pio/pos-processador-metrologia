@@ -14,6 +14,24 @@ from src.core.domain.ports import ReportDocument
 from src.core.infrastructure.template_repository import JSONTemplateRepository
 
 
+def test_session_fields_not_marked_overridden() -> None:
+    from types import SimpleNamespace
+
+    doc = ReportDocument(
+        source_pdf_path=Path("/tmp/x.pdf"),
+        client_project="Cliente importado",
+        evaluated_component="LOTE",
+    )
+    doc.raw_parsed_data = SimpleNamespace(
+        cliente_projeto="Outro",
+        componente="Do PDF",
+    )
+    values, overridden = extract_global_field_values(doc)
+    assert values["evaluated_component"] == "LOTE"
+    assert "evaluated_component" not in overridden
+    assert "client_project" not in overridden
+
+
 def test_application_sync_operador() -> None:
     doc = ReportDocument(
         source_pdf_path=Path("/tmp/x.pdf"),

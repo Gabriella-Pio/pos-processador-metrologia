@@ -7,13 +7,14 @@ from pathlib import Path
 import fitz
 
 from src.core.domain.ports import ReportDocument, ReportExporter
+from src.ui.shared.report_editor.preview_constants import PREVIEW_ZOOM
 
 
 class PreviewService:
     def __init__(self, exporter: ReportExporter) -> None:
         self._exporter = exporter
 
-    def render_pages(self, document: ReportDocument, zoom: float = 1.6) -> list[bytes]:
+    def render_pages(self, document: ReportDocument, zoom: float = PREVIEW_ZOOM) -> list[bytes]:
         with tempfile.TemporaryDirectory(prefix="metrologia_preview_") as tmp_dir:
             rascunho_path = Path(tmp_dir) / "preview.pdf"
             self._exporter.export(document, rascunho_path)

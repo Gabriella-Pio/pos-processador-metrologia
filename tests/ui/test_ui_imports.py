@@ -228,7 +228,7 @@ def test_hero_command_bar_instantiates() -> None:
     assert not hero._secondary_card.isHidden()
     assert hero._continue_card.isHidden()
 
-    hero.update_stats(3, 2)
+    hero.update_stats(1, 3, 2)
     assert hero._continue_card.isHidden()
 
     last = RecentFileSummary(
@@ -238,7 +238,7 @@ def test_hero_command_bar_instantiates() -> None:
         version="v1",
         updated_at=datetime(2026, 8, 3),
     )
-    hero.update_stats(3, 2, last)
+    hero.update_stats(1, 3, 2, last_export=last)
     assert not hero._continue_card.isHidden()
     assert hero.filter_bar.is_expanded() is False
 
@@ -265,7 +265,7 @@ def test_home_view_has_page_scroll() -> None:
     from src.ui.features.home.components.home_view import HomeView
 
     class _RepoStub:
-        def list_recent_files(self):
+        def list_recent(self, limit: int = 20):
             return []
 
         def list_templates(self):
@@ -288,9 +288,10 @@ def test_hero_uses_inline_metrics() -> None:
 
     hero = HeroCommandBar()
     assert hasattr(hero, "_inline_metrics")
-    hero.update_stats(11, 2)
-    assert "11 arquivos" in hero._inline_metrics.text()
-    assert "2 templates" in hero._inline_metrics.text()
+    hero.update_stats(2, 11, 3)
+    assert "2 projetos" in hero._inline_metrics.text()
+    assert "11 exports" in hero._inline_metrics.text()
+    assert "3 templates" in hero._inline_metrics.text()
 
     last = RecentFileSummary(
         file_id="1",
@@ -299,7 +300,7 @@ def test_hero_uses_inline_metrics() -> None:
         version="v1",
         updated_at=datetime(2026, 8, 3),
     )
-    hero.update_stats(11, 2, last)
+    hero.update_stats(2, 11, 3, last_export=last)
     assert "último: Cargill" in hero._inline_metrics.text()
 
 
@@ -613,6 +614,12 @@ def test_workspace_export_shortcut_and_hidden_banner() -> None:
 
     assert view._banner.isHidden()
     assert view._export_btn.toolTip() == "Exportar PDF (Ctrl+E)"
+    from PyQt6.QtGui import QKeySequence, QShortcut
+
+    shortcuts = view.findChildren(QShortcut)
+    sequences = {shortcut.key().toString() for shortcut in shortcuts}
+    assert "Ctrl+S" in sequences
+    assert "Ctrl+E" in sequences
     assert view._preview_menu is not None
     assert view._save_layout_action is not None
     assert view._template_selector is not None

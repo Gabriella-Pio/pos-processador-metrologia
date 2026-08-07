@@ -7,8 +7,14 @@ from datetime import datetime
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from src.core.application.project_service import ProjectService
 from src.core.domain.ports import RecentFilesRepository, TemplateRepository
-from src.ui.features.home.models.dashboard import RecentFileSummary, TemplateSummary
+from src.ui.features.home.models.dashboard import (
+    ProjectSummary,
+    RecentFileSummary,
+    TemplateSummary,
+    project_summary_from_workspace,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +23,12 @@ class HomeViewModel(QObject):
     """Carrega templates e arquivos recentes através das portas de
     repositório (SQLite/JSON), sem conhecer os detalhes de implementação.
 
-    A ``HomeView`` observa ``templates_loaded`` e ``recent_files_loaded``
-    e apenas renderiza — toda decisão de dados fica aqui.
+    A ``HomeView`` observa ``templates_loaded``, ``ongoing_projects_loaded``
+    e ``recent_files_loaded`` e apenas renderiza — toda decisão de dados fica aqui.
     """
 
     templates_loaded = pyqtSignal(list)  # list[TemplateSummary]
+    ongoing_projects_loaded = pyqtSignal(list)  # list[ProjectSummary]
     recent_files_loaded = pyqtSignal(list)  # list[RecentFileSummary]
     error_occurred = pyqtSignal(str, str, str)  # title, message, details
 
@@ -29,18 +36,52 @@ class HomeViewModel(QObject):
         self,
         recent_files_repo: RecentFilesRepository,
         template_repo: TemplateRepository,
+        project_service: ProjectService | None = None,
     ) -> None:
         super().__init__()
         self._recent_files_repo = recent_files_repo
         self._template_repo = template_repo
+        self._project_service = project_service
 
     def load_dashboard(self) -> None:
-        """Carrega templates e arquivos recentes em paralelo lógico
+        """Carrega templates, projetos em andamento e exports em paralelo lógico
         (chamadas síncronas simples aqui; podem virar QThread/worker
         se o volume de dados justificar, sem alterar a interface).
         """
         self._load_templates()
+        self._load_ongoing_projects()
         self._load_recent_files()
+
+    def _load_ongoing_projects(self) -> None:
+        if self._project_service is None:
+            self.ongoing_projects_loaded.emit([])
+            return
+        try:
+            workspaces = self._project_service.list_ongoing()
+        except Exception:  # noqa: BLE001
+            logger.exception("Falha ao carregar projetos em andamento")
+            self.error_occurred.emit(
+                "Não foi possível carregar os projetos",
+                "O banco de dados local pode estar indisponível.",
+                traceback.format_exc(),
+            )
+            return
+        summaries = [project_summary_from_workspace(workspace) for workspace in workspaces]
+        self.ongoing_projects_loaded.emit(summaries)
+
+    def rename_project(self, project_id: str, display_name: str) -> None:
+        if self._project_service is None:
+            return
+        try:
+            if self._project_service.rename(project_id, display_name):
+                self._load_ongoing_projects()
+        except Exception:  # noqa: BLE001
+            logger.exception("Falha ao renomear projeto")
+            self.error_occurred.emit(
+                "Não foi possível renomear o projeto",
+                "Tente novamente em instantes.",
+                traceback.format_exc(),
+            )
 
     def _load_templates(self) -> None:
         try:

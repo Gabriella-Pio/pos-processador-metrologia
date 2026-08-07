@@ -7,7 +7,7 @@ from typing import Any
 
 from src.core.domain.parsed_overrides import build_effective_dto, build_prose_context
 from src.core.domain.placeholder_utils import build_placeholder_context
-from src.core.domain.ports import ReportDocument
+from src.core.domain.ports import ReportDocument, VersionEntry
 from src.core.domain.report_field_registry import PROSE_TEMPLATES, merge_section_prose
 from src.core.domain.section_schema import is_tomography_template
 from src.core.domain.table_row_registry import INTRODUCAO_BLOCK_TITLES, SECTION_HEADING_DEFAULTS
@@ -103,7 +103,7 @@ def build_controle_tecnico(document: ReportDocument) -> dict:
     }
 
 
-def build_historico_versoes(document: ReportDocument) -> list[dict]:
+def version_entries_to_historico_rows(entries: list[VersionEntry]) -> list[dict]:
     return [
         {
             "version_number": entrada.version_number,
@@ -111,8 +111,17 @@ def build_historico_versoes(document: ReportDocument) -> list[dict]:
             "responsible_name": entrada.responsible_name,
             "description": entrada.description,
         }
-        for entrada in document.version_history
+        for entrada in entries
     ]
+
+
+def build_historico_versoes(
+    document: ReportDocument,
+    *,
+    version_entries: list[VersionEntry] | None = None,
+) -> list[dict]:
+    entries = version_entries if version_entries is not None else document.version_history
+    return version_entries_to_historico_rows(entries)
 
 
 def build_section_prose(
@@ -124,6 +133,7 @@ def build_section_prose(
     ctx["report_kind"] = report_kind
     result: dict[str, dict] = {}
     section_ids = set(PROSE_TEMPLATES.keys()) | set(document.section_overrides.keys()) | set(SECTION_HEADING_DEFAULTS.keys())
+    section_ids |= {s["id"] for s in document.custom_sections if s.get("id")}
     if report_kind == "tomografia":
         from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
 
@@ -185,4 +195,11 @@ def build_table_rows(document: ReportDocument, report_kind: str) -> dict[str, li
         intro_overrides,
         report_kind=report_kind,
     )
+    for custom in document.custom_sections:
+        section_id = custom.get("id", "")
+        if not section_id:
+            continue
+        stored = document.section_overrides.get(section_id, {}).get("table_rows")
+        if stored:
+            result[section_id] = merge_table_rows(section_id, stored)
     return result

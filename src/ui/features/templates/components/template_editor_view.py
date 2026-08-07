@@ -3,7 +3,7 @@ Editor de templates full-page — shell espelhando o workspace.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QPoint, Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -158,6 +158,7 @@ class TemplateEditorView(QWidget):
         self._sidebar.section_delete_requested.connect(self._on_delete_custom_section)
         self._sidebar.sections_reordered.connect(self._vm.reorder_sections)
         self._preview_panel.page_clicked.connect(self._on_preview_page_clicked)
+        self._preview_panel.section_clicked.connect(self._on_preview_section_clicked)
 
         self._vm.template_name_changed.connect(self._name_field.setText)
         self._vm.dirty_changed.connect(self._on_dirty_changed)
@@ -180,6 +181,7 @@ class TemplateEditorView(QWidget):
         self._edit_container.setVisible(visible)
         if visible:
             self._main_splitter.setSizes([240, 320, 800])
+            QTimer.singleShot(0, self._preview_panel.center_horizontal_scroll)
         else:
             self._main_splitter.setSizes([240, 0, 1120])
             self._section_title_label.setText("")
@@ -190,6 +192,7 @@ class TemplateEditorView(QWidget):
         section = self._section_anchor_map.get(section_id, {})
         title = section.get("display_title") or section.get("title", section_id)
         self._section_title_label.setText(f"Seção: {title}")
+        self._preview_panel.focus_section(section_id)
 
     def _on_add_custom_section(self) -> None:
         section_id = self._vm.add_custom_section("Nova seção")
@@ -240,6 +243,14 @@ class TemplateEditorView(QWidget):
     def _on_preview_page_clicked(self, page_number: int) -> None:
         section_id = self._preview_panel.section_id_for_page(page_number)
         if section_id:
-            self._active_section_id = section_id
-            self._vm.set_active_section(section_id)
-            self._sidebar.open_edit_for_section(section_id)
+            self._on_preview_section_clicked(section_id)
+
+    def _on_preview_section_clicked(self, section_id: str, focus_target: str = "section_title") -> None:
+        self._active_section_id = section_id
+        self._vm.set_active_section(section_id)
+        self._sidebar.open_edit_for_section(section_id)
+        self._on_section_selected(section_id)
+        if focus_target == "section_title":
+            QTimer.singleShot(0, self._sidebar.edit_view.focus_section_title)
+        elif focus_target == "photos":
+            self._sidebar.edit_view.focus_tab_for_kind("photos")

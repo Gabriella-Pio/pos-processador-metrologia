@@ -29,6 +29,18 @@ def header_gradient_style() -> str:
     return load_fragment("header_gradient")
 
 
+def header_help_button_style() -> str:
+    return load_fragment("header_help_btn")
+
+
+def header_badge_style() -> str:
+    return load_fragment("header_badge")
+
+
+def header_logo_button_style() -> str:
+    return load_fragment("header_logo_btn")
+
+
 def apply_elevation(
     widget: QWidget,
     blur: int = 24,

@@ -4,6 +4,7 @@ from __future__ import annotations
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QFrame
 
+from src.core.domain.ports import VersionEntry
 from src.ui.shared.report_editor.section_edit_view import SectionEditView
 
 
@@ -19,6 +20,7 @@ class BaseSidebarPanel(QFrame):
         self._active_section_id: str | None = None
         self._edit_open = False
         self._vm = None
+        self._version_entries: list[VersionEntry] = []
         self._edit_view = edit_view or SectionEditView()
 
     @property
@@ -62,12 +64,18 @@ class BaseSidebarPanel(QFrame):
         self._set_sections_panel_active(section_id)
         section = self._sections_map.get(section_id, {"id": section_id, "title": section_id})
         overrides = dict(section.get("fields") or {})
+        locked_media_kinds: list[str] = []
+        if self._vm is not None and hasattr(self._vm, "locked_media_kinds"):
+            locked_media_kinds = self._vm.locked_media_kinds(section_id)
+        self._edit_view.set_locked_media_kinds(locked_media_kinds)
         self._edit_view.open_section(
             section_id,
             section,
             overrides,
             section.get("table_rows"),
             itens_medicao,
+            self._version_entries,
+            locked_media_kinds,
         )
         self._after_edit_opened(section_id)
         self._edit_open = True
@@ -107,6 +115,11 @@ class BaseSidebarPanel(QFrame):
 
     def _on_edit_closed(self) -> None:
         """Hook ao fechar editor (ex.: reset breadcrumb no workspace)."""
+
+    def set_version_entries(self, entries: list[VersionEntry]) -> None:
+        self._version_entries = list(entries)
+        if self._edit_open and self._active_section_id == "historico_versoes":
+            self._edit_view.set_version_entries(entries)
 
     def close_edit(self) -> None:
         self._close_edit()

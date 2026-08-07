@@ -15,20 +15,20 @@ def run_workspace_export(
     vm: WorkspaceViewModel,
     app_state: AppState,
     *,
-    export_individual_cb,
-    export_merged_cb,
+    export_individual: bool,
+    export_merged: bool,
 ) -> None:
     session = app_state.project_session
     multi = session is not None and len(session.documents) > 1
 
-    if multi and export_merged_cb.isChecked() and not export_merged_cb.isEnabled():
+    if multi and export_merged and not export_individual:
         show_info(
             parent,
             "Exportação unificada",
             "Em breve — mescla seções institucionais em um único PDF.",
         )
 
-    if multi and export_individual_cb.isChecked():
+    if multi and export_individual:
         output_dir = QFileDialog.getExistingDirectory(parent, "Pasta para exportação em lote")
         if output_dir:
             paths = vm.export_all_documents(Path(output_dir))

@@ -19,12 +19,13 @@ from PyQt6.QtWidgets import (
 
 from src.core.domain.report_field_registry import get_edit_fields, get_media_blocks
 from src.core.application.interpretacao_edit import interpretacao_field_defs
-from src.core.domain.ports import ReportImage
+from src.core.domain.ports import ReportImage, VersionEntry
 from src.core.domain.table_row_registry import (
     INTRODUCAO_BLOCK_TITLES,
     SECTION_HEADING_DEFAULTS,
     TABLE_SECTIONS,
 )
+from src.core.domain.section_schema import is_custom_section_id
 from src.ui.components.buttons import IconButton, SecondaryButton
 from src.ui.components.icons import icon_close, icon_help
 from src.ui.components.panels import AnnotationToolbar, ImageManagerPanel
@@ -56,6 +57,7 @@ class SectionEditView(QFrame):
     delete_requested = pyqtSignal(str)
     section_restore_requested = pyqtSignal(str)
     media_kinds_changed = pyqtSignal(str, list)
+    manage_versions_requested = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -64,6 +66,8 @@ class SectionEditView(QFrame):
         self._loading = False
         self._defaults_mode = False
         self._section_overrides: dict = {}
+        self._version_entries: list[VersionEntry] = []
+        self._locked_media_kinds: list[str] = []
         self._field_widgets: dict[str, PlaceholderTextEdit | QLineEdit] = {}
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -112,6 +116,7 @@ class SectionEditView(QFrame):
             on_field_changed=self._on_field_changed,
             on_line_finished=self._on_line_finished,
             on_field_restore=lambda sid, key: self.section_field_restore_requested.emit(sid, key),
+            on_manage_versions=self.manage_versions_requested.emit,
         )
 
         self._medicoes_editor = MedicoesTableEditor()
@@ -160,6 +165,7 @@ class SectionEditView(QFrame):
 
         self._layout_panel = TemplateLayoutPanel()
         self._layout_panel.kinds_changed.connect(self._on_template_media_kinds_changed)
+        self._layout_panel.blocked_action.connect(self._on_layout_blocked)
         self._tabs_builder = SectionTabsBuilder()
 
         self._delete_btn = SecondaryButton("Excluir seção")
@@ -232,6 +238,8 @@ class SectionEditView(QFrame):
         overrides: dict,
         table_rows: list[dict[str, str]] | None = None,
         itens_medicao: list[dict[str, str]] | None = None,
+        version_entries: list[VersionEntry] | None = None,
+        locked_media_kinds: list[str] | None = None,
     ) -> None:
         # Interpretação muda de quantidade por PDF — se os campos diferem, reconstrói.
         if (
@@ -245,6 +253,10 @@ class SectionEditView(QFrame):
         scroll_pos = self._content_scroll.verticalScrollBar().value()
         self._section_id = section_id
         self._section_overrides = dict(overrides)
+        if version_entries is not None:
+            self._version_entries = list(version_entries)
+        if locked_media_kinds is not None:
+            self._locked_media_kinds = list(locked_media_kinds)
         # Limpa fotos da seção anterior até o painel reaplicar o filtro.
         self._image_panel.render_images([])
         is_custom = section.get("custom", False) or section_id.startswith("custom_")
@@ -307,7 +319,7 @@ class SectionEditView(QFrame):
             elif isinstance(widget, QLineEdit):
                 widget.setText(value)
 
-        if section_id in TABLE_SECTIONS and table_rows is not None:
+        if (section_id in TABLE_SECTIONS or is_custom_section_id(section_id)) and table_rows is not None:
             self._table_rows_editor.set_rows(table_rows)
         if section_id == "resultados" and itens_medicao is not None:
             self._medicoes_editor.set_rows(itens_medicao)
@@ -331,12 +343,32 @@ class SectionEditView(QFrame):
         self._section_title_edit.set_text(overrides.get("section_title", default))
 
     def _rebuild_table_rows(self, section_id: str, rows: list[dict[str, str]]) -> None:
-        if section_id not in TABLE_SECTIONS:
+        if section_id not in TABLE_SECTIONS and not is_custom_section_id(section_id):
             return
         self._table_rows_editor.set_rows(rows)
 
+    def set_locked_media_kinds(self, kinds: list[str]) -> None:
+        self._locked_media_kinds = list(kinds)
+        if self._section_id is not None:
+            self._rebuild_editor_tabs(self._section_id)
+
+    def set_version_entries(self, entries: list[VersionEntry]) -> None:
+        self._version_entries = list(entries)
+        if self._section_id == "historico_versoes" and not self._defaults_mode:
+            self._field_widgets = self._form_builder.rebuild(
+                self._section_id,
+                self._section_overrides,
+                False,
+                version_entries=self._version_entries,
+            )
+
     def _rebuild_fields(self, section_id: str, overrides: dict, is_custom: bool) -> None:
-        self._field_widgets = self._form_builder.rebuild(section_id, overrides, is_custom)
+        self._field_widgets = self._form_builder.rebuild(
+            section_id,
+            overrides,
+            is_custom,
+            version_entries=self._version_entries,
+        )
 
     def _rebuild_editor_tabs(self, section_id: str) -> None:
         self._tabs_builder.rebuild(
@@ -355,6 +387,7 @@ class SectionEditView(QFrame):
                 medicoes_editor=self._medicoes_editor,
                 annotation_toolbar=self._annotation_toolbar,
             ),
+            locked_media_kinds=self._locked_media_kinds,
         )
 
     def _current_overrides(self) -> dict:
@@ -371,15 +404,31 @@ class SectionEditView(QFrame):
                 values[key] = widget.text()
         return values
 
+    def _on_layout_blocked(self, message: str) -> None:
+        self._layout_panel.show_blocked_notice(message)
+
     def _on_template_media_kinds_changed(self, kinds: list[str]) -> None:
         if self._section_id is None:
             return
-        if self._section_id in TABLE_SECTIONS:
+        if self._defaults_mode and self._section_id in TABLE_SECTIONS:
             if "tables" in kinds:
                 self._layout_panel.set_table_widget(self._table_rows_editor)
             else:
                 self._layout_panel.set_table_widget(None)
+        if not self._defaults_mode:
+            removed_locked = set(self._locked_media_kinds) - set(kinds)
+            if removed_locked:
+                self._layout_panel.show_blocked_notice(
+                    "Este bloco faz parte do layout padrão da seção e não pode ser desativado aqui. "
+                    "Para um relatório diferente, crie uma seção personalizada."
+                )
+                kinds = list(dict.fromkeys([*self._locked_media_kinds, *kinds]))
         self.media_kinds_changed.emit(self._section_id, kinds)
+        if not self._defaults_mode:
+            merged = list(dict.fromkeys([*self._locked_media_kinds, *kinds]))
+            self._section_overrides = dict(self._section_overrides)
+            self._section_overrides["media_kinds"] = merged
+            self._rebuild_editor_tabs(self._section_id)
 
     def _on_insert_photo(self) -> None:
         from PyQt6.QtWidgets import QFileDialog
@@ -419,6 +468,32 @@ class SectionEditView(QFrame):
 
     def current_section_id(self) -> str | None:
         return self._section_id
+
+    def focus_tab_for_kind(self, kind: str) -> None:
+        targets = {
+            "content": self._content_scroll,
+            "layout": self._layout_panel,
+            "photos": self._photos_page,
+            "graphics": self._graphics_page,
+            "tables": self._tables_page,
+        }
+        widget = targets.get(kind)
+        if widget is None:
+            return
+        index = self._tabs.indexOf(widget)
+        if index >= 0:
+            self._tabs.setCurrentIndex(index)
+
+    def focus_section_title(self) -> None:
+        """Foca o campo editável do título na aba Conteúdo."""
+        content_index = self._tabs.indexOf(self._content_scroll)
+        if content_index >= 0:
+            self._tabs.setCurrentIndex(content_index)
+        QTimer.singleShot(80, self._focus_section_title_editor)
+
+    def _focus_section_title_editor(self) -> None:
+        self._content_scroll.ensureWidgetVisible(self._section_title_host, 0, 40)
+        self._section_title_edit.focus_editor(select_all=True)
 
     def _update_photos_hint(self, section: dict | None = None) -> None:
         title = ""

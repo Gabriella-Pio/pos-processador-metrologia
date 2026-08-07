@@ -1,8 +1,10 @@
 """Lista reordenável de seções — compartilhada entre workspace e templates."""
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtCore import QEvent, QPoint, Qt, pyqtSignal, QTimer
+from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QFrame,
     QLabel,
     QListWidget,
@@ -10,15 +12,184 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
 from src.core.domain.ports import ReportImage
+from src.ui.shared.report_editor.section_order_rules import (
+    is_sidebar_section_draggable,
+    validate_sidebar_order,
+)
 from src.ui.shared.report_editor.section_summary_rows import (
     AddSectionRow,
     SectionSummaryRow,
     TemplateSectionRow,
 )
 from src.ui.shared.report_editor.sidebar_chrome import sidebar_section_header
-from src.ui.styles import SPACING, caption_style, sidebar_panel_style
+from src.ui.styles import SPACING, PALETTE, caption_style, sidebar_panel_style
+
+
+def _notice_style(*, padding: str = "6px 8px") -> str:
+    return (
+        f"color: {PALETTE.senai_orange}; background: {PALETTE.senai_orange_glow}; "
+        f"border: 1px solid {PALETTE.senai_orange}; border-radius: 8px; padding: {padding};"
+    )
+
+
+class _DropLineOverlay(QWidget):
+    """Barra laranja persistente entre itens da lista (filho do viewport)."""
+
+    _HEIGHT = 4
+    _MARGIN = 8
+
+    def __init__(self, viewport: QWidget) -> None:
+        super().__init__(viewport)
+        self._viewport = viewport
+        self.setObjectName("SectionDropLine")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setFixedHeight(self._HEIGHT)
+        self.hide()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(PALETTE.senai_orange))
+        painter.drawRoundedRect(self.rect(), 2, 2)
+
+    def place_at_viewport_y(self, viewport_y: int) -> None:
+        width = max(48, self._viewport.width() - 2 * self._MARGIN)
+        y = viewport_y - self._HEIGHT // 2
+        self.setGeometry(self._MARGIN, y, width, self._HEIGHT)
+        self.show()
+        self.raise_()
+
+
+class SectionSummaryList(QListWidget):
+    """Lista com reordenação linear — indicador de linha, sem highlight de 'caixa'."""
+
+    def __init__(self, panel: "SectionsListPanel", parent=None) -> None:
+        super().__init__(parent)
+        self._panel = panel
+        self._drag_source_row = -1
+        self._last_drop_viewport_y: int | None = None
+        self._drop_line = _DropLineOverlay(self.viewport())
+        self.setDropIndicatorShown(False)
+        self.setMouseTracking(True)
+        self.viewport().setMouseTracking(True)
+        self.viewport().setAutoFillBackground(False)
+        self.viewport().installEventFilter(self)
+
+    def _set_dragging(self, dragging: bool) -> None:
+        self.setProperty("dragging", dragging)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        if dragging:
+            self._clear_row_hovers()
+
+    def _clear_row_hovers(self) -> None:
+        for index in range(self.count()):
+            item = self.item(index)
+            if item is None:
+                continue
+            widget = self.itemWidget(item)
+            if widget is None or not hasattr(widget, "setProperty"):
+                continue
+            widget.setProperty("hovered", "false")
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+
+    def _end_drag_visuals(self) -> None:
+        self._set_dragging(False)
+        self._clear_drop_line()
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        if obj is self.viewport():
+            event_type = event.type()
+            if event_type == QEvent.Type.DragMove:
+                self._update_drop_line(int(event.position().y()))
+            elif event_type in (QEvent.Type.DragLeave, QEvent.Type.Drop):
+                self._clear_drop_line()
+        return super().eventFilter(obj, event)
+
+    def _viewport_pos(self, event) -> QPoint:
+        """Converte posição do drag para coordenadas do viewport."""
+        return self.viewport().mapFrom(self, event.position().toPoint())
+
+    def _is_add_row_index(self, row: int) -> bool:
+        item = self.item(row)
+        if item is None:
+            return False
+        return isinstance(self.itemWidget(item), AddSectionRow)
+
+    def _update_drop_line(self, pos_y: int) -> None:
+        best_row: int | None = None
+        best_dist = float("inf")
+        insert_above = True
+        for row in range(self.count()):
+            if self._is_add_row_index(row):
+                continue
+            item = self.item(row)
+            if item is None:
+                continue
+            rect = self.visualItemRect(item)
+            dist = abs(pos_y - rect.center().y())
+            if dist < best_dist:
+                best_dist = dist
+                best_row = row
+                insert_above = pos_y < rect.center().y()
+        if best_row is None:
+            self._clear_drop_line()
+        else:
+            rect = self.visualItemRect(self.item(best_row))
+            y = rect.top() if insert_above else rect.bottom()
+            self._last_drop_viewport_y = y
+            self._drop_line.place_at_viewport_y(y)
+
+    def _clear_drop_line(self) -> None:
+        self._last_drop_viewport_y = None
+        self._drop_line.hide()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if self._last_drop_viewport_y is not None:
+            self._drop_line.place_at_viewport_y(self._last_drop_viewport_y)
+
+    def startDrag(self, supportedActions) -> None:  # noqa: N802
+        self._drag_source_row = self.currentRow()
+        self._set_dragging(True)
+        super().startDrag(supportedActions)
+
+    def dragMoveEvent(self, event) -> None:  # noqa: N802
+        vp = self._viewport_pos(event)
+        target = self.indexAt(vp)
+        if target.isValid() and self._is_add_row_index(target.row()):
+            self._clear_drop_line()
+            event.ignore()
+            return
+        super().dragMoveEvent(event)
+        if 0 <= self._drag_source_row < self.count():
+            self.setCurrentRow(self._drag_source_row)
+        self._update_drop_line(vp.y())
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802
+        if event.source() is self:
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragLeaveEvent(self, event) -> None:  # noqa: N802
+        self._end_drag_visuals()
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event) -> None:  # noqa: N802
+        vp = self._viewport_pos(event)
+        target = self.indexAt(vp)
+        if target.isValid() and self._is_add_row_index(target.row()):
+            event.ignore()
+            return
+        super().dropEvent(event)
+        self._end_drag_visuals()
+        self._panel._pin_add_row_last()
+        if not self._panel._loading:
+            self._panel._emit_reorder()
 
 
 class SectionsListPanel(QFrame):
@@ -50,24 +221,24 @@ class SectionsListPanel(QFrame):
         self._hint = QLabel(
             "Marque as seções e clique para editar defaults"
             if self._mode == "template"
-            else "Clique para ir ao preview · duplo-clique para editar"
+            else "Marque para incluir no relatório · clique no preview · duplo-clique para editar"
         )
         self._hint.setObjectName("SidebarHint")
         self._hint.setWordWrap(True)
 
-        self._list = QListWidget()
+        self._hint_default = self._hint.text()
+        self._hint_timer = QTimer(self)
+        self._hint_timer.setSingleShot(True)
+        self._hint_timer.timeout.connect(self._restore_hint_text)
+
+        self._list = SectionSummaryList(self)
         self._list.setObjectName("SectionSummaryList")
         self._list.setMinimumWidth(0)
-        self._list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self._list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self._list.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self._list.setSpacing(2)
+        self._list.setUniformItemSizes(True)
+        self._list.setSpacing(SPACING.sm)
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._list.model().rowsMoved.connect(self._emit_reorder)
-
-        self._add_row = AddSectionRow()
-        self._add_row.clicked.connect(self.add_custom_section_requested.emit)
-        if self._mode == "template":
-            self._add_row.setToolTip("Adicionar seção personalizada ao template")
 
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
@@ -75,7 +246,6 @@ class SectionsListPanel(QFrame):
         inner_layout.setSpacing(SPACING.sm)
         inner_layout.addWidget(self._hint)
         inner_layout.addWidget(self._list, stretch=1)
-        inner_layout.addWidget(self._add_row)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -97,20 +267,35 @@ class SectionsListPanel(QFrame):
             if isinstance(widget, SectionSummaryRow):
                 widget.set_photo_count(len(self._images_by_section.get(widget.section_id, [])))
 
+    def _show_notice(self, message: str, duration_ms: int = 4500) -> None:
+        if not self._hint_timer.isActive():
+            self._hint_default = self._hint.text()
+        self._hint.setText(f"⚠ {message}")
+        self._hint.setStyleSheet(caption_style() + " " + _notice_style())
+        self._hint_timer.start(duration_ms)
+
+    def _restore_hint_text(self) -> None:
+        self._hint.setText(self._hint_default)
+        self._hint.setStyleSheet(caption_style())
+
     def render_sections(self, sections: list[dict]) -> None:
         self._sections = sections
         count = len(sections)
         if self._mode == "template":
             enabled_count = sum(1 for s in sections if s.get("enabled", True))
             self._hint.setText(
-                f"{enabled_count} de {count} seção{'ões' if count != 1 else ''} ativas · "
-                "marque e clique para editar defaults"
+                f"{enabled_count} de {count} seç{'ões' if count != 1 else 'ão'} ativas · "
+                "≡ arraste para reordenar · marque e clique para editar defaults"
             )
         else:
+            enabled_count = sum(1 for s in sections if s.get("enabled", True))
             self._hint.setText(
-                f"{count} seção{'ões' if count != 1 else ''} · "
-                "clique para ir ao preview · duplo-clique para editar"
+                f"{enabled_count} de {count} seç{'ões' if count != 1 else 'ão'} ativas · "
+                "≡ arraste para reordenar · marque para incluir no PDF · "
+                "clique para preview · duplo-clique para editar"
             )
+        self._hint_default = self._hint.text()
+        self._hint.setStyleSheet(caption_style())
         self._rebuild_rows()
 
     def set_active_section(self, section_id: str | None) -> None:
@@ -122,6 +307,28 @@ class SectionsListPanel(QFrame):
             if isinstance(widget, row_types):
                 widget.set_active(widget.section_id == section_id)
 
+    def _append_add_row(self) -> None:
+        row = AddSectionRow(self._list)
+        row.clicked.connect(self.add_custom_section_requested.emit)
+        if self._mode == "template":
+            row.setToolTip("Adicionar seção personalizada ao template")
+        add_item = QListWidgetItem()
+        add_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        add_item.setSizeHint(row.sizeHint())
+        self._list.addItem(add_item)
+        self._list.setItemWidget(add_item, row)
+
+    def _pin_add_row_last(self) -> None:
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            widget = self._list.itemWidget(item) if item is not None else None
+            if isinstance(widget, AddSectionRow):
+                if index == self._list.count() - 1:
+                    return
+                taken = self._list.takeItem(index)
+                self._list.addItem(taken)
+                return
+
     def _rebuild_rows(self) -> None:
         self._loading = True
         self._list.clear()
@@ -132,23 +339,29 @@ class SectionsListPanel(QFrame):
                 row.click_requested.connect(self.section_edit_requested.emit)
                 row.enabled_changed.connect(self.section_enabled_changed.emit)
                 row.delete_requested.connect(self.section_delete_requested.emit)
+                row.protected_toggle_blocked.connect(self._on_protected_toggle_blocked)
             else:
                 photos = len(self._images_by_section.get(section_id, []))
-                row = SectionSummaryRow(section, photos)
+                row = SectionSummaryRow(section, photos, show_enable_toggle=True)
                 row.click_requested.connect(self._on_row_clicked)
                 row.edit_requested.connect(self._on_row_edit_requested)
                 row.delete_requested.connect(self.section_delete_requested.emit)
+                row.enabled_changed.connect(self.section_enabled_changed.emit)
+                row.protected_toggle_blocked.connect(self._on_protected_toggle_blocked)
             row.set_active(section_id == self._active_section_id)
             item = QListWidgetItem()
-            item.setFlags(
-                item.flags()
-                | Qt.ItemFlag.ItemIsDragEnabled
+            flags = (
+                Qt.ItemFlag.ItemIsEnabled
+                | Qt.ItemFlag.ItemIsSelectable
                 | Qt.ItemFlag.ItemIsDropEnabled
-                | Qt.ItemFlag.ItemIsEnabled
             )
+            if is_sidebar_section_draggable(section_id):
+                flags |= Qt.ItemFlag.ItemIsDragEnabled
+            item.setFlags(flags)
             item.setSizeHint(row.sizeHint())
             self._list.addItem(item)
             self._list.setItemWidget(item, row)
+        self._append_add_row()
         self._loading = False
 
     def _on_row_clicked(self, section_id: str) -> None:
@@ -170,22 +383,38 @@ class SectionsListPanel(QFrame):
             self.section_navigated.emit(self._pending_section_id)
             self._pending_section_id = None
 
+    def _on_protected_toggle_blocked(self) -> None:
+        self._show_notice(
+            "Esta seção é obrigatória no relatório e não pode ser desativada."
+        )
+
     def _emit_reorder(self, *_args) -> None:
         if self._loading:
             return
+        self._pin_add_row_last()
         row_type = TemplateSectionRow if self._mode == "template" else SectionSummaryRow
-        ordered = [
-            self._list.itemWidget(self._list.item(i)).section_id  # type: ignore[union-attr]
-            for i in range(self._list.count())
-            if isinstance(self._list.itemWidget(self._list.item(i)), row_type)
-        ]
-        if ordered:
-            self.sections_reordered.emit(ordered)
+        ordered: list[str] = []
+        for i in range(self._list.count()):
+            widget = self._list.itemWidget(self._list.item(i))
+            if isinstance(widget, row_type):
+                ordered.append(widget.section_id)
+        if len(ordered) != len(self._sections):
+            QTimer.singleShot(0, self._restore_section_order)
+            return
+        valid, message = validate_sidebar_order(ordered)
+        if not valid:
+            self._show_notice(message)
+            QTimer.singleShot(0, self._restore_section_order)
+            return
+        self.sections_reordered.emit(ordered)
+
+    def _restore_section_order(self) -> None:
+        self.render_sections(self._sections)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         row_type = TemplateSectionRow if self._mode == "template" else SectionSummaryRow
         for index in range(self._list.count()):
             widget = self._list.itemWidget(self._list.item(index))
-            if isinstance(widget, row_type):
+            if isinstance(widget, (row_type, AddSectionRow)):
                 widget.resize(self._list.viewport().width() - 4, widget.height())

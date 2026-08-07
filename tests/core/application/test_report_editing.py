@@ -163,8 +163,10 @@ def test_sections_list_panel_template_mode() -> None:
         {"id": "resultados", "title": "Resultados", "enabled": False},
     ])
     assert panel._mode == "template"
-    assert panel._list.count() == 2
-    assert panel._add_row.parentWidget() is not None
+    assert panel._list.count() == 3
+    last_widget = panel._list.itemWidget(panel._list.item(panel._list.count() - 1))
+    from src.ui.shared.report_editor.section_summary_rows import AddSectionRow
+    assert isinstance(last_widget, AddSectionRow)
 
 
 def test_template_custom_section_in_config() -> None:
@@ -196,6 +198,18 @@ def test_effective_media_kinds_override() -> None:
     assert len(blocks) == 2
 
 
+def test_update_section_media_kinds_persists_in_overrides() -> None:
+    from src.ui.features.workspace.commands.section_edit_commands import SectionEditCommands
+
+    doc = ReportDocument(
+        source_pdf_path=Path("/tmp/x.pdf"),
+        client_project="Cliente",
+        evaluated_component="Peça",
+    )
+    SectionEditCommands.update_section_media_kinds(doc, "grafica", ["photos"])
+    assert doc.section_overrides["grafica"]["media_kinds"] == ["photos"]
+
+
 def test_layout_dirty_vs_data_dirty_split(tmp_path) -> None:
     repo = JSONTemplateRepository(storage_path=str(tmp_path / "templates.json"))
     doc = ReportDocument(
@@ -213,6 +227,18 @@ def test_layout_dirty_vs_data_dirty_split(tmp_path) -> None:
 
     doc.section_overrides["introducao"] = {"objetivo": "Custom"}
     assert is_layout_dirty_vs_template(doc, repo)
+
+
+def test_data_dirty_ignores_images_without_annotations() -> None:
+    from src.core.domain.ports import ReportImage
+
+    doc = ReportDocument(
+        source_pdf_path=Path("/tmp/x.pdf"),
+        client_project="Cliente",
+        evaluated_component="Peça",
+    )
+    doc.images.append(ReportImage(image_path=Path("/tmp/photo.jpg"), section_id="grafica"))
+    assert not is_data_dirty(doc)
 
 
 def test_sync_operador_control_info() -> None:

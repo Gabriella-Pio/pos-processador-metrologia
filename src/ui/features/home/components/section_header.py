@@ -34,6 +34,10 @@ class TabSectionHeader(QWidget):
         if right is not None:
             row.addWidget(right)
 
+    def set_title(self, text: str) -> None:
+        if self._title_label is not None:
+            self._title_label.setText(text)
+
     def set_subtitle(self, text: str) -> None:
         if self._subtitle_label is not None:
             self._subtitle_label.setText(text)

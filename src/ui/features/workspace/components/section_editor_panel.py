@@ -21,6 +21,9 @@ class SectionEditorPanel(BaseSidebarPanel):
     add_custom_section_requested = pyqtSignal()
     sections_reordered = pyqtSignal(list)
     new_version_requested = pyqtSignal()
+    version_preview_requested = pyqtSignal(int)
+    version_restore_requested = pyqtSignal(int)
+    version_export_requested = pyqtSignal(int)
     image_dropped = pyqtSignal(Path)
     image_remove_requested = pyqtSignal(object)
     image_caption_changed = pyqtSignal(object, str)
@@ -47,6 +50,9 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._dados_panel = DadosRelatorioPanel()
         self._version_panel = VersionHistoryPanel()
         self._version_panel.new_version_requested.connect(self.new_version_requested.emit)
+        self._version_panel.preview_requested.connect(self.version_preview_requested.emit)
+        self._version_panel.restore_requested.connect(self.version_restore_requested.emit)
+        self._version_panel.export_requested.connect(self.version_export_requested.emit)
 
         self._sidebar_tabs = QTabWidget()
         self._sidebar_tabs.setObjectName("WorkspaceSidebarTabs")
@@ -61,6 +67,7 @@ class SectionEditorPanel(BaseSidebarPanel):
 
     def bind_view_model(self, view_model) -> None:
         super().bind_view_model(view_model)
+        self._sections_panel.section_enabled_changed.connect(view_model.set_section_enabled)
         self._edit_view.section_field_changed.connect(view_model.update_section_field)
         self._edit_view.section_field_restore_requested.connect(view_model.restore_section_field)
         self._edit_view.table_rows_changed.connect(view_model.update_section_table_rows)
@@ -72,6 +79,8 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._edit_view.tool_selected.connect(self.tool_selected.emit)
         self._edit_view.itens_medicao_changed.connect(view_model.update_itens_medicao)
         self._edit_view.section_restore_requested.connect(view_model.restore_section)
+        self._edit_view.manage_versions_requested.connect(self._show_historico_tab)
+        self._edit_view.media_kinds_changed.connect(view_model.update_section_media_kinds)
         self._dados_panel.field_changed.connect(view_model.update_parsed_field)
         self._dados_panel.restore_field_requested.connect(view_model.restore_parsed_field)
 
@@ -128,6 +137,14 @@ class SectionEditorPanel(BaseSidebarPanel):
         """Seleção no preview — navega sem abrir o editor."""
         self._on_section_navigated(section_id)
 
+    def focus_section_tab(self, kind: str) -> None:
+        if self._edit_open:
+            self._edit_view.focus_tab_for_kind(kind)
+
+    def focus_section_title(self) -> None:
+        if self._edit_open:
+            self._edit_view.focus_section_title()
+
     def _show_sumario_tab(self) -> None:
         self._sidebar_tabs.setCurrentIndex(0)
 
@@ -141,7 +158,12 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._edit_view.render_images(images)
 
     def render_versions(self, entries) -> None:
+        self.set_version_entries(entries)
         self._version_panel.render_history(entries)
+
+    def _show_historico_tab(self) -> None:
+        self._close_edit()
+        self._sidebar_tabs.setCurrentIndex(2)
 
     def set_source_attachments(self, paths: list[Path]) -> None:
         """Recebe os PDFs de origem do projeto (seção Anexos usa o documento ativo)."""

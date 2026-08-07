@@ -3,7 +3,7 @@ Header institucional — gradiente SENAI, breadcrumb dinâmico e navegação tex
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Optional
 
@@ -19,11 +19,28 @@ from PyQt6.QtWidgets import (
 )
 
 from src.ui.components.icons import icon_help
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, header_gradient_style
+from src.ui.styles import (
+    PALETTE,
+    SPACING,
+    TYPOGRAPHY,
+    header_badge_style,
+    header_gradient_style,
+    header_help_button_style,
+    header_logo_button_style,
+)
 
 _ASSETS_DIR = Path(__file__).parents[3] / "assets"
 
 BreadcrumbHandler = Callable[[], None] | None
+
+_LEADING_LOGO_CANDIDATES = (
+    "logo-centro-white.png",
+    "logo-centro-senai-white.png",
+    "logo-senai-white.png",
+    "logo-centro-senai.png",
+    "logo-senai.png",
+    "logo-centro.png",
+)
 
 
 class BreadcrumbBar(QWidget):
@@ -122,6 +139,8 @@ class AppHeader(QWidget):
     def __init__(
         self,
         subtitle: str = "Centro de Excelência em Metrologia",
+        *,
+        trailing_logos: Sequence[str] = (),
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -136,6 +155,8 @@ class AppHeader(QWidget):
         self._nav_divider: Optional[QFrame] = None
         self._brand_btn: Optional[QPushButton] = None
         self._breadcrumb = BreadcrumbBar()
+        self._trailing_logo_candidates = tuple(trailing_logos)
+        self._trailing_logo_buttons: list[QPushButton] = []
 
         self._build_ui(subtitle)
 
@@ -145,7 +166,7 @@ class AppHeader(QWidget):
         layout.setContentsMargins(s.xl, s.sm, s.xl, s.sm)
         layout.setSpacing(s.md)
 
-        logo_loaded = self._try_add_logo(layout)
+        logo_loaded = self._add_logo_candidates(layout, _LEADING_LOGO_CANDIDATES)
         if logo_loaded:
             layout.addSpacing(s.sm)
 
@@ -203,6 +224,7 @@ class AppHeader(QWidget):
         layout.addStretch(1)
 
         self._help_btn = QPushButton()
+        self._help_btn.setObjectName("AppHeaderHelpBtn")
         self._help_btn.setIcon(icon_help())
         self._help_btn.setIconSize(QSize(18, 18))
         self._help_btn.setFixedSize(38, 38)
@@ -212,53 +234,74 @@ class AppHeader(QWidget):
         self._apply_help_button_style()
         layout.addWidget(self._help_btn)
 
+        self._badge_label.setObjectName("AppHeaderBadge")
         self._badge_label.setText("Pós-processador de Relatórios")
-        self._badge_label.setStyleSheet(f"""
-            color: {p.senai_orange};
-            background-color: rgba(240, 67, 30, 0.15);
-            border: 1px solid rgba(240, 67, 30, 0.35);
-            border-radius: {s.radius_pill}px;
-            font-size: 11px;
-            font-weight: {t.weight_bold};
-            letter-spacing: 0.6px;
-            padding: 6px 14px;
-        """)
+        self._apply_badge_style()
         layout.addWidget(self._badge_label)
+
+        if self._trailing_logo_candidates:
+            layout.addSpacing(s.sm)
+            self._add_trailing_logos(layout, self._trailing_logo_candidates)
 
         if subtitle and subtitle != "Centro de Excelência em Metrologia":
             self.set_subtitle(subtitle)
         else:
             self._breadcrumb.set_segments([("Início", None)])
 
-    def _try_add_logo(self, layout: QHBoxLayout) -> bool:
-        for candidate in (
-            "logo-centro-senai.png",
-            "logo-centro.png",
-            "logo-senai.png",
-            "logo-senai-white.png",
-        ):
+    def _create_logo_button(self, path: Path, *, trailing: bool = False) -> QPushButton:
+        pixmap = QPixmap(str(path))
+        scaled = pixmap.scaledToHeight(40, Qt.TransformationMode.SmoothTransformation)
+        logo_btn = QPushButton()
+        logo_btn.setObjectName(
+            "AppHeaderTrailingLogoBtn" if trailing else "AppHeaderLogoBtn"
+        )
+        logo_btn.setIcon(QIcon(scaled))
+        logo_btn.setIconSize(scaled.size())
+        logo_btn.setFixedSize(scaled.width() + 8, 44)
+        logo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        logo_btn.setToolTip("Ir para Início" if not trailing else path.stem.replace("-", " ").title())
+        logo_btn.setStyleSheet(header_logo_button_style())
+        if not trailing:
+            logo_btn.clicked.connect(self.home_requested.emit)
+        return logo_btn
+
+    def _add_logo_candidates(self, layout: QHBoxLayout, candidates: Sequence[str]) -> bool:
+        for candidate in candidates:
             path = _ASSETS_DIR / candidate
             if path.exists():
                 pixmap = QPixmap(str(path))
                 if not pixmap.isNull():
-                    scaled = pixmap.scaledToHeight(
-                        40, Qt.TransformationMode.SmoothTransformation
-                    )
-                    logo_btn = QPushButton()
-                    logo_btn.setIcon(QIcon(scaled))
-                    logo_btn.setIconSize(scaled.size())
-                    logo_btn.setFixedSize(scaled.width() + 8, 44)
-                    logo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                    logo_btn.setToolTip("Ir para Início")
-                    logo_btn.setStyleSheet(
-                        "QPushButton { background: transparent; border: none; }"
-                        "QPushButton:hover { background: rgba(255,255,255,0.08); "
-                        "border-radius: 8px; }"
-                    )
-                    logo_btn.clicked.connect(self.home_requested.emit)
-                    layout.addWidget(logo_btn)
+                    layout.addWidget(self._create_logo_button(path, trailing=False))
                     return True
         return False
+
+    def _add_trailing_logos(self, layout: QHBoxLayout, candidates: Sequence[str]) -> None:
+        for candidate in candidates:
+            path = _ASSETS_DIR / candidate
+            if not path.exists():
+                continue
+            pixmap = QPixmap(str(path))
+            if pixmap.isNull():
+                continue
+            btn = self._create_logo_button(path, trailing=True)
+            layout.addWidget(btn)
+            self._trailing_logo_buttons.append(btn)
+
+    def add_trailing_logo(self, asset_name: str) -> bool:
+        """Adiciona logo no canto direito. Coloque o arquivo em ``assets/``."""
+        path = _ASSETS_DIR / asset_name
+        if not path.exists():
+            return False
+        pixmap = QPixmap(str(path))
+        if pixmap.isNull():
+            return False
+        layout = self.layout()
+        if not isinstance(layout, QHBoxLayout):
+            return False
+        btn = self._create_logo_button(path, trailing=True)
+        layout.addWidget(btn)
+        self._trailing_logo_buttons.append(btn)
+        return True
 
     def set_breadcrumb(self, segments: list[tuple[str, BreadcrumbHandler]]) -> None:
         self._breadcrumb.set_segments(segments)
@@ -281,37 +324,22 @@ class AppHeader(QWidget):
             self._nav_divider.setVisible(show_nav)
 
     def _apply_help_button_style(self) -> None:
-        p = PALETTE
         if self._help_btn is None:
             return
         self._help_btn.setIcon(icon_help())
-        self._help_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.18);
-                border-radius: {SPACING.radius_md}px;
-            }}
-            QPushButton:hover {{
-                background: rgba(240, 67, 30, 0.22);
-                border-color: rgba(240, 67, 30, 0.45);
-            }}
-        """)
+        self._help_btn.setStyleSheet(header_help_button_style())
+
+    def _apply_badge_style(self) -> None:
+        self._badge_label.setStyleSheet(header_badge_style())
 
     def refresh_appearance(self) -> None:
         """Reaplica estilos após mudança de tema/contraste/fonte."""
         self.setStyleSheet(header_gradient_style())
         self._apply_help_button_style()
-        p, t, s = PALETTE, TYPOGRAPHY, SPACING
-        self._badge_label.setStyleSheet(f"""
-            color: {p.senai_orange};
-            background-color: rgba(240, 67, 30, 0.15);
-            border: 1px solid rgba(240, 67, 30, 0.35);
-            border-radius: {s.radius_pill}px;
-            font-size: 11px;
-            font-weight: {t.weight_bold};
-            letter-spacing: 0.6px;
-            padding: 6px 14px;
-        """)
+        self._apply_badge_style()
+        for btn in self._trailing_logo_buttons:
+            btn.setStyleSheet(header_logo_button_style())
+        p, t = PALETTE, TYPOGRAPHY
         if self._back_link:
             self._back_link.setStyleSheet(self._nav_link_stylesheet())
         if self._forward_link:

@@ -9,6 +9,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import QDialog, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
+from src.core.application.project_service import ProjectService
+from src.core.application.project_serializer import resolved_display_name
 from src.core.domain.ports import (
     RecentFilesRepository,
     ReportExporter,
@@ -43,6 +45,8 @@ class MainWindow(QMainWindow):
         template_repo: TemplateRepository,
         version_history_repo: VersionHistoryRepository | None = None,
         workspace_session_repo: WorkspaceSessionPort | None = None,
+        project_service: ProjectService | None = None,
+        version_snapshot_repo=None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("Pós-processamento de Relatórios de Metrologia — SENAI × ZEISS")
@@ -53,7 +57,7 @@ class MainWindow(QMainWindow):
         self._template_repo = template_repo
         self._app_state = AppState()
 
-        self._home_vm = HomeViewModel(recent_files_repo, template_repo)
+        self._home_vm = HomeViewModel(recent_files_repo, template_repo, project_service)
         self._workspace_vm = WorkspaceViewModel(
             self._app_state,
             report_parser,
@@ -62,6 +66,8 @@ class MainWindow(QMainWindow):
             version_history_repo,
             template_repo,
             workspace_session_repo,
+            project_service,
+            version_snapshot_repo,
         )
         self._template_editor_vm = TemplateEditorViewModel(template_repo, report_exporter)
         self._nav_controller = NavigationController()
@@ -73,7 +79,10 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        self._header = AppHeader(parent=self)
+        self._header = AppHeader(
+            trailing_logos=("logo-senai-white.png",),
+            parent=self,
+        )
         main_layout.addWidget(self._header)
 
         self._stack = QStackedWidget()
@@ -101,9 +110,11 @@ class MainWindow(QMainWindow):
 
         self._home_view.new_document_requested.connect(self._open_project_setup)
         self._home_view.template_editor_requested.connect(self._open_template_editor)
+        self._home_view.project_opened.connect(self._open_project)
         self._home_view.recent_file_opened.connect(self._open_recent_file)
         self._template_editor_view.saved.connect(lambda _tid: self._home_vm.load_dashboard())
         self._template_editor_vm.template_name_changed.connect(self._on_template_name_changed)
+        self._workspace_vm.project_display_name_changed.connect(self._on_project_display_name_changed)
 
     def _setup_shortcuts(self) -> None:
         back = QShortcut(QKeySequence("Alt+Left"), self)
@@ -176,7 +187,11 @@ class MainWindow(QMainWindow):
             doc = self._app_state.active_document
             comp_name = doc.evaluated_component if doc else "Workspace de Análise"
             session = self._app_state.project_session
-            project_name = session.client_project if session else comp_name
+            project_name = (
+                resolved_display_name(session)
+                if session is not None
+                else comp_name
+            )
 
             self._header.set_breadcrumb([
                 ("Início", self._go_home),
@@ -201,6 +216,18 @@ class MainWindow(QMainWindow):
             ("Início", self._go_home),
             ("Templates", None),
             (display, None),
+        ])
+
+    def _on_project_display_name_changed(self, display_name: str) -> None:
+        if self._stack.currentIndex() != 1:
+            return
+        doc = self._app_state.active_document
+        comp_name = doc.evaluated_component if doc else "Workspace de Análise"
+        self._header.set_badge_text(display_name)
+        self._header.set_breadcrumb([
+            ("Início", self._go_home),
+            ("Workspace", None),
+            (comp_name, None),
         ])
 
     def _open_project_setup(self) -> None:
@@ -250,6 +277,10 @@ class MainWindow(QMainWindow):
                 return
         self._template_editor_view.load_template(template_id)
         self._nav_controller.navigate_to(2)
+
+    def _open_project(self, project_id: str) -> None:
+        if self._workspace_vm.load_project_by_id(project_id):
+            self._nav_controller.navigate_to(1)
 
     def _open_recent_file(self, file_id: str) -> None:
         try:

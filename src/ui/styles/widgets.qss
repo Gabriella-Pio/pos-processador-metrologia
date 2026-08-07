@@ -208,6 +208,39 @@ QWidget#AppHeader {{
     border-bottom: 3px solid {senai_orange};
 }}
 
+/* @fragment header_help_btn */
+QPushButton#AppHeaderHelpBtn {{
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: {radius_md}px;
+}}
+QPushButton#AppHeaderHelpBtn:hover {{
+    background: rgba(240, 67, 30, 0.22);
+    border-color: rgba(240, 67, 30, 0.45);
+}}
+
+/* @fragment header_badge */
+QLabel#AppHeaderBadge {{
+    color: {senai_orange};
+    background-color: rgba(240, 67, 30, 0.15);
+    border: 1px solid rgba(240, 67, 30, 0.35);
+    border-radius: {radius_pill}px;
+    font-size: 11px;
+    font-weight: {weight_bold};
+    letter-spacing: 0.6px;
+    padding: 6px 14px;
+}}
+
+/* @fragment header_logo_btn */
+QPushButton#AppHeaderLogoBtn, QPushButton#AppHeaderTrailingLogoBtn {{
+    background: transparent;
+    border: none;
+}}
+QPushButton#AppHeaderLogoBtn:hover, QPushButton#AppHeaderTrailingLogoBtn:hover {{
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}}
+
 /* @fragment list_card_frame */
 QFrame {{
     background: {bg_surface};

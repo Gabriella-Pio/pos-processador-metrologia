@@ -157,8 +157,12 @@ class PlaceholderTextEdit(QFrame):
     def has_editor_focus(self) -> bool:
         return self._editor.hasFocus()
 
-    def focus_editor(self) -> None:
+    def focus_editor(self, *, select_all: bool = False) -> None:
         self._editor.setFocus(Qt.FocusReason.OtherFocusReason)
+        if select_all:
+            cursor = self._editor.textCursor()
+            cursor.select(QTextCursor.SelectionType.Document)
+            self._editor.setTextCursor(cursor)
 
     def sizeHint(self) -> QSize:
         width = max(80, self.width() or 120)

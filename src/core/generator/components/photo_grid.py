@@ -84,3 +84,13 @@ def append_photo_grid(
         ]))
         story.append(band)
         story.append(Spacer(1, 6))
+
+
+def append_section_photos_if_any(story, styles, section_id: str, contexto_extra: dict) -> None:
+    """Fotos adicionadas no workspace em seções sem renderer nativo de imagem."""
+    fotos = list((contexto_extra.get("fotos_secoes") or {}).get(section_id, []) or [])
+    if not fotos:
+        return
+    captions = contexto_extra.get("foto_captions") or {}
+    story.append(Spacer(1, 4))
+    append_photo_grid(story, fotos, captions, styles)

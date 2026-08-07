@@ -5,21 +5,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QPoint, Qt, pyqtSignal
-from PyQt6.QtGui import QCursor, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QCursor, QFontMetrics, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QFileDialog,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTabBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from src.core.application.project_serializer import resolved_display_name
 from src.core.domain.ports import ReportDocument
+from src.core.domain.project_session import ProjectDocumentSlot
 from src.ui.components.inputs import LayoutTemplateSelector
-from src.ui.components.icons import icon_plus
+from src.ui.components.icons import icon_edit, icon_plus
 from src.ui.components.feedback import (
     FeedbackLevel,
     InlineBanner,
@@ -29,8 +32,8 @@ from src.ui.components.feedback import (
 )
 from src.ui.features.workspace.dialogs.save_template_dialog import SaveTemplateDialog
 from src.ui.features.workspace.dialogs.version_register_dialog import VersionRegisterDialog
-from src.ui.styles import SPACING
 from src.ui.controllers.app_state import AppState
+from src.ui.features.workspace.commands.project_commands import ProjectCommands
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from src.ui.features.workspace.components.section_editor_panel import SectionEditorPanel
 from src.ui.features.workspace.components.workspace_export_flow import (
@@ -44,6 +47,38 @@ from src.ui.features.workspace.components.workspace_preview_chrome import (
 )
 from src.ui.shared.report_editor.editor_shell import build_editor_stack, create_three_column_splitter
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
+
+
+def _document_tab_label(slot: ProjectDocumentSlot) -> str:
+    """Rótulo da aba — usa o nome do arquivo de entrada, não o componente avaliado."""
+    stem = slot.source_pdf_path.stem[:20] or "PDF"
+    kind = getattr(slot, "source_kind", "") or (
+        slot.document.source_kind if slot.document else ""
+    )
+    badge = "Tomo" if kind == "insp_ect" else "MMC"
+    return f"{stem} [{badge}]"
+
+
+def _document_tab_tooltip(slot: ProjectDocumentSlot) -> str:
+    path = slot.source_pdf_path.resolve()
+    kind = getattr(slot, "source_kind", "") or (
+        slot.document.source_kind if slot.document else ""
+    )
+    lines = [path.name, str(path), f"Origem: {kind or 'desconhecida'}"]
+    component = slot.evaluated_component.strip()
+    if component and component != path.stem:
+        lines.append(f"Componente avaliado: {component}")
+    if slot.template_id:
+        lines.append(f"Template: {slot.template_id}")
+    return "\n".join(lines)
+
+
+def _document_header_label(document: ReportDocument, session) -> str:
+    base = f"{document.client_project} — {document.evaluated_component}"
+    if session is not None and len(session.documents) > 1:
+        slot = session.documents[session.active_index]
+        return f"{slot.source_pdf_path.name} · {base}"
+    return base
 
 
 class WorkspaceView(QWidget):
@@ -69,6 +104,23 @@ class WorkspaceView(QWidget):
         self._add_pdf_btn.setToolTip("Incluir mais relatórios ZEISS no projeto")
         self._add_pdf_btn.clicked.connect(self._on_add_pdf_clicked)
 
+        self._project_title_edit = QLineEdit()
+        self._project_title_edit.setObjectName("WorkspaceProjectTitle")
+        self._project_title_edit.setPlaceholderText("Título do projeto")
+        self._project_title_edit.setToolTip("Nome exibido na Home — editável a qualquer momento")
+        self._project_title_edit.editingFinished.connect(self._on_project_title_edited)
+        self._project_title_edit.textChanged.connect(self._sync_project_title_width)
+        self._project_title_block = False
+
+        self._project_title_edit_btn = QToolButton()
+        self._project_title_edit_btn.setObjectName("WorkspaceProjectTitleEditBtn")
+        self._project_title_edit_btn.setAutoRaise(True)
+        self._project_title_edit_btn.setIcon(icon_edit())
+        self._project_title_edit_btn.setToolTip("Editar nome do projeto")
+        self._project_title_edit_btn.setFixedSize(32, 32)
+        self._project_title_edit_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self._project_title_edit_btn.clicked.connect(self._focus_project_title)
+
         self._document_title_label = QLabel("Nenhum documento carregado")
         self._document_title_label.setObjectName("WorkspaceDocTitleCompact")
         self._active_section_label = QLabel("")
@@ -78,18 +130,12 @@ class WorkspaceView(QWidget):
         self._banner = InlineBanner("", level=FeedbackLevel.INFO)
         self._banner.sync_visibility()
 
-        self._export_individual_cb = QCheckBox("Exportar PDFs individuais")
-        self._export_individual_cb.setChecked(True)
-        self._export_merged_cb = QCheckBox("Exportar um único PDF")
-        self._export_merged_cb.setChecked(True)
-        self._export_merged_cb.setEnabled(False)
-        self._export_merged_cb.setToolTip("Em breve — mescla seções institucionais")
-
         self._build_ui()
         self._section_editor.bind_view_model(self._vm)
         self._connect_signals()
         self._setup_shortcuts()
         self._update_export_options_visibility()
+        self._sync_project_title_width()
 
     def refresh_appearance(self) -> None:
         self._banner.refresh_appearance()
@@ -115,12 +161,12 @@ class WorkspaceView(QWidget):
         ) = build_workspace_project_tabs_strip(
             self._project_tabs,
             self._add_pdf_btn,
+            project_title_edit=self._project_title_edit,
+            project_title_edit_btn=self._project_title_edit_btn,
             on_more_clicked=self._show_preview_menu,
             on_export_clicked=self._on_export_clicked,
             on_save_layout=self._on_save_template_clicked,
             on_change_layout=self._focus_template_combo,
-            export_individual_cb=self._export_individual_cb,
-            export_merged_cb=self._export_merged_cb,
         )
         self._save_layout_action = self._project_tabs_strip._save_layout_action
         self._export_individual_action = self._project_tabs_strip._export_individual_action
@@ -149,8 +195,6 @@ class WorkspaceView(QWidget):
             self._document_title_label,
             self._active_section_label,
             self._template_selector,
-            self._export_individual_cb,
-            self._export_merged_cb,
         )
         self._meta_sep_before_section = self._action_bar._meta_sep_before_section
         self._meta_sep_before_layout = self._action_bar._meta_sep_before_layout
@@ -175,6 +219,9 @@ class WorkspaceView(QWidget):
         self._section_editor.add_custom_section_requested.connect(self._on_add_custom_section)
         self._section_editor.sections_reordered.connect(self._vm.reorder_sections)
         self._section_editor.new_version_requested.connect(self._on_register_version)
+        self._section_editor.version_preview_requested.connect(self._on_preview_version)
+        self._section_editor.version_restore_requested.connect(self._on_restore_version)
+        self._section_editor.version_export_requested.connect(self._on_export_version)
         self._section_editor.image_dropped.connect(self._on_image_dropped)
         self._section_editor.image_remove_requested.connect(self._on_image_remove)
         self._section_editor.image_caption_changed.connect(self._on_image_caption_changed)
@@ -182,6 +229,7 @@ class WorkspaceView(QWidget):
         self._section_editor.tool_selected.connect(self._on_tool_selected)
 
         self._vm.project_loaded.connect(self._on_project_loaded)
+        self._vm.project_display_name_changed.connect(self._on_project_display_name_changed)
         self._vm.sections_summary_ready.connect(self._on_sections_summary_ready)
         self._vm.preview_ready.connect(self._preview_panel.render_pages)
         self._vm.preview_generating.connect(self._on_preview_generating)
@@ -196,9 +244,15 @@ class WorkspaceView(QWidget):
         self._vm.templates_list_ready.connect(self._populate_template_combo)
         self._vm.preview_metadata_ready.connect(self._on_preview_metadata)
         self._preview_panel.page_clicked.connect(self._on_preview_page_clicked)
-        self._vm.export_validation_ready.connect(self._on_export_validation)
+        self._preview_panel.section_clicked.connect(self._on_preview_section_clicked)
+        self._vm.version_timeline_changed.connect(self._on_version_timeline_changed)
+        self._vm.version_status_changed.connect(self._on_version_status_changed)
 
     def _setup_shortcuts(self) -> None:
+        save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        save_shortcut.activated.connect(self._on_register_version)
+
         export_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
         export_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         export_shortcut.activated.connect(self._on_export_clicked)
@@ -244,7 +298,7 @@ class WorkspaceView(QWidget):
         self._template_selector.set_layout_dirty(dirty)
 
     def _on_data_dirty_changed(self, dirty: bool) -> None:
-        self._data_dirty_label.setText("● Dados não salvos no PDF" if dirty else "")
+        self._data_dirty_label.setText("● Medições alteradas" if dirty else "")
 
     def _focus_template_combo(self) -> None:
         self._template_combo.setFocus()
@@ -277,31 +331,53 @@ class WorkspaceView(QWidget):
         self._export_merged_action.setVisible(multi)
 
     def _on_project_loaded(self, session) -> None:
+        self._project_title_block = True
+        self._project_title_edit.setText(resolved_display_name(session))
+        self._project_title_block = False
+        self._sync_project_title_width()
         self._project_tabs.blockSignals(True)
         while self._project_tabs.count():
             self._project_tabs.removeTab(0)
         for index, slot in enumerate(session.documents):
-            base = slot.evaluated_component[:20] or slot.source_pdf_path.stem[:20]
-            kind = getattr(slot, "source_kind", "") or (
-                slot.document.source_kind if slot.document else ""
-            )
-            badge = "Tomo" if kind == "insp_ect" else "MMC"
-            label = f"{base} [{badge}]"
+            label = _document_tab_label(slot)
             self._project_tabs.addTab(label)
-            path = slot.source_pdf_path.resolve()
-            tip = f"{path.name}\n{path}\nOrigem: {kind or 'desconhecida'}"
-            if slot.template_id:
-                tip += f"\nTemplate: {slot.template_id}"
-            self._project_tabs.setTabToolTip(index, tip)
+            self._project_tabs.setTabToolTip(index, _document_tab_tooltip(slot))
         self._project_tabs.setCurrentIndex(session.active_index)
         self._project_tabs.blockSignals(False)
         self._update_export_options_visibility()
+        self._refresh_versions()
 
     def _on_project_changed(self, session) -> None:
         if session is None:
+            self._project_title_block = True
+            self._project_title_edit.clear()
+            self._project_title_block = False
             while self._project_tabs.count():
                 self._project_tabs.removeTab(0)
         self._update_export_options_visibility()
+
+    def _sync_project_title_width(self) -> None:
+        metrics = QFontMetrics(self._project_title_edit.font())
+        text = self._project_title_edit.text() or self._project_title_edit.placeholderText() or " "
+        width = metrics.horizontalAdvance(text) + 36
+        self._project_title_edit.setFixedWidth(min(max(180, width), 560))
+
+    def _focus_project_title(self) -> None:
+        self._project_title_edit.setFocus(Qt.FocusReason.MouseFocusReason)
+        self._project_title_edit.selectAll()
+
+    def _on_project_title_edited(self) -> None:
+        if self._project_title_block:
+            return
+        self._vm.set_display_name(self._project_title_edit.text())
+
+    def _on_project_display_name_changed(self, display_name: str) -> None:
+        if self._project_title_edit.text() == display_name:
+            return
+        self._project_title_block = True
+        self._project_title_edit.setText(display_name)
+        self._project_title_block = False
+        self._sync_project_title_width()
 
     def _on_project_tab_changed(self, index: int) -> None:
         if index < 0:
@@ -317,14 +393,16 @@ class WorkspaceView(QWidget):
             self._section_editor.update_document_context(None)
             return
         self._document_title_label.setText(
-            f"{document.client_project} — {document.evaluated_component}"
+            _document_header_label(document, self._app_state.project_session)
         )
         session = self._app_state.project_session
-        if session and session.documents:
-            paths = [s.source_pdf_path for s in session.documents]
+        if session is not None:
+            paths = ProjectCommands.sync_attachment_paths(document, session)
         else:
-            paths = [document.source_pdf_path] if document.source_pdf_path else []
-        document.attachment_pdf_paths = list(paths)
+            paths = list(document.attachment_pdf_paths)
+            if not paths and document.source_pdf_path:
+                paths = [document.source_pdf_path]
+                document.attachment_pdf_paths = list(paths)
         self._section_editor.set_source_attachments(paths)
         self._section_editor.update_document_context(document)
         self._refresh_images()
@@ -340,7 +418,10 @@ class WorkspaceView(QWidget):
         self._section_editor.render_global_fields(values, overridden)
 
     def _on_preview_generating(self, generating: bool) -> None:
-        self._preview_status_label.setText("Atualizando preview…" if generating else "")
+        if generating:
+            self._preview_status_label.setText("Atualizando preview…")
+        else:
+            self._on_version_status_changed(self._vm.version_status_text())
         self._preview_panel.set_status_text("Atualizando preview…" if generating else "")
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
@@ -348,6 +429,7 @@ class WorkspaceView(QWidget):
         self._edit_container.setVisible(visible)
         if visible:
             self._main_splitter.setSizes([240, 320, 800])
+            QTimer.singleShot(0, self._preview_panel.center_horizontal_scroll)
         else:
             self._main_splitter.setSizes([240, 0, 1120])
 
@@ -422,9 +504,36 @@ class WorkspaceView(QWidget):
             self._section_editor.render_images(document.images)
 
     def _refresh_versions(self) -> None:
+        self._section_editor.render_versions(self._vm.list_version_timeline())
+
+    def _on_version_timeline_changed(self, entries: list) -> None:
+        self._section_editor.render_versions(entries)
+
+    def _on_version_status_changed(self, text: str) -> None:
+        if text and not self._preview_status_label.text().startswith("Atualizando"):
+            self._preview_status_label.setText(text)
+
+    def _on_preview_version(self, version_number: int) -> None:
+        self._vm.preview_version(version_number)
+
+    def _on_restore_version(self, version_number: int) -> None:
+        if not self._vm.restore_version(version_number):
+            return
+        self._on_version_status_changed(self._vm.version_status_text())
+
+    def _on_export_version(self, version_number: int) -> None:
         document = self._app_state.active_document
+        default_name = "relatorio.pdf"
         if document is not None:
-            self._section_editor.render_versions(document.version_history)
+            default_name = f"{document.evaluated_component}_v{version_number}.pdf"
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            f"Exportar versão v{version_number}",
+            default_name,
+            "PDF (*.pdf)",
+        )
+        if path:
+            self._vm.export_version_snapshot(version_number, Path(path))
 
     def _on_sections_summary_ready(self, sections: list[dict]) -> None:
         self._section_anchor_map = {s["id"]: s for s in sections}
@@ -440,7 +549,19 @@ class WorkspaceView(QWidget):
     def _on_preview_page_clicked(self, page_number: int) -> None:
         section_id = self._preview_panel.section_id_for_page(page_number)
         if section_id:
-            self._section_editor.navigate_to_section(section_id)
+            self._on_preview_section_clicked(section_id)
+
+    def _on_preview_section_clicked(self, section_id: str, focus_target: str = "section_title") -> None:
+        self._active_section_id = section_id
+        self._section_editor.open_edit_for_section(section_id)
+        anchor = self._section_anchor_map.get(section_id, {})
+        title = anchor.get("title", section_id) if isinstance(anchor, dict) else section_id
+        self._active_section_label.setText(f"Seção: {title}")
+        self._sync_section_meta_row()
+        if focus_target == "section_title":
+            QTimer.singleShot(0, self._section_editor.focus_section_title)
+        elif focus_target == "photos":
+            self._section_editor.focus_section_tab("photos")
 
     def _on_preview_metadata(self, anchor_map: dict) -> None:
         self._preview_panel.update_anchor_map(anchor_map)
@@ -483,8 +604,8 @@ class WorkspaceView(QWidget):
             self,
             self._vm,
             self._app_state,
-            export_individual_cb=self._export_individual_cb,
-            export_merged_cb=self._export_merged_cb,
+            export_individual=self._export_individual_action.isChecked(),
+            export_merged=self._export_merged_action.isChecked(),
         )
 
     def _on_export_finished(self, final_path: Path) -> None:

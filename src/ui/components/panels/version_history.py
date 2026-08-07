@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
+from PyQt6.QtGui import QAction
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QScrollArea, QVBoxLayout, QWidget
 
 from src.core.domain.ports import VersionEntry
-from src.ui.components.buttons import PrimaryButton
+from src.ui.components.buttons import ChromeIconButton, PrimaryButton
+from src.ui.components.icons import icon_ellipsis
 from src.ui.components.panels._chrome import section_header
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, sidebar_panel_style
 from src.ui.styles.helpers import workspace_version_entry_style
@@ -14,10 +16,16 @@ from src.ui.styles.helpers import workspace_version_entry_style
 class _VersionEntryWidget(QWidget):
     """Mini-card de versão com timeline visual (border-left colorida)."""
 
+    preview_requested = pyqtSignal(int)
+    restore_requested = pyqtSignal(int)
+    export_requested = pyqtSignal(int)
+
     def __init__(self, entry: VersionEntry, is_latest: bool = False, parent=None) -> None:
         super().__init__(parent)
         self._entry = entry
         self._is_latest = is_latest
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.sm)
@@ -47,7 +55,46 @@ class _VersionEntryWidget(QWidget):
         content_layout.addWidget(self._meta)
 
         layout.addLayout(content_layout, stretch=1)
+
+        self._actions_btn = ChromeIconButton(
+            icon_ellipsis(),
+            "Ações da versão",
+        )
+        self._actions_btn.clicked.connect(self._show_actions_menu)
+        layout.addWidget(self._actions_btn, 0, Qt.AlignmentFlag.AlignTop)
+
+        self.setToolTip(
+            "Use o ícone ⋯ ou o botão direito para visualizar, restaurar ou exportar"
+        )
         self.refresh_appearance()
+
+    def _build_actions_menu(self) -> QMenu:
+        menu = QMenu(self)
+        preview_action = QAction("Visualizar", self)
+        restore_action = QAction("Restaurar e editar", self)
+        export_action = QAction("Exportar esta versão", self)
+        preview_action.triggered.connect(
+            lambda: self.preview_requested.emit(self._entry.version_number)
+        )
+        restore_action.triggered.connect(
+            lambda: self.restore_requested.emit(self._entry.version_number)
+        )
+        export_action.triggered.connect(
+            lambda: self.export_requested.emit(self._entry.version_number)
+        )
+        menu.addAction(preview_action)
+        menu.addAction(restore_action)
+        menu.addAction(export_action)
+        return menu
+
+    def _show_actions_menu(self) -> None:
+        menu = self._build_actions_menu()
+        pos = self._actions_btn.mapToGlobal(self._actions_btn.rect().bottomLeft())
+        menu.exec(pos)
+
+    def _show_context_menu(self, pos) -> None:
+        menu = self._build_actions_menu()
+        menu.exec(self.mapToGlobal(pos))
 
     def refresh_appearance(self) -> None:
         p = PALETTE
@@ -67,12 +114,17 @@ class _VersionEntryWidget(QWidget):
             f"color: {p.text_muted}; font-size: 10px; background: transparent;"
         )
         self.setStyleSheet(workspace_version_entry_style(is_latest=self._is_latest))
+        if hasattr(self, "_actions_btn"):
+            self._actions_btn.refresh_appearance()
 
 
 class VersionHistoryPanel(QFrame):
     """Histórico de versões com timeline visual em tempo real."""
 
     new_version_requested = pyqtSignal()
+    preview_requested = pyqtSignal(int)
+    restore_requested = pyqtSignal(int)
+    export_requested = pyqtSignal(int)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -127,4 +179,7 @@ class VersionHistoryPanel(QFrame):
         for i, entry in enumerate(reversed(entries)):
             is_latest = i == 0
             widget = _VersionEntryWidget(entry, is_latest=is_latest)
+            widget.preview_requested.connect(self.preview_requested.emit)
+            widget.restore_requested.connect(self.restore_requested.emit)
+            widget.export_requested.connect(self.export_requested.emit)
             self._layout.insertWidget(self._layout.count() - 1, widget)

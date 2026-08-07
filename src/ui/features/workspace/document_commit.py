@@ -52,6 +52,7 @@ def persist_session(vm: WorkspaceViewModel) -> None:
         save_workspace_session(vm._session_repo, document)
     except Exception:
         logger.exception("Falha ao persistir sessão do workspace")
+    vm._persist_project()
 
 
 def refresh_export_validation(vm: WorkspaceViewModel) -> None:

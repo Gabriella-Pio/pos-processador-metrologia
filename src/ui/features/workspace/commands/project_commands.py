@@ -7,6 +7,7 @@ from pathlib import Path
 from src.core.application.session import load_workspace_session
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.ports import RecentFilesRepository, ReportDocument, WorkspaceSessionPort
+from src.ui.features.workspace.commands.section_edit_commands import SectionEditCommands
 from src.ui.features.workspace.services.document_session_service import DocumentSessionService
 
 
@@ -21,6 +22,42 @@ class RecentFileResolution:
 
 
 class ProjectCommands:
+    @staticmethod
+    def default_attachment_paths(
+        document: ReportDocument,
+        session: ProjectSession,
+    ) -> list[Path]:
+        """PDFs de origem para anexos — preserva sessão salva ou deriva dos slots."""
+        if document.attachment_pdf_paths:
+            return list(document.attachment_pdf_paths)
+        if session.documents:
+            return [slot.source_pdf_path for slot in session.documents]
+        if document.source_pdf_path:
+            return [document.source_pdf_path]
+        return []
+
+    @staticmethod
+    def sync_attachment_paths(document: ReportDocument, session: ProjectSession) -> list[Path]:
+        paths = ProjectCommands.default_attachment_paths(document, session)
+        if paths and not document.attachment_pdf_paths:
+            document.attachment_pdf_paths = list(paths)
+        return paths
+
+    @staticmethod
+    def ensure_project_attachment_paths(session: ProjectSession) -> None:
+        """Define anexos como PDFs ZEISS originais de todos os slots do projeto."""
+        originals = [slot.source_pdf_path for slot in session.documents if slot.source_pdf_path]
+        if not originals:
+            return
+        for slot in session.documents:
+            doc = slot.document
+            if doc is None:
+                continue
+            export_path = str(doc.last_export_path) if doc.last_export_path else None
+            current = [p for p in doc.attachment_pdf_paths if str(p) != export_path]
+            if not current:
+                doc.attachment_pdf_paths = list(originals)
+
     @staticmethod
     def append_document_slots(
         session: ProjectSession,
@@ -50,6 +87,9 @@ class ProjectCommands:
         slot_doc = session.documents[index].document
         if slot_doc is not None and session_repo is not None:
             load_workspace_session(session_repo, slot_doc)
+            ProjectCommands.sync_attachment_paths(slot_doc, session)
+        if slot_doc is not None:
+            SectionEditCommands.ensure_fixed_sections_enabled(slot_doc)
         return True, ""
 
     @staticmethod
@@ -66,6 +106,8 @@ class ProjectCommands:
         doc_service.load_versions_for_document(document)
         if session_repo is not None:
             load_workspace_session(session_repo, document)
+        ProjectCommands.sync_attachment_paths(document, session)
+        SectionEditCommands.ensure_fixed_sections_enabled(document)
         return document
 
     @staticmethod
@@ -86,13 +128,17 @@ class ProjectCommands:
                 error_title="Arquivo não encontrado",
                 error_message="Este registro não existe mais no histórico local.",
             )
-        pdf_path = Path(record["file_path"])
+        pdf_path = Path(record.get("source_pdf_path") or record["file_path"])
         if not pdf_path.exists():
-            return RecentFileResolution(
-                ok=False,
-                error_title="Arquivo ausente",
-                error_message=f"O PDF não foi encontrado em:\n{pdf_path}",
-            )
+            export_path = Path(record["file_path"])
+            if export_path.exists() and export_path != pdf_path:
+                pdf_path = export_path
+            else:
+                return RecentFileResolution(
+                    ok=False,
+                    error_title="Arquivo ausente",
+                    error_message=f"O PDF não foi encontrado em:\n{pdf_path}",
+                )
         return RecentFileResolution(
             ok=True,
             pdf_path=pdf_path,
