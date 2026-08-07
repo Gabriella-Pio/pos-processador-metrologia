@@ -137,6 +137,14 @@ class SectionEditorPanel(BaseSidebarPanel):
         """Seleção no preview — navega sem abrir o editor."""
         self._on_section_navigated(section_id)
 
+    def focus_section_tab(self, kind: str) -> None:
+        if self._edit_open:
+            self._edit_view.focus_tab_for_kind(kind)
+
+    def focus_section_title(self) -> None:
+        if self._edit_open:
+            self._edit_view.focus_section_title()
+
     def _show_sumario_tab(self) -> None:
         self._sidebar_tabs.setCurrentIndex(0)
 

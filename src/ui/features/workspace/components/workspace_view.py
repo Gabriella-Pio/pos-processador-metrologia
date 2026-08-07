@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QPoint, Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QCursor, QFontMetrics, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -244,6 +244,7 @@ class WorkspaceView(QWidget):
         self._vm.templates_list_ready.connect(self._populate_template_combo)
         self._vm.preview_metadata_ready.connect(self._on_preview_metadata)
         self._preview_panel.page_clicked.connect(self._on_preview_page_clicked)
+        self._preview_panel.section_clicked.connect(self._on_preview_section_clicked)
         self._vm.version_timeline_changed.connect(self._on_version_timeline_changed)
         self._vm.version_status_changed.connect(self._on_version_status_changed)
 
@@ -428,6 +429,7 @@ class WorkspaceView(QWidget):
         self._edit_container.setVisible(visible)
         if visible:
             self._main_splitter.setSizes([240, 320, 800])
+            QTimer.singleShot(0, self._preview_panel.center_horizontal_scroll)
         else:
             self._main_splitter.setSizes([240, 0, 1120])
 
@@ -547,7 +549,19 @@ class WorkspaceView(QWidget):
     def _on_preview_page_clicked(self, page_number: int) -> None:
         section_id = self._preview_panel.section_id_for_page(page_number)
         if section_id:
-            self._section_editor.navigate_to_section(section_id)
+            self._on_preview_section_clicked(section_id)
+
+    def _on_preview_section_clicked(self, section_id: str, focus_target: str = "section_title") -> None:
+        self._active_section_id = section_id
+        self._section_editor.open_edit_for_section(section_id)
+        anchor = self._section_anchor_map.get(section_id, {})
+        title = anchor.get("title", section_id) if isinstance(anchor, dict) else section_id
+        self._active_section_label.setText(f"Seção: {title}")
+        self._sync_section_meta_row()
+        if focus_target == "section_title":
+            QTimer.singleShot(0, self._section_editor.focus_section_title)
+        elif focus_target == "photos":
+            self._section_editor.focus_section_tab("photos")
 
     def _on_preview_metadata(self, anchor_map: dict) -> None:
         self._preview_panel.update_anchor_map(anchor_map)

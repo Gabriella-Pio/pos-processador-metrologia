@@ -469,6 +469,32 @@ class SectionEditView(QFrame):
     def current_section_id(self) -> str | None:
         return self._section_id
 
+    def focus_tab_for_kind(self, kind: str) -> None:
+        targets = {
+            "content": self._content_scroll,
+            "layout": self._layout_panel,
+            "photos": self._photos_page,
+            "graphics": self._graphics_page,
+            "tables": self._tables_page,
+        }
+        widget = targets.get(kind)
+        if widget is None:
+            return
+        index = self._tabs.indexOf(widget)
+        if index >= 0:
+            self._tabs.setCurrentIndex(index)
+
+    def focus_section_title(self) -> None:
+        """Foca o campo editável do título na aba Conteúdo."""
+        content_index = self._tabs.indexOf(self._content_scroll)
+        if content_index >= 0:
+            self._tabs.setCurrentIndex(content_index)
+        QTimer.singleShot(80, self._focus_section_title_editor)
+
+    def _focus_section_title_editor(self) -> None:
+        self._content_scroll.ensureWidgetVisible(self._section_title_host, 0, 40)
+        self._section_title_edit.focus_editor(select_all=True)
+
     def _update_photos_hint(self, section: dict | None = None) -> None:
         title = ""
         if section:
