@@ -82,7 +82,7 @@ def interpretacao_field_defs(fields: dict[str, str] | None = None) -> tuple[Sect
     """Campos dinâmicos: intro + bullet_1..N + nota de rodapé."""
     fields = fields or {}
     defs: list[SectionFieldDef] = [
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        SectionFieldDef("intro", "Texto introdutório", "textarea", supports_formatting=True),
     ]
     bullet_indexes = sorted(
         int(key.split("_", 1)[1])
@@ -95,9 +95,14 @@ def interpretacao_field_defs(fields: dict[str, str] | None = None) -> tuple[Sect
         bullet_indexes = list(range(1, 5))
     for index in bullet_indexes:
         defs.append(
-            SectionFieldDef(f"bullet_{index}", f"Interpretação {index}", "textarea")
+            SectionFieldDef(
+                f"bullet_{index}",
+                f"Interpretação {index}",
+                "textarea",
+                supports_formatting=True,
+            )
         )
-    defs.append(SectionFieldDef("nota", "Nota de rodapé", "textarea"))
+    defs.append(SectionFieldDef("nota", "Nota de rodapé", "textarea", supports_formatting=True))
     return tuple(defs)
 
 

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFontMetrics, QTextCursor, QTextOption
+from PyQt6.QtGui import QFontMetrics, QKeyEvent, QTextCursor, QTextOption
 from PyQt6.QtWidgets import (
     QCompleter,
     QFrame,
@@ -14,9 +14,50 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.core.domain.markdown_prose import resolve_list_enter
 from src.core.domain.placeholder_utils import PLACEHOLDER_CATALOG, extract_placeholders, placeholder_label, remove_placeholder
 from src.ui.components.flow_layout import FlowLayout
+from src.ui.components.rich_text_toolbar import RichTextToolbar
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
+
+
+class _PlainTextEdit(QTextEdit):
+    """``QTextEdit`` que sempre cola texto puro (sem HTML do Word/PDF)."""
+
+    def __init__(self, *, continue_lists: bool = False, parent=None) -> None:
+        super().__init__(parent)
+        self._continue_lists = continue_lists
+
+    def insertFromMimeData(self, source) -> None:  # noqa: N802
+        if source is not None and source.hasText():
+            self.textCursor().insertText(source.text())
+            return
+        super().insertFromMimeData(source)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
+        if (
+            self._continue_lists
+            and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and event.modifiers() == Qt.KeyboardModifier.NoModifier
+        ):
+            cursor = self.textCursor()
+            action = resolve_list_enter(cursor.block().text())
+            if action.kind == "continue":
+                cursor.insertText(action.insert_text)
+                event.accept()
+                return
+            if action.kind == "exit":
+                block_start = cursor.block().position()
+                cursor.setPosition(block_start)
+                cursor.movePosition(
+                    QTextCursor.MoveOperation.Right,
+                    QTextCursor.MoveMode.KeepAnchor,
+                    action.prefix_length,
+                )
+                cursor.removeSelectedText()
+                super().keyPressEvent(event)
+                return
+        super().keyPressEvent(event)
 
 
 class _PlaceholderChip(QPushButton):
@@ -76,17 +117,25 @@ class PlaceholderTextEdit(QFrame):
     _MAX_HEIGHT = 360
     _PAD_Y = 16
 
-    def __init__(self, multiline: bool = True, parent=None) -> None:
+    def __init__(
+        self,
+        multiline: bool = True,
+        *,
+        supports_formatting: bool = False,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._loading = False
         self._multiline = multiline
+        self._supports_formatting = supports_formatting and multiline
+        self._toolbar: RichTextToolbar | None = None
         self._popup: _PlaceholderPopup | None = None
         self._brace_pos: int | None = None
 
         completer_keys = [f"{{{key}}}" for key, _ in PLACEHOLDER_CATALOG]
 
         # Caixa visual só no editor — chips ficam abaixo, fora da borda
-        self._editor = QTextEdit()
+        self._editor = _PlainTextEdit(continue_lists=self._supports_formatting)
         self._editor.setObjectName("PlaceholderEditor")
         self._editor.setAcceptRichText(False)
         self._editor.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
@@ -129,7 +178,12 @@ class PlaceholderTextEdit(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(SPACING.xs)
+        if self._supports_formatting:
+            self._toolbar = RichTextToolbar(self)
+            self._toolbar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            self._toolbar.bind_editor(self._editor)
+            layout.addWidget(self._toolbar)
         layout.addWidget(self._editor)
         layout.addWidget(self._chips_host)
 
@@ -169,17 +223,36 @@ class PlaceholderTextEdit(QFrame):
         chips_h = 0
         if self._chips_host.isVisible():
             chips_h = self._chips_layout.heightForWidth(width)
-        spacing = 4 if chips_h else 0
-        height = self._editor.height() + chips_h + spacing
-        return QSize(width, max(height, self._min_editor_height()))
+        chrome_h = self._chrome_height()
+        spacing = SPACING.xs if chips_h else 0
+        height = chrome_h + self._editor.height() + chips_h + spacing
+        return QSize(width, max(height, chrome_h + self._min_editor_height()))
 
     def minimumSizeHint(self) -> QSize:
         hint = self.sizeHint()
         return QSize(60, hint.height())
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        QTimer.singleShot(0, self._adjust_editor_height)
+
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._adjust_editor_height()
+
+    def _chrome_height(self) -> int:
+        if self._toolbar is None:
+            return 0
+        return self._toolbar.sizeHint().height() + SPACING.xs
+
+    def _editor_content_width(self) -> int:
+        viewport_width = self._editor.viewport().width()
+        if viewport_width >= 40:
+            return viewport_width
+        frame_width = self.width()
+        if frame_width >= 40:
+            return max(40, frame_width - 16)
+        return 200
 
     def _min_editor_height(self) -> int:
         metrics = QFontMetrics(self._editor.font())
@@ -187,7 +260,9 @@ class PlaceholderTextEdit(QFrame):
         return metrics.lineSpacing() * lines + self._PAD_Y
 
     def _adjust_editor_height(self) -> None:
-        doc_height = int(ceil_doc_height(self._editor))
+        doc = self._editor.document()
+        doc.setTextWidth(self._editor_content_width())
+        doc_height = int(doc.size().height())
         target = max(self._min_editor_height(), doc_height + self._PAD_Y)
         target = min(target, self._MAX_HEIGHT)
         if self._editor.height() != target:

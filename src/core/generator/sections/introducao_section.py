@@ -5,7 +5,7 @@ from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
 from ..components.image_handler import ReportImageHandler
 from ..components.photo_grid import append_photo_grid, caption_for_path
-from ..prose_helpers import get_section_prose, get_section_heading
+from ..prose_helpers import format_prose_paragraph, get_section_prose, get_section_heading
 from src.core.domain.placeholder_utils import resolve_placeholders
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import (
@@ -92,7 +92,7 @@ class IntroducaoSection(BaseSection):
                 continue
             left_flowables.append(Paragraph(title, estilo_bloco))
             if body:
-                left_flowables.append(Paragraph(body, styles["texto"]))
+                left_flowables.append(Paragraph(format_prose_paragraph(body), styles["texto"]))
             left_flowables.append(Spacer(1, 8))
 
         # Só fotos associadas a esta seção — sem herdar de cabecalho/outras.

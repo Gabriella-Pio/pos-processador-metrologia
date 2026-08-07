@@ -3,7 +3,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import HRFlowable, Paragraph, Spacer
 
 from .base import BaseSection, anchored_section_title
-from ..prose_helpers import get_section_prose, get_section_heading
+from ..prose_helpers import format_prose_paragraph, get_section_prose, get_section_heading
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 
@@ -31,7 +31,7 @@ class ConclusaoSection(BaseSection):
                 tmpl.get("texto_reprovado", "") if total_fora > 0 else tmpl.get("texto_aprovado", "")
             )
 
-        story.append(Paragraph(conclusao_texto, styles["texto"]))
+        story.append(Paragraph(format_prose_paragraph(conclusao_texto), styles["texto"]))
 
         # Espaço + linha de assinatura + rótulo (gov.br aplica a assinatura depois).
         aprovacao = get_section_prose(

@@ -4,6 +4,7 @@ from .base import BaseSection
 from ..prose_helpers import (
     append_anchored_section_title,
     append_section_prose_paragraph,
+    format_prose_paragraph,
     get_section_prose,
 )
 from src.core.domain.measurement_interpretation import format_item_bullet_html
@@ -32,7 +33,7 @@ class InterpretacaoSection(BaseSection):
             for key in keys:
                 bullet = get_section_prose(contexto_extra, "interpretacao", key, "")
                 if bullet:
-                    story.append(Paragraph(f"•  {bullet}", styles["bullet"]))
+                    story.append(Paragraph(f"•  {format_prose_paragraph(bullet)}", styles["bullet"]))
             story.append(Spacer(1, 10))
             return
 
