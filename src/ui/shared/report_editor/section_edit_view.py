@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 
 from src.core.domain.report_field_registry import get_edit_fields, get_media_blocks
 from src.core.application.interpretacao_edit import interpretacao_field_defs
-from src.core.domain.ports import ReportImage
+from src.core.domain.ports import ReportImage, VersionEntry
 from src.core.domain.table_row_registry import (
     INTRODUCAO_BLOCK_TITLES,
     SECTION_HEADING_DEFAULTS,
@@ -57,6 +57,7 @@ class SectionEditView(QFrame):
     delete_requested = pyqtSignal(str)
     section_restore_requested = pyqtSignal(str)
     media_kinds_changed = pyqtSignal(str, list)
+    manage_versions_requested = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -65,6 +66,7 @@ class SectionEditView(QFrame):
         self._loading = False
         self._defaults_mode = False
         self._section_overrides: dict = {}
+        self._version_entries: list[VersionEntry] = []
         self._field_widgets: dict[str, PlaceholderTextEdit | QLineEdit] = {}
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -113,6 +115,7 @@ class SectionEditView(QFrame):
             on_field_changed=self._on_field_changed,
             on_line_finished=self._on_line_finished,
             on_field_restore=lambda sid, key: self.section_field_restore_requested.emit(sid, key),
+            on_manage_versions=self.manage_versions_requested.emit,
         )
 
         self._medicoes_editor = MedicoesTableEditor()
@@ -233,6 +236,7 @@ class SectionEditView(QFrame):
         overrides: dict,
         table_rows: list[dict[str, str]] | None = None,
         itens_medicao: list[dict[str, str]] | None = None,
+        version_entries: list[VersionEntry] | None = None,
     ) -> None:
         # Interpretação muda de quantidade por PDF — se os campos diferem, reconstrói.
         if (
@@ -246,6 +250,8 @@ class SectionEditView(QFrame):
         scroll_pos = self._content_scroll.verticalScrollBar().value()
         self._section_id = section_id
         self._section_overrides = dict(overrides)
+        if version_entries is not None:
+            self._version_entries = list(version_entries)
         # Limpa fotos da seção anterior até o painel reaplicar o filtro.
         self._image_panel.render_images([])
         is_custom = section.get("custom", False) or section_id.startswith("custom_")
@@ -336,8 +342,23 @@ class SectionEditView(QFrame):
             return
         self._table_rows_editor.set_rows(rows)
 
+    def set_version_entries(self, entries: list[VersionEntry]) -> None:
+        self._version_entries = list(entries)
+        if self._section_id == "historico_versoes" and not self._defaults_mode:
+            self._field_widgets = self._form_builder.rebuild(
+                self._section_id,
+                self._section_overrides,
+                False,
+                version_entries=self._version_entries,
+            )
+
     def _rebuild_fields(self, section_id: str, overrides: dict, is_custom: bool) -> None:
-        self._field_widgets = self._form_builder.rebuild(section_id, overrides, is_custom)
+        self._field_widgets = self._form_builder.rebuild(
+            section_id,
+            overrides,
+            is_custom,
+            version_entries=self._version_entries,
+        )
 
     def _rebuild_editor_tabs(self, section_id: str) -> None:
         self._tabs_builder.rebuild(

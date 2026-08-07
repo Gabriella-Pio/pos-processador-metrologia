@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -110,7 +111,7 @@ class WorkspaceViewModel(QObject):
         self._presenter = SectionSummaryPresenter(exporter)
         self._preview_service = PreviewService(exporter)
         self._preview_runner = DebouncedPreviewRunner(self._preview_service, parent=self)
-        self._preview_runner.set_document_getter(self._active_document)
+        self._preview_runner.set_document_getter(self._document_for_preview)
         self._preview_runner.generating.connect(self.preview_generating.emit)
         self._preview_runner.finished.connect(self._on_preview_finished)
         self._preview_runner.failed.connect(self._on_preview_failed)
@@ -519,10 +520,33 @@ class WorkspaceViewModel(QObject):
         self.preview_ready.emit(pages)
         self.preview_metadata_ready.emit(anchor_map)
 
+    def _document_for_preview(self) -> ReportDocument | None:
+        return self._document_with_project_timeline(self._active_document())
+
+    def _document_with_project_timeline(
+        self,
+        document: ReportDocument | None,
+    ) -> ReportDocument | None:
+        if document is None:
+            return None
+        timeline = self.list_version_timeline()
+        if not timeline or timeline == document.version_history:
+            return document
+        return replace(document, version_history=list(timeline))
+
+    def _preview_error_summary(self, details: str, *, max_len: int = 240) -> str:
+        lines = [line.strip() for line in details.strip().splitlines() if line.strip()]
+        if not lines:
+            return "Não foi possível determinar a causa do erro."
+        message = lines[-1]
+        if len(message) > max_len:
+            return f"{message[: max_len - 3]}..."
+        return message
+
     def _on_preview_failed(self, details: str) -> None:
         self.error_occurred.emit(
             "Não foi possível atualizar o preview",
-            "Alguns dados do relatório podem estar incompletos.",
+            self._preview_error_summary(details),
             details,
         )
 
@@ -748,7 +772,10 @@ class WorkspaceViewModel(QObject):
         return document
 
     def export_document(self, output_path: Path) -> None:
-        outcome = self._export_commands.export_document(self._active_document(), output_path)
+        outcome = self._export_commands.export_document(
+            self._document_with_project_timeline(self._active_document()),
+            output_path,
+        )
         if not outcome.success:
             self.error_occurred.emit(
                 outcome.error_title,
