@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
 
 from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.inputs import LayoutTemplateSelector
@@ -16,19 +16,34 @@ def build_workspace_project_tabs_strip(
     project_tabs,
     add_pdf_btn,
     *,
+    project_title_edit=None,
+    project_title_edit_btn=None,
     on_more_clicked,
     on_export_clicked,
     on_save_layout,
     on_change_layout,
 ) -> tuple[QWidget, QLabel, QLabel, ChromeIconButton, PrimaryButton, QMenu]:
-    """Faixa superior com abas de PDF, status e ações de export."""
+    """Barra superior do workspace: título, abas PDF, status e ações."""
     row = QWidget()
     row.setObjectName("WorkspaceProjectTabsStrip")
     layout = QHBoxLayout(row)
-    layout.setContentsMargins(SPACING.md, SPACING.xs, SPACING.md, SPACING.xs)
+    layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
     layout.setSpacing(SPACING.sm)
-    layout.addWidget(project_tabs)
-    layout.addWidget(add_pdf_btn)
+    layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+    if project_title_edit is not None:
+        layout.addWidget(project_title_edit, alignment=Qt.AlignmentFlag.AlignVCenter)
+    if project_title_edit_btn is not None:
+        layout.addWidget(project_title_edit_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+    if project_title_edit is not None or project_title_edit_btn is not None:
+        separator = QFrame()
+        separator.setObjectName("WorkspaceTopBarSeparator")
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFixedWidth(1)
+        layout.addWidget(separator, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+    layout.addWidget(project_tabs, alignment=Qt.AlignmentFlag.AlignVCenter)
+    layout.addWidget(add_pdf_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
     layout.addStretch(1)
 
     preview_status_label = QLabel("")

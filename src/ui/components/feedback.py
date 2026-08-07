@@ -2,7 +2,7 @@
 Componentes de feedback ao usuário — dark edition.
 
 InlineBanner → faixa estilo GitHub Alert (border-left colorida)
-show_friendly_error / show_info / confirm_action → diálogos padrão
+show_friendly_error / show_info / confirm_action → diálogos do design system
 """
 from __future__ import annotations
 
@@ -10,13 +10,9 @@ from enum import Enum, auto
 from typing import Optional
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
-    QMessageBox,
-    QWidget,
-)
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
+from src.ui.components.app_dialog import AppMessageDialog, DialogKind
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
 from src.ui.styles.helpers import inline_banner_style
 
@@ -68,7 +64,7 @@ class InlineBanner(QWidget):
 
         self._icon_label = QLabel(icon_char)
         self._icon_label.setFixedSize(22, 22)
-        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self._icon_label, 0, Qt.AlignmentFlag.AlignTop)
 
         self._message_label = QLabel(message)
@@ -117,33 +113,32 @@ def show_friendly_error(
     details: Optional[str] = None,
 ) -> None:
     """Exibe um erro de forma amigável, sem expor stack traces ao operador."""
-    box = QMessageBox(parent)
-    box.setIcon(QMessageBox.Icon.Warning)
-    box.setWindowTitle(title)
-    box.setText(message)
-    if details:
-        box.setDetailedText(details)
-    box.setStandardButtons(QMessageBox.StandardButton.Ok)
-    box.exec()
+    AppMessageDialog.inform(
+        parent,
+        title,
+        message,
+        kind=DialogKind.WARNING,
+        details=details,
+    )
 
 
 def show_info(parent: Optional[QWidget], title: str, message: str) -> None:
     """Exibe uma confirmação neutra/positiva (ex.: exportação concluída)."""
-    box = QMessageBox(parent)
-    box.setIcon(QMessageBox.Icon.Information)
-    box.setWindowTitle(title)
-    box.setText(message)
-    box.setStandardButtons(QMessageBox.StandardButton.Ok)
-    box.exec()
+    AppMessageDialog.inform(parent, title, message, kind=DialogKind.SUCCESS)
 
 
 def confirm_action(parent: Optional[QWidget], title: str, message: str) -> bool:
     """Diálogo de confirmação padrão (ex.: excluir template, descartar edição)."""
-    reply = QMessageBox.question(
+    return AppMessageDialog.confirm(parent, title, message)
+
+
+def confirm_dangerous_action(parent: Optional[QWidget], title: str, message: str) -> bool:
+    """Confirmação para ações destrutivas."""
+    return AppMessageDialog.confirm(
         parent,
         title,
         message,
-        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        QMessageBox.StandardButton.No,
+        confirm_label="Excluir",
+        cancel_label="Cancelar",
+        danger=True,
     )
-    return reply == QMessageBox.StandardButton.Yes

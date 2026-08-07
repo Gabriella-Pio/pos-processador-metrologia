@@ -79,7 +79,10 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        self._header = AppHeader(parent=self)
+        self._header = AppHeader(
+            trailing_logos=("logo-senai-white.png",),
+            parent=self,
+        )
         main_layout.addWidget(self._header)
 
         self._stack = QStackedWidget()

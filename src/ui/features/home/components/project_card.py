@@ -4,15 +4,23 @@ from __future__ import annotations
 from typing import Optional
 
 from PyQt6.QtCore import QEvent, Qt, pyqtSignal
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QSizePolicy, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QSizePolicy,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from src.ui.components.cards import ActionCard, ElidingLabel
-from src.ui.components.icons import icon_layers
+from src.ui.components.icons import icon_edit, icon_layers
 from src.ui.features.home.models.dashboard import ProjectSummary
 from src.ui.styles import (
     PALETTE,
     SPACING,
-    TYPOGRAPHY,
     action_card_hover_style,
     action_card_idle_style,
     badge_style,
@@ -22,7 +30,7 @@ from src.ui.styles import (
 
 
 class ProjectRow(QFrame):
-    """Linha de projeto em andamento — duplo-clique no título para renomear."""
+    """Linha de projeto em andamento — clique abre; lápis ou duplo-clique renomeia."""
 
     opened = pyqtSignal(str)
     renamed = pyqtSignal(str, str)
@@ -35,6 +43,7 @@ class ProjectRow(QFrame):
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
+        self.setObjectName("HomeProjectRow")
         self._summary = summary
         self._compact = compact
         self._build_ui()
@@ -70,18 +79,23 @@ class ProjectRow(QFrame):
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(SPACING.xs)
         self._title_edit = QLineEdit(self._summary.display_name)
+        self._title_edit.setObjectName("HomeProjectTitle")
         self._title_edit.setReadOnly(True)
         self._title_edit.setFrame(False)
         self._title_edit.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._title_edit.setToolTip("Duplo-clique para renomear")
-        self._title_edit.setStyleSheet(
-            f"color: {p.text_primary}; font-size: {TYPOGRAPHY.size_body}px; "
-            f"font-weight: {TYPOGRAPHY.weight_semibold}; background: transparent; "
-            f"border: none; padding: 0;"
-        )
+        self._title_edit.setToolTip("Clique para abrir o projeto")
         self._title_edit.installEventFilter(self)
         self._title_edit.editingFinished.connect(self._commit_title)
         title_row.addWidget(self._title_edit, stretch=1)
+
+        self._title_edit_btn = QToolButton()
+        self._title_edit_btn.setObjectName("HomeProjectTitleEditBtn")
+        self._title_edit_btn.setIcon(icon_edit())
+        self._title_edit_btn.setToolTip("Renomear projeto")
+        self._title_edit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._title_edit_btn.clicked.connect(self._begin_title_edit)
+        title_row.addWidget(self._title_edit_btn)
+
         if self._summary.is_batch:
             badge = QLabel(f"{self._summary.document_count} PDFs")
             badge.setStyleSheet(
@@ -104,17 +118,28 @@ class ProjectRow(QFrame):
         lines = [self._summary.display_name, f"Modo: {self._summary.report_mode_label()}"]
         if self._summary.components:
             lines.append("Componentes: " + ", ".join(self._summary.components[:5]))
-        lines.append("Duplo-clique no título para renomear")
+        lines.append("Clique para abrir · use o lápis para renomear")
         return "\n".join(lines)
 
+    def _begin_title_edit(self) -> None:
+        self._title_edit.setReadOnly(False)
+        self._title_edit.setCursor(Qt.CursorShape.IBeamCursor)
+        self._title_edit.setFrame(True)
+        self._title_edit.selectAll()
+        self._title_edit.setFocus()
+
     def eventFilter(self, obj, event) -> bool:  # noqa: N802
-        if obj is self._title_edit and event.type() == QEvent.Type.MouseButtonDblClick:
-            self._title_edit.setReadOnly(False)
-            self._title_edit.setCursor(Qt.CursorShape.IBeamCursor)
-            self._title_edit.setFrame(True)
-            self._title_edit.selectAll()
-            self._title_edit.setFocus()
-            return True
+        if obj is self._title_edit:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                if (
+                    event.button() == Qt.MouseButton.LeftButton
+                    and self._title_edit.isReadOnly()
+                ):
+                    self.opened.emit(self._summary.project_id)
+                    return True
+            if event.type() == QEvent.Type.MouseButtonDblClick:
+                self._begin_title_edit()
+                return True
         return super().eventFilter(obj, event)
 
     def _commit_title(self) -> None:
@@ -134,6 +159,8 @@ class ProjectRow(QFrame):
         if (
             event.button() == Qt.MouseButton.LeftButton
             and self._title_edit.isReadOnly()
+            and not self._title_edit.underMouse()
+            and not self._title_edit_btn.underMouse()
         ):
             self.opened.emit(self._summary.project_id)
         super().mousePressEvent(event)

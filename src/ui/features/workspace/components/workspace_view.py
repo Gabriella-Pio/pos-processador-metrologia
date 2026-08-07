@@ -6,13 +6,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
-from PyQt6.QtGui import QCursor, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtGui import QCursor, QFontMetrics, QKeySequence, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QFileDialog,
     QLabel,
     QLineEdit,
     QPushButton,
     QTabBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -21,7 +22,7 @@ from src.core.application.project_serializer import resolved_display_name
 from src.core.domain.ports import ReportDocument
 from src.core.domain.project_session import ProjectDocumentSlot
 from src.ui.components.inputs import LayoutTemplateSelector
-from src.ui.components.icons import icon_plus
+from src.ui.components.icons import icon_edit, icon_plus
 from src.ui.components.feedback import (
     FeedbackLevel,
     InlineBanner,
@@ -31,7 +32,6 @@ from src.ui.components.feedback import (
 )
 from src.ui.features.workspace.dialogs.save_template_dialog import SaveTemplateDialog
 from src.ui.features.workspace.dialogs.version_register_dialog import VersionRegisterDialog
-from src.ui.styles import SPACING
 from src.ui.controllers.app_state import AppState
 from src.ui.features.workspace.commands.project_commands import ProjectCommands
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
@@ -109,7 +109,17 @@ class WorkspaceView(QWidget):
         self._project_title_edit.setPlaceholderText("Título do projeto")
         self._project_title_edit.setToolTip("Nome exibido na Home — editável a qualquer momento")
         self._project_title_edit.editingFinished.connect(self._on_project_title_edited)
+        self._project_title_edit.textChanged.connect(self._sync_project_title_width)
         self._project_title_block = False
+
+        self._project_title_edit_btn = QToolButton()
+        self._project_title_edit_btn.setObjectName("WorkspaceProjectTitleEditBtn")
+        self._project_title_edit_btn.setAutoRaise(True)
+        self._project_title_edit_btn.setIcon(icon_edit())
+        self._project_title_edit_btn.setToolTip("Editar nome do projeto")
+        self._project_title_edit_btn.setFixedSize(32, 32)
+        self._project_title_edit_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self._project_title_edit_btn.clicked.connect(self._focus_project_title)
 
         self._document_title_label = QLabel("Nenhum documento carregado")
         self._document_title_label.setObjectName("WorkspaceDocTitleCompact")
@@ -125,6 +135,7 @@ class WorkspaceView(QWidget):
         self._connect_signals()
         self._setup_shortcuts()
         self._update_export_options_visibility()
+        self._sync_project_title_width()
 
     def refresh_appearance(self) -> None:
         self._banner.refresh_appearance()
@@ -150,6 +161,8 @@ class WorkspaceView(QWidget):
         ) = build_workspace_project_tabs_strip(
             self._project_tabs,
             self._add_pdf_btn,
+            project_title_edit=self._project_title_edit,
+            project_title_edit_btn=self._project_title_edit_btn,
             on_more_clicked=self._show_preview_menu,
             on_export_clicked=self._on_export_clicked,
             on_save_layout=self._on_save_template_clicked,
@@ -158,14 +171,6 @@ class WorkspaceView(QWidget):
         self._save_layout_action = self._project_tabs_strip._save_layout_action
         self._export_individual_action = self._project_tabs_strip._export_individual_action
         self._export_merged_action = self._project_tabs_strip._export_merged_action
-
-        title_row = QWidget()
-        title_row.setObjectName("WorkspaceProjectTitleRow")
-        title_layout = QVBoxLayout(title_row)
-        title_layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, 0)
-        title_layout.setSpacing(0)
-        title_layout.addWidget(self._project_title_edit)
-        outer.addWidget(title_row)
         outer.addWidget(self._project_tabs_strip)
 
         self._edit_placeholder = QLabel(
@@ -292,7 +297,7 @@ class WorkspaceView(QWidget):
         self._template_selector.set_layout_dirty(dirty)
 
     def _on_data_dirty_changed(self, dirty: bool) -> None:
-        self._data_dirty_label.setText("● Dados não salvos no PDF" if dirty else "")
+        self._data_dirty_label.setText("● Medições alteradas" if dirty else "")
 
     def _focus_template_combo(self) -> None:
         self._template_combo.setFocus()
@@ -328,6 +333,7 @@ class WorkspaceView(QWidget):
         self._project_title_block = True
         self._project_title_edit.setText(resolved_display_name(session))
         self._project_title_block = False
+        self._sync_project_title_width()
         self._project_tabs.blockSignals(True)
         while self._project_tabs.count():
             self._project_tabs.removeTab(0)
@@ -349,6 +355,16 @@ class WorkspaceView(QWidget):
                 self._project_tabs.removeTab(0)
         self._update_export_options_visibility()
 
+    def _sync_project_title_width(self) -> None:
+        metrics = QFontMetrics(self._project_title_edit.font())
+        text = self._project_title_edit.text() or self._project_title_edit.placeholderText() or " "
+        width = metrics.horizontalAdvance(text) + 36
+        self._project_title_edit.setFixedWidth(min(max(180, width), 560))
+
+    def _focus_project_title(self) -> None:
+        self._project_title_edit.setFocus(Qt.FocusReason.MouseFocusReason)
+        self._project_title_edit.selectAll()
+
     def _on_project_title_edited(self) -> None:
         if self._project_title_block:
             return
@@ -360,6 +376,7 @@ class WorkspaceView(QWidget):
         self._project_title_block = True
         self._project_title_edit.setText(display_name)
         self._project_title_block = False
+        self._sync_project_title_width()
 
     def _on_project_tab_changed(self, index: int) -> None:
         if index < 0:
