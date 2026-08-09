@@ -39,6 +39,7 @@ class ReportImage:
     section_id: str
     annotations: list[Annotation] = field(default_factory=list)
     caption: str = ""
+    bosello_import: bool = False
 
 
 @dataclass

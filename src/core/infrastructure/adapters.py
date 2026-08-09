@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+from src.core.application.bosello_image_import import build_bosello_image_document
 from src.core.application.export_context_builder import build_export_context
 from src.core.application.template_block_resolver import (
     resolve_active_template_blocks,
@@ -21,17 +22,20 @@ from src.core.generator.constants import SECTION_TITLES
 from src.core.generator.engine import ReportGenerator
 from src.core.infrastructure.template_repository import JSONTemplateRepository
 from src.core.parser.parser import PDFParserService
+from src.core.parser.source_kind import detect_source_kind
 
 
 class RealReportParserAdapter:
     """Adaptador real que traduz o Parser da ZEISS para o contrato da UI."""
 
     def parse(self, pdf_path: Path) -> ReportDocument:
+        kind = detect_source_kind(pdf_path)
+        if kind == "insp_ect":
+            return self._parse_bosello_image_source(pdf_path)
+
         dto_resultado = PDFParserService.extrair_dados_avancados(str(pdf_path))
         source_kind = getattr(dto_resultado, "source_kind", "calypso") or "calypso"
         maquina = getattr(dto_resultado, "maquina_mmc", "Não identificada")
-        if source_kind == "insp_ect":
-            maquina = getattr(dto_resultado, "equipamento_default", maquina) or maquina
 
         return ReportDocument(
             source_pdf_path=pdf_path,
@@ -44,11 +48,13 @@ class RealReportParserAdapter:
                 role="Técnico de Laboratório",
                 institutional_email="metrologia@senaigo.com.br",
             ),
-            # Payload opaco: a UI só carrega isso de volta pro exportador,
-            # nunca lê seu conteúdo diretamente (ver comentário em ports.py).
             raw_parsed_data=dto_resultado,
             source_kind=source_kind,
         )
+
+    def _parse_bosello_image_source(self, pdf_path: Path) -> ReportDocument:
+        """PDF Bosello usado como fonte de imagens — sem parse completo de medições."""
+        return build_bosello_image_document(pdf_path)
 
 
 class RealReportExporterAdapter:

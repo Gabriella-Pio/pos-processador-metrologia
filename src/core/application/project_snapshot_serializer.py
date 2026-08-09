@@ -18,6 +18,7 @@ def serialize_document_workspace(document: ReportDocument) -> dict[str, Any]:
             "path": str(img.image_path),
             "section_id": img.section_id,
             "caption": img.caption or "",
+            "bosello_import": bool(img.bosello_import),
         }
         for img in document.images
     ]
@@ -45,6 +46,7 @@ def apply_workspace_to_document(document: ReportDocument, workspace: dict[str, A
             image_path=Path(item["path"]),
             section_id=item["section_id"],
             caption=str(item.get("caption") or ""),
+            bosello_import=bool(item.get("bosello_import")),
         )
         for item in images_raw
         if item.get("path") and item.get("section_id")

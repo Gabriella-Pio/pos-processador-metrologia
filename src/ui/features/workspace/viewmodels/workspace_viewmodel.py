@@ -71,6 +71,7 @@ class WorkspaceViewModel(QObject):
     document_loaded = pyqtSignal(object)
     project_loaded = pyqtSignal(object)
     project_display_name_changed = pyqtSignal(str)
+    import_notice = pyqtSignal(str, str)
     export_finished = pyqtSignal(Path)
     sections_summary_ready = pyqtSignal(list)
     preview_ready = pyqtSignal(list)
@@ -240,9 +241,15 @@ class WorkspaceViewModel(QObject):
         pdf_entries: list[tuple[Path, str]],
         template_id: str = "default",
         report_mode: str = "auto",
+        *,
+        default_component: str = "",
     ) -> None:
         session = self._doc_service.build_project_session(
-            client_project, pdf_entries, template_id, report_mode=report_mode
+            client_project,
+            pdf_entries,
+            template_id,
+            report_mode=report_mode,
+            default_component=default_component or (pdf_entries[0][1] if pdf_entries else ""),
         )
         self._app_state.set_project_session(session)
         self.project_loaded.emit(session)
@@ -273,7 +280,7 @@ class WorkspaceViewModel(QObject):
         missing = [
             slot.source_pdf_path
             for slot in session.documents
-            if not slot.source_pdf_path.exists()
+            if slot.source_pdf_path and str(slot.source_pdf_path).strip() and not slot.source_pdf_path.exists()
         ]
         if missing:
             self.error_occurred.emit(
@@ -392,12 +399,16 @@ class WorkspaceViewModel(QObject):
             self._doc_service, self._session_repo, session, index
         )
         if not ok:
+            slot = session.documents[index]
+            label = slot.source_pdf_path.name if slot.source_pdf_path.name else slot.evaluated_component
             self.error_occurred.emit(
                 "Não foi possível ler o PDF",
-                f"Erro ao processar {session.documents[index].source_pdf_path.name}.",
+                f"Erro ao processar {label}.",
                 details,
             )
             return False
+        if details:
+            self.import_notice.emit("Imagens Bosello", details)
         return True
 
     # ------------------------------------------------------------------ fields

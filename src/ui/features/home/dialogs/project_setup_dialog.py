@@ -188,9 +188,13 @@ class ProjectSetupDialog(QDialog):
             self._component_field.clear_validation_error()
 
         if self._drop_zone.count() == 0:
-            self._files_error.setText("Selecione ao menos um arquivo PDF.")
-            self._files_error.show()
-            valid = False
+            mode = self._mode_combo.currentData()
+            if mode != "tomo_only":
+                self._files_error.setText("Selecione ao menos um arquivo PDF.")
+                self._files_error.show()
+                valid = False
+            else:
+                self._files_error.hide()
         else:
             self._files_error.hide()
 
@@ -210,4 +214,5 @@ class ProjectSetupDialog(QDialog):
             "template_id": self._template_combo.currentData() or "default",
             "report_mode": self._mode_combo.currentData() or "auto",
             "pdf_entries": pdf_entries,
+            "default_component": default_component,
         }

@@ -60,6 +60,15 @@ class InspEctParser:
     """Extrai resumo de volume e poros (Vp) de PDFs ZEISS INSP ECT."""
 
     @staticmethod
+    def extract_graphic_images_from_pdf(caminho_pdf: str, max_pages: int = 3) -> list[str]:
+        """Extrai imagens embutidas das primeiras páginas (sem parse de texto)."""
+        doc = fitz.open(caminho_pdf)
+        try:
+            return InspEctParser._extract_graphic_images(doc, max_pages=max_pages)
+        finally:
+            doc.close()
+
+    @staticmethod
     def parse(caminho_pdf: str, extract_images: bool = False) -> RelatorioInspEctDto:
         doc = fitz.open(caminho_pdf)
         try:

@@ -237,6 +237,9 @@ class WorkspaceView(QWidget):
         self._vm.error_occurred.connect(
             lambda title, msg, details: show_friendly_error(self, title, msg, details)
         )
+        self._vm.import_notice.connect(
+            lambda title, msg: show_info(self, title, msg)
+        )
         self._vm.export_finished.connect(self._on_export_finished)
         self._vm.layout_dirty_changed.connect(self._on_layout_dirty_changed)
         self._vm.data_dirty_changed.connect(self._on_data_dirty_changed)
