@@ -52,8 +52,18 @@ class ReportImageHandler:
         *,
         largura: int = 180,
         altura: int = 105,
+        preserve_original: bool = False,
     ):
         """Processa a imagem e retorna o elemento gráfico pronto para o ReportLab."""
+        if preserve_original:
+            elemento = cls._criar_elemento_foto_preservado(
+                caminho_imagem,
+                largura=largura,
+                altura=altura,
+            )
+            if elemento is not None:
+                return elemento
+
         caminho_tratado = cls.processar_foto_peca(
             caminho_imagem, largura_alvo=largura, altura_alvo=altura,
         )
@@ -62,3 +72,26 @@ class ReportImageHandler:
             return RLImage(caminho_tratado, width=max(largura - 5, 1), height=max(altura - 5, 1))
         fallback_style = styles.get("celula_centro") or styles.get("texto")
         return Paragraph("<b>[ FOTO DA PEÇA ]</b>", fallback_style)
+
+    @staticmethod
+    def _criar_elemento_foto_preservado(
+        caminho_imagem: str,
+        *,
+        largura: int,
+        altura: int,
+    ) -> RLImage | None:
+        """Escala proporcionalmente sem recorte nem troca de fundo."""
+        if not caminho_imagem or not os.path.exists(caminho_imagem):
+            return None
+        try:
+            with Image.open(caminho_imagem) as img:
+                img_w, img_h = img.size
+            if img_w <= 0 or img_h <= 0:
+                return None
+            scale = min(largura / img_w, altura / img_h)
+            draw_w = max(1, int(img_w * scale))
+            draw_h = max(1, int(img_h * scale))
+            return RLImage(caminho_imagem, width=draw_w, height=draw_h)
+        except Exception as e:
+            print(f"[ReportImageHandler] Erro ao preservar imagem: {e}")
+            return None

@@ -28,6 +28,7 @@ def serialize_document_workspace(document: ReportDocument) -> dict[str, Any]:
         "parsed_overrides": document.parsed_overrides,
         "section_order": document.section_order,
         "images": images,
+        "bosello_captured_paths": [str(path) for path in document.bosello_captured_paths],
         "custom_sections": document.custom_sections,
         "deleted_section_ids": document.deleted_section_ids,
         "attachment_pdf_paths": [str(path) for path in document.attachment_pdf_paths],
@@ -55,6 +56,8 @@ def apply_workspace_to_document(document: ReportDocument, workspace: dict[str, A
     document.deleted_section_ids = list(workspace.get("deleted_section_ids") or [])
     attachment_raw = workspace.get("attachment_pdf_paths") or []
     document.attachment_pdf_paths = [Path(path) for path in attachment_raw if path]
+    bosello_raw = workspace.get("bosello_captured_paths") or []
+    document.bosello_captured_paths = [Path(path) for path in bosello_raw if path]
 
 
 def serialize_version_history(entries: list[VersionEntry]) -> list[dict[str, Any]]:

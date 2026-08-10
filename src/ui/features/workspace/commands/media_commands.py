@@ -34,5 +34,31 @@ class MediaCommands:
                 break
 
     @staticmethod
+    def add_bosello_capture(
+        document: ReportDocument,
+        image_path: Path,
+        section_id: str,
+    ) -> ReportImage | None:
+        from src.core.application.bosello_image_import import attach_bosello_captures
+
+        added = attach_bosello_captures(document, [image_path], section_id)
+        if added == 0:
+            return None
+        for img in reversed(document.images):
+            if img.section_id == section_id and str(img.image_path) == str(image_path):
+                return img
+        return None
+
+    @staticmethod
+    def add_bosello_captures(
+        document: ReportDocument,
+        image_paths: list[Path],
+        section_id: str,
+    ) -> int:
+        from src.core.application.bosello_image_import import attach_bosello_captures
+
+        return attach_bosello_captures(document, image_paths, section_id)
+
+    @staticmethod
     def add_annotation(image: ReportImage, annotation: Annotation) -> None:
         image.annotations.append(annotation)

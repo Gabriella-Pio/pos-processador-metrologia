@@ -53,6 +53,7 @@ class SectionEditView(QFrame):
     image_remove_requested = pyqtSignal(object)
     image_caption_changed = pyqtSignal(object, str)
     image_selected = pyqtSignal(object)
+    bosello_picker_requested = pyqtSignal()
     tool_selected = pyqtSignal(str)
     delete_requested = pyqtSignal(str)
     section_restore_requested = pyqtSignal(str)
@@ -130,6 +131,7 @@ class SectionEditView(QFrame):
         self._image_panel.image_caption_changed.connect(self.image_caption_changed.emit)
         self._image_panel.image_selected.connect(self._on_image_selected)
         self._image_panel.choose_file_requested.connect(self._on_insert_photo)
+        self._image_panel.bosello_picker_requested.connect(self.bosello_picker_requested.emit)
         self._annotation_toolbar = AnnotationToolbar()
         self._annotation_toolbar.tool_selected.connect(self.tool_selected.emit)
 
@@ -514,9 +516,13 @@ class SectionEditView(QFrame):
         section_id = self._section_id
         if section_id is None:
             self._image_panel.render_images([])
+            self._image_panel.set_bosello_captures_available(False)
             return
         filtered = [img for img in images if img.section_id == section_id]
         self._image_panel.render_images(filtered)
+
+    def set_bosello_captures_available(self, available: bool) -> None:
+        self._image_panel.set_bosello_captures_available(available)
 
     def _on_image_selected(self, image: ReportImage | None) -> None:
         self._active_image = image

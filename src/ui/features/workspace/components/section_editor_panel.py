@@ -29,6 +29,7 @@ class SectionEditorPanel(BaseSidebarPanel):
     image_caption_changed = pyqtSignal(object, str)
     image_selected = pyqtSignal(object)
     tool_selected = pyqtSignal(str)
+    bosello_picker_requested = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent=parent)
@@ -77,6 +78,7 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._edit_view.image_caption_changed.connect(self.image_caption_changed.emit)
         self._edit_view.image_selected.connect(self.image_selected.emit)
         self._edit_view.tool_selected.connect(self.tool_selected.emit)
+        self._edit_view.bosello_picker_requested.connect(self.bosello_picker_requested.emit)
         self._edit_view.itens_medicao_changed.connect(view_model.update_itens_medicao)
         self._edit_view.section_restore_requested.connect(view_model.restore_section)
         self._edit_view.manage_versions_requested.connect(self._show_historico_tab)
@@ -156,6 +158,9 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._document_images = list(images)
         self._sections_panel.set_section_images(images)
         self._edit_view.render_images(images)
+
+    def set_bosello_captures_available(self, available: bool) -> None:
+        self._edit_view.set_bosello_captures_available(available)
 
     def render_versions(self, entries) -> None:
         self.set_version_entries(entries)

@@ -33,6 +33,7 @@ from src.core.application.document_editing import (
     get_measurement_rows,
 )
 from src.core.application.template_layout import document_has_data_changes
+from src.core.domain.pdf_source import has_source_pdf_reference, is_usable_source_pdf
 from src.core.domain.project_session import ProjectSession
 from src.core.domain.ports import (
     Annotation,
@@ -280,7 +281,7 @@ class WorkspaceViewModel(QObject):
         missing = [
             slot.source_pdf_path
             for slot in session.documents
-            if slot.source_pdf_path and str(slot.source_pdf_path).strip() and not slot.source_pdf_path.exists()
+            if has_source_pdf_reference(slot.source_pdf_path) and not slot.source_pdf_path.exists()
         ]
         if missing:
             self.error_occurred.emit(
@@ -592,6 +593,17 @@ class WorkspaceViewModel(QObject):
             lambda doc: MediaCommands.add_image(doc, image_path, section_id),
         ):
             self._app_state.notify_images_changed()
+
+    def add_bosello_captures_to_section(self, image_paths: list[Path], section_id: str) -> int:
+        added = 0
+
+        def mutate(doc: ReportDocument) -> None:
+            nonlocal added
+            added = MediaCommands.add_bosello_captures(doc, image_paths, section_id)
+
+        if self._mutate_data(mutate):
+            self._app_state.notify_images_changed()
+        return added
 
     def remove_image(self, image: ReportImage) -> None:
         if self._mutate_data(lambda doc: MediaCommands.remove_image(doc, image)):

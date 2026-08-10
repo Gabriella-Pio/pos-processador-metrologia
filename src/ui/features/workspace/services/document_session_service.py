@@ -16,6 +16,7 @@ from src.core.application.bosello_image_import import (
 )
 from src.core.application.project_serializer import default_display_name
 from src.core.application.template_apply import apply_template_content_defaults, apply_template_layout
+from src.core.domain.pdf_source import is_usable_source_pdf
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.ports import ReportDocument, ReportParser, TemplateRepository, VersionHistoryRepository
 from src.core.parser.source_kind import detect_source_kind
@@ -38,18 +39,24 @@ class DocumentSessionService:
         slot = session.documents[index]
         notice = ""
         try:
-            if not slot.source_pdf_path or not str(slot.source_pdf_path).strip():
+            if not is_usable_source_pdf(slot.source_pdf_path):
                 document = build_manual_tomography_document(
                     slot.evaluated_component,
                     client_project=session.client_project,
                 )
             elif self._use_bosello_image_import(session, slot):
                 document = build_bosello_image_document(slot.source_pdf_path)
-                imported = sum(1 for img in document.images if img.bosello_import)
-                if imported:
+                attached = sum(
+                    1
+                    for img in document.images
+                    if img.bosello_import and img.section_id == "tomografia"
+                )
+                library_count = len(document.bosello_captured_paths)
+                if library_count:
                     notice = (
-                        f"{imported} imagem(ns) importada(s) do relatório Bosello "
-                        "para a seção Tomografia."
+                        f"{library_count} captura(s) do Bosello disponíveis; "
+                        f"{attached} adicionada(s) à Tomografia. "
+                        "Use “Capturas Bosello…” para incluir ou recuperar fotos."
                     )
             else:
                 document = self._parser.parse(slot.source_pdf_path)
@@ -81,6 +88,8 @@ class DocumentSessionService:
 
     @staticmethod
     def _use_bosello_image_import(session: ProjectSession, slot: ProjectDocumentSlot) -> bool:
+        if not is_usable_source_pdf(slot.source_pdf_path):
+            return False
         if session.report_mode == "tomo_only":
             return True
         kind = slot.source_kind or detect_source_kind(slot.source_pdf_path)

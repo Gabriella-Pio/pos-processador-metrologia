@@ -4,11 +4,19 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 from src.core.application.bosello_image_import import (
+    attach_bosello_captures,
     build_bosello_image_document,
     build_manual_tomography_document,
+    ensure_bosello_capture_library,
+    filter_importable_image_paths,
     import_bosello_images,
+    is_likely_logo_or_icon,
     merge_bosello_images,
+    prune_bosello_logo_images,
+    render_bosello_capture_paths,
 )
 from src.core.domain.ports import ReportDocument, ReportImage
 from src.core.infrastructure.adapters import RealReportParserAdapter
@@ -35,34 +43,39 @@ def test_adapter_uses_image_only_path_for_insp_ect(require_insp_ect_fixture: Pat
 def test_merge_bosello_images_skips_when_auto_import_already_present(tmp_path: Path) -> None:
     pdf = tmp_path / "bosello.pdf"
     pdf.write_bytes(b"%PDF-1.4")
+    existing = tmp_path / "existing.png"
+    Image.new("RGB", (800, 600), (10, 10, 10)).save(existing)
     document = ReportDocument(
         source_pdf_path=pdf,
         client_project="Cliente",
         evaluated_component="Peça",
+        bosello_captured_paths=[existing],
         images=[
             ReportImage(
-                image_path=tmp_path / "existing.png",
+                image_path=existing,
                 section_id="tomografia",
                 bosello_import=True,
             )
         ],
     )
-    with patch("src.core.application.bosello_image_import.import_bosello_images") as import_mock:
+    with patch("src.core.application.bosello_image_import.render_bosello_capture_paths") as render_mock:
+        render_mock.return_value = [tmp_path / "cap.png"]
         added = merge_bosello_images(document, pdf)
     assert added == 0
-    import_mock.assert_not_called()
+    render_mock.assert_not_called()
 
 
 def test_import_bosello_images_copies_to_persistent_dir(tmp_path: Path) -> None:
     pdf = tmp_path / "relatorio.pdf"
     pdf.write_bytes(b"%PDF-1.4")
-    raw_paths = [str(tmp_path / "raw1.png"), str(tmp_path / "raw2.png")]
-    for path in raw_paths:
-        Path(path).write_bytes(b"png")
+    raw1 = tmp_path / "raw1.png"
+    raw2 = tmp_path / "raw2.png"
+    Image.new("RGB", (800, 600), (10, 10, 10)).save(raw1)
+    Image.new("RGB", (900, 700), (20, 20, 20)).save(raw2)
 
     with patch(
         "src.core.application.bosello_image_import.InspEctParser.extract_graphic_images_from_pdf",
-        return_value=raw_paths,
+        return_value=[str(raw1), str(raw2)],
     ):
         imported = import_bosello_images(pdf)
 
@@ -71,3 +84,139 @@ def test_import_bosello_images_copies_to_persistent_dir(tmp_path: Path) -> None:
     assert all(img.bosello_import for img in imported)
     assert imported[0].image_path.parent.name == "relatorio"
     assert imported[0].image_path.exists()
+
+
+def test_is_likely_logo_or_icon_detects_small_images(tmp_path: Path) -> None:
+    logo = tmp_path / "logo.png"
+    Image.new("RGB", (120, 120), (0, 0, 255)).save(logo)
+    zeiss = tmp_path / "zeiss.png"
+    Image.new("RGB", (295, 295), (0, 0, 255)).save(zeiss)
+    photo = tmp_path / "photo.png"
+    Image.new("RGB", (640, 480), (10, 10, 10)).save(photo)
+
+    assert is_likely_logo_or_icon(logo) is True
+    assert is_likely_logo_or_icon(zeiss) is True
+    assert is_likely_logo_or_icon(photo) is False
+
+
+def test_filter_importable_image_paths_skips_zeiss_logo(require_insp_ect_fixture: Path) -> None:
+    from src.core.parser.insp_ect_parser import InspEctParser
+
+    raw_paths = [
+        Path(path)
+        for path in InspEctParser.extract_graphic_images_from_pdf(str(require_insp_ect_fixture))
+    ]
+    kept = filter_importable_image_paths(raw_paths)
+    sizes = []
+    for path in kept:
+        with Image.open(path) as img:
+            sizes.append(img.size)
+    assert len(kept) == 6
+    large = [size for size in sizes if size[0] > 1000]
+    assert len(large) == 2
+
+
+def test_import_bosello_images_skips_logos(tmp_path: Path) -> None:
+    pdf = tmp_path / "relatorio.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    logo = tmp_path / "raw_logo.png"
+    photo = tmp_path / "raw_photo.png"
+    Image.new("RGB", (100, 100), (0, 0, 255)).save(logo)
+    Image.new("RGB", (800, 600), (20, 20, 20)).save(photo)
+
+    with patch(
+        "src.core.application.bosello_image_import.InspEctParser.extract_graphic_images_from_pdf",
+        return_value=[str(logo), str(photo)],
+    ):
+        imported = import_bosello_images(pdf)
+
+    assert len(imported) == 1
+    assert imported[0].image_path.name == "img_01.png"
+
+
+def test_serialize_document_workspace_includes_bosello_library(tmp_path: Path) -> None:
+    from src.core.application.project_snapshot_serializer import serialize_document_workspace
+
+    document = ReportDocument(
+        source_pdf_path=tmp_path / "a.pdf",
+        client_project="Cliente",
+        evaluated_component="Peça",
+        bosello_captured_paths=[tmp_path / "cap1.png", tmp_path / "cap2.png"],
+    )
+    payload = serialize_document_workspace(document)
+    assert payload["bosello_captured_paths"] == [
+        str(tmp_path / "cap1.png"),
+        str(tmp_path / "cap2.png"),
+    ]
+
+
+def test_prune_bosello_logo_images_removes_square_logos(tmp_path: Path) -> None:
+    logo = tmp_path / "logo.png"
+    photo = tmp_path / "photo.png"
+    Image.new("RGB", (295, 295), (0, 0, 255)).save(logo)
+    Image.new("RGB", (800, 600), (20, 20, 20)).save(photo)
+    document = ReportDocument(
+        source_pdf_path=tmp_path / "x.pdf",
+        client_project="Cliente",
+        evaluated_component="Peça",
+        images=[
+            ReportImage(image_path=logo, section_id="tomografia", bosello_import=True),
+            ReportImage(image_path=photo, section_id="tomografia", bosello_import=True),
+        ],
+    )
+
+    removed = prune_bosello_logo_images(document)
+
+    assert removed == 1
+    assert len(document.images) == 1
+    assert document.images[0].image_path == photo
+
+
+def test_remove_from_section_keeps_bosello_library(tmp_path: Path) -> None:
+    pdf = tmp_path / "relatorio.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    photo = tmp_path / "raw_photo.png"
+    Image.new("RGB", (800, 600), (20, 20, 20)).save(photo)
+    with patch(
+        "src.core.application.bosello_image_import.InspEctParser.extract_graphic_images_from_pdf",
+        return_value=[str(photo)],
+    ):
+        library = render_bosello_capture_paths(pdf)
+    document = ReportDocument(
+        source_pdf_path=pdf,
+        client_project="Cliente",
+        evaluated_component="Peça",
+        bosello_captured_paths=library,
+    )
+    attach_bosello_captures(document, library, "tomografia")
+    assert len(document.images) == 1
+
+    from src.ui.features.workspace.commands.media_commands import MediaCommands
+
+    MediaCommands.remove_image(document, document.images[0])
+    assert document.images == []
+    assert len(document.bosello_captured_paths) == 1
+
+    added = attach_bosello_captures(document, library, "tomografia")
+    assert added == 1
+    assert len(document.images) == 1
+
+
+def test_ensure_bosello_capture_library_reuses_existing(tmp_path: Path) -> None:
+    pdf = tmp_path / "relatorio.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    photo = tmp_path / "raw_photo.png"
+    Image.new("RGB", (800, 600), (20, 20, 20)).save(photo)
+    with patch(
+        "src.core.application.bosello_image_import.InspEctParser.extract_graphic_images_from_pdf",
+        return_value=[str(photo)],
+    ) as extract_mock:
+        document = ReportDocument(
+            source_pdf_path=pdf,
+            client_project="Cliente",
+            evaluated_component="Peça",
+        )
+        first = ensure_bosello_capture_library(document, pdf)
+        second = ensure_bosello_capture_library(document, pdf)
+    assert first == second
+    extract_mock.assert_called_once()

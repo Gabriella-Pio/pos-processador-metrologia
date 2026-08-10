@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+from src.core.domain.pdf_source import has_source_pdf_reference, source_pdf_path_from_storage, source_pdf_path_to_storage
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.project_workspace import ProjectSlotSnapshot, ProjectWorkspace
 
@@ -11,7 +12,9 @@ from src.core.domain.project_workspace import ProjectSlotSnapshot, ProjectWorksp
 def default_display_name(session: ProjectSession) -> str:
     """Nome inicial do projeto — stem do primeiro PDF importado."""
     if session.documents:
-        return session.documents[0].source_pdf_path.stem
+        first = session.documents[0].source_pdf_path
+        if has_source_pdf_reference(first):
+            return first.stem
     return session.client_project.strip() or "Projeto"
 
 
@@ -26,7 +29,7 @@ def session_to_workspace(session: ProjectSession) -> ProjectWorkspace:
     project_id = session.project_id or str(uuid.uuid4())
     slots = [
         ProjectSlotSnapshot(
-            source_pdf_path=str(slot.source_pdf_path),
+            source_pdf_path=source_pdf_path_to_storage(slot.source_pdf_path),
             evaluated_component=slot.evaluated_component,
             source_kind=slot.source_kind,
             template_id=slot.template_id,
@@ -47,7 +50,7 @@ def session_to_workspace(session: ProjectSession) -> ProjectWorkspace:
 def workspace_to_session(workspace: ProjectWorkspace) -> ProjectSession:
     documents = [
         ProjectDocumentSlot(
-            source_pdf_path=Path(slot.source_pdf_path),
+            source_pdf_path=source_pdf_path_from_storage(slot.source_pdf_path),
             evaluated_component=slot.evaluated_component,
             source_kind=slot.source_kind,
             template_id=slot.template_id,
@@ -56,7 +59,9 @@ def workspace_to_session(workspace: ProjectWorkspace) -> ProjectSession:
     ]
     display_name = (workspace.display_name or "").strip()
     if not display_name and workspace.slots:
-        display_name = Path(workspace.slots[0].source_pdf_path).stem
+        first = source_pdf_path_from_storage(workspace.slots[0].source_pdf_path)
+        if has_source_pdf_reference(first):
+            display_name = first.stem
     return ProjectSession(
         client_project=workspace.client_project,
         template_id=workspace.template_id,
@@ -71,7 +76,7 @@ def workspace_to_session(workspace: ProjectWorkspace) -> ProjectSession:
 def slots_to_json(slots: list[ProjectSlotSnapshot]) -> list[dict]:
     return [
         {
-            "source_pdf_path": slot.source_pdf_path,
+            "source_pdf_path": source_pdf_path_to_storage(slot.source_pdf_path),
             "evaluated_component": slot.evaluated_component,
             "source_kind": slot.source_kind,
             "template_id": slot.template_id,
@@ -86,8 +91,6 @@ def slots_from_json(raw: list) -> list[ProjectSlotSnapshot]:
         if not isinstance(item, dict):
             continue
         path = str(item.get("source_pdf_path") or "").strip()
-        if not path:
-            continue
         slots.append(
             ProjectSlotSnapshot(
                 source_pdf_path=path,
