@@ -46,7 +46,11 @@ class ProjectCommands:
     @staticmethod
     def ensure_project_attachment_paths(session: ProjectSession) -> None:
         """Define anexos como PDFs ZEISS originais de todos os slots do projeto."""
-        originals = [slot.source_pdf_path for slot in session.documents if slot.source_pdf_path]
+        originals = [
+            slot.source_pdf_path
+            for slot in session.documents
+            if slot.source_pdf_path and str(slot.source_pdf_path).strip()
+        ]
         if not originals:
             return
         for slot in session.documents:

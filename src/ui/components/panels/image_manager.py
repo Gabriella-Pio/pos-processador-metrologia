@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractScrollArea,
@@ -29,6 +30,7 @@ from src.ui.styles.helpers import workspace_drop_hint_style, workspace_image_lis
 class _ImageListRow(QFrame):
     remove_requested = pyqtSignal(object)
     _ROW_HEIGHT = 56
+    _MIN_ROW_WIDTH = 260
     _THUMB = 40
 
     def __init__(self, image: ReportImage, parent=None) -> None:
@@ -54,7 +56,7 @@ class _ImageListRow(QFrame):
                 pixmap.scaled(
                     self._THUMB,
                     self._THUMB,
-                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
             )
@@ -75,8 +77,9 @@ class _ImageListRow(QFrame):
         meta.addWidget(self._status)
 
         remove_btn = IconButton(icon_close(), "Remover foto")
-        remove_btn.setFixedSize(22, 22)
-        remove_btn.setIconSize(QSize(12, 12))
+        remove_btn.setFixedSize(28, 28)
+        remove_btn.setMinimumSize(28, 28)
+        remove_btn.setIconSize(QSize(14, 14))
         remove_btn.clicked.connect(lambda: self.remove_requested.emit(self.image))
         layout.addWidget(self._thumb)
         layout.addLayout(meta, stretch=1)
@@ -112,6 +115,7 @@ class ImageManagerPanel(QFrame):
     image_remove_requested = pyqtSignal(object)
     image_caption_changed = pyqtSignal(object, str)
     choose_file_requested = pyqtSignal()
+    bosello_picker_requested = pyqtSignal()
 
     def __init__(self, parent=None, *, show_header: bool = True) -> None:
         super().__init__(parent)
@@ -143,6 +147,11 @@ class ImageManagerPanel(QFrame):
         self._choose_btn = SecondaryButton("+ Escolher arquivo…")
         self._choose_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._choose_btn.clicked.connect(self.choose_file_requested.emit)
+
+        self._bosello_btn = SecondaryButton("Capturas Bosello…")
+        self._bosello_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._bosello_btn.setVisible(False)
+        self._bosello_btn.clicked.connect(self.bosello_picker_requested.emit)
 
         self._hint = QLabel("Fotos desta seção")
         self._hint.setObjectName("GlobalFieldLabel")
@@ -190,6 +199,7 @@ class ImageManagerPanel(QFrame):
             inner_layout.addWidget(hint_legacy)
         inner_layout.addWidget(self._drop_hint)
         inner_layout.addWidget(self._choose_btn)
+        inner_layout.addWidget(self._bosello_btn)
         inner_layout.addWidget(self._selection_block)
         inner_layout.addStretch(1)
         layout.addWidget(inner, stretch=1)
@@ -207,7 +217,11 @@ class ImageManagerPanel(QFrame):
         )
         self._empty_list_hint.setStyleSheet(caption_style())
         self._choose_btn.refresh_appearance()
+        self._bosello_btn.refresh_appearance()
         self._apply_drop_hint_style()
+
+    def set_bosello_captures_available(self, available: bool) -> None:
+        self._bosello_btn.setVisible(available)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
@@ -259,9 +273,9 @@ class ImageManagerPanel(QFrame):
             self._row_widgets.append(row)
             self._list.addItem(item)
             self._list.setItemWidget(item, row)
-            item.setSizeHint(QSize(max(80, self._list.viewport().width()), _ImageListRow._ROW_HEIGHT))
             if selected_path and str(image.image_path) == selected_path:
                 restore_row = index
+        self._sync_list_item_widths()
         if images:
             self._list.setCurrentRow(restore_row)
             self._select_image(
@@ -275,6 +289,24 @@ class ImageManagerPanel(QFrame):
         else:
             self._select_image(None, emit=True)
         self._sync_list_height()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._sync_list_item_widths()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._sync_list_item_widths()
+
+    def _sync_list_item_widths(self) -> None:
+        width = max(_ImageListRow._MIN_ROW_WIDTH, self._list.viewport().width())
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            if item is not None:
+                item.setSizeHint(QSize(width, _ImageListRow._ROW_HEIGHT))
+            row = self._row_widgets[index] if index < len(self._row_widgets) else None
+            if row is not None:
+                row.setMinimumWidth(width)
 
     def _sync_list_height(self) -> None:
         count = self._list.count()

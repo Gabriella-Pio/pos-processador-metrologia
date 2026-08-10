@@ -44,11 +44,11 @@ def filter_paths_for_mode(
     rejected: list[tuple[Path, str]] = []
     for path in paths:
         kind = detect_source_kind(path)
+        if report_mode == "tomo_only":
+            accepted.append(path)
+            continue
         if report_mode == "mmc_only" and kind != "calypso":
             rejected.append((path, "modo MMC aceita apenas PDFs CALYPSO"))
-            continue
-        if report_mode == "tomo_only" and kind != "insp_ect":
-            rejected.append((path, "modo Tomografia aceita apenas PDFs INSP ECT"))
             continue
         accepted.append(path)
     return accepted, rejected

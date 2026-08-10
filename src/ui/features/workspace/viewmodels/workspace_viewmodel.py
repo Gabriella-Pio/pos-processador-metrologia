@@ -33,6 +33,7 @@ from src.core.application.document_editing import (
     get_measurement_rows,
 )
 from src.core.application.template_layout import document_has_data_changes
+from src.core.domain.pdf_source import has_source_pdf_reference, is_usable_source_pdf
 from src.core.domain.project_session import ProjectSession
 from src.core.domain.ports import (
     Annotation,
@@ -71,6 +72,7 @@ class WorkspaceViewModel(QObject):
     document_loaded = pyqtSignal(object)
     project_loaded = pyqtSignal(object)
     project_display_name_changed = pyqtSignal(str)
+    import_notice = pyqtSignal(str, str)
     export_finished = pyqtSignal(Path)
     sections_summary_ready = pyqtSignal(list)
     preview_ready = pyqtSignal(list)
@@ -240,9 +242,15 @@ class WorkspaceViewModel(QObject):
         pdf_entries: list[tuple[Path, str]],
         template_id: str = "default",
         report_mode: str = "auto",
+        *,
+        default_component: str = "",
     ) -> None:
         session = self._doc_service.build_project_session(
-            client_project, pdf_entries, template_id, report_mode=report_mode
+            client_project,
+            pdf_entries,
+            template_id,
+            report_mode=report_mode,
+            default_component=default_component or (pdf_entries[0][1] if pdf_entries else ""),
         )
         self._app_state.set_project_session(session)
         self.project_loaded.emit(session)
@@ -273,7 +281,7 @@ class WorkspaceViewModel(QObject):
         missing = [
             slot.source_pdf_path
             for slot in session.documents
-            if not slot.source_pdf_path.exists()
+            if has_source_pdf_reference(slot.source_pdf_path) and not slot.source_pdf_path.exists()
         ]
         if missing:
             self.error_occurred.emit(
@@ -392,12 +400,16 @@ class WorkspaceViewModel(QObject):
             self._doc_service, self._session_repo, session, index
         )
         if not ok:
+            slot = session.documents[index]
+            label = slot.source_pdf_path.name if slot.source_pdf_path.name else slot.evaluated_component
             self.error_occurred.emit(
                 "Não foi possível ler o PDF",
-                f"Erro ao processar {session.documents[index].source_pdf_path.name}.",
+                f"Erro ao processar {label}.",
                 details,
             )
             return False
+        if details:
+            self.import_notice.emit("Imagens Bosello", details)
         return True
 
     # ------------------------------------------------------------------ fields
@@ -581,6 +593,17 @@ class WorkspaceViewModel(QObject):
             lambda doc: MediaCommands.add_image(doc, image_path, section_id),
         ):
             self._app_state.notify_images_changed()
+
+    def add_bosello_captures_to_section(self, image_paths: list[Path], section_id: str) -> int:
+        added = 0
+
+        def mutate(doc: ReportDocument) -> None:
+            nonlocal added
+            added = MediaCommands.add_bosello_captures(doc, image_paths, section_id)
+
+        if self._mutate_data(mutate):
+            self._app_state.notify_images_changed()
+        return added
 
     def remove_image(self, image: ReportImage) -> None:
         if self._mutate_data(lambda doc: MediaCommands.remove_image(doc, image)):

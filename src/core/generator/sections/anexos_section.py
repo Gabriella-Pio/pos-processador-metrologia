@@ -4,7 +4,7 @@ from pathlib import Path
 from reportlab.platypus import PageBreak, Paragraph, Spacer
 
 from .base import BaseSection, anchored_section_title
-from ..prose_helpers import get_section_heading, get_section_prose
+from ..prose_helpers import format_prose_paragraph, get_section_heading, get_section_prose
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 
@@ -34,7 +34,7 @@ class AnexosSection(BaseSection):
             PROSE_TEMPLATES.get("anexos", {}).get("intro", ""),
         )
         if intro.strip():
-            story.append(Paragraph(intro, styles["texto"]))
+            story.append(Paragraph(format_prose_paragraph(intro), styles["texto"]))
             story.append(Spacer(1, 8))
 
         anexos = list(contexto_extra.get("anexo_pdfs") or [])

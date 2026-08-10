@@ -44,6 +44,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
             "custom_sections": "TEXT NOT NULL DEFAULT '[]'",
             "deleted_section_ids": "TEXT NOT NULL DEFAULT '[]'",
             "attachment_pdf_paths": "TEXT NOT NULL DEFAULT '[]'",
+            "bosello_captured_paths": "TEXT NOT NULL DEFAULT '[]'",
         }
         for column, definition in migrations.items():
             if column not in existing:
@@ -62,10 +63,12 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                 "path": str(img.image_path),
                 "section_id": img.section_id,
                 "caption": img.caption or "",
+                "bosello_import": bool(img.bosello_import),
             }
             for img in document.images
         ]
         attachment_paths = [str(path) for path in document.attachment_pdf_paths]
+        bosello_paths = [str(path) for path in document.bosello_captured_paths]
         with self._connect() as conn:
             conn.execute(
                 """
@@ -73,8 +76,8 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     source_pdf_path, client_project, evaluated_component,
                     template_id, section_overrides, parsed_overrides,
                     section_order, images, custom_sections, deleted_section_ids,
-                    attachment_pdf_paths, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    attachment_pdf_paths, bosello_captured_paths, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(source_pdf_path, client_project, evaluated_component)
                 DO UPDATE SET
                     template_id=excluded.template_id,
@@ -85,6 +88,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     custom_sections=excluded.custom_sections,
                     deleted_section_ids=excluded.deleted_section_ids,
                     attachment_pdf_paths=excluded.attachment_pdf_paths,
+                    bosello_captured_paths=excluded.bosello_captured_paths,
                     updated_at=datetime('now')
                 """,
                 (
@@ -97,6 +101,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     json.dumps(document.custom_sections, ensure_ascii=False),
                     json.dumps(document.deleted_section_ids, ensure_ascii=False),
                     json.dumps(attachment_paths, ensure_ascii=False),
+                    json.dumps(bosello_paths, ensure_ascii=False),
                 ),
             )
             conn.commit()
@@ -106,7 +111,8 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
             row = conn.execute(
                 """
                 SELECT template_id, section_overrides, parsed_overrides, section_order,
-                       images, custom_sections, deleted_section_ids, attachment_pdf_paths
+                       images, custom_sections, deleted_section_ids, attachment_pdf_paths,
+                       bosello_captured_paths
                 FROM workspace_sessions
                 WHERE source_pdf_path=? AND client_project=? AND evaluated_component=?
                 """,
@@ -129,6 +135,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                 image_path=Path(item["path"]),
                 section_id=item["section_id"],
                 caption=str(item.get("caption") or ""),
+                bosello_import=bool(item.get("bosello_import")),
             )
             for item in images_raw
             if item.get("path") and item.get("section_id")
@@ -137,4 +144,6 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
         document.deleted_section_ids = json.loads(row[6] or "[]")
         attachment_raw = json.loads(row[7] or "[]")
         document.attachment_pdf_paths = [Path(path) for path in attachment_raw if path]
+        bosello_raw = json.loads(row[8] or "[]") if len(row) > 8 else []
+        document.bosello_captured_paths = [Path(path) for path in bosello_raw if path]
         return True

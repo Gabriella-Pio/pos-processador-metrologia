@@ -1,7 +1,7 @@
 """Seção personalizada inserida pelo workspace."""
 from reportlab.platypus import Paragraph, Spacer
 
-from ..prose_helpers import render_kv_table
+from ..prose_helpers import format_prose_paragraph, render_kv_table
 from .base import anchored_section_title
 
 
@@ -21,7 +21,7 @@ class CustomSection:
             contexto_extra.get("section_anchor_map"),
         ))
         if body:
-            story.append(Paragraph(body, styles["texto"]))
+            story.append(Paragraph(format_prose_paragraph(body), styles["texto"]))
         table_rows = (contexto_extra.get("table_rows") or {}).get(section_id, [])
         if table_rows:
             ctx = contexto_extra.get("placeholder_context") or {}

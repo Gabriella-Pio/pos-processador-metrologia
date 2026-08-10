@@ -37,6 +37,10 @@ class SectionFormBuilder:
         self._on_line_finished = on_line_finished
         self._on_field_restore = on_field_restore
         self._on_manage_versions = on_manage_versions
+        self._fields_host_ref = fields_host
+
+    def _on_prose_field_height_changed(self) -> None:
+        self._fields_host_ref.updateGeometry()
 
     def set_defaults_mode(self, enabled: bool) -> None:
         self._defaults_mode = enabled
@@ -157,11 +161,16 @@ class SectionFormBuilder:
                 lambda k=field_def.key, w=widget: self._on_line_finished(k, w)
             )
         else:
-            widget = PlaceholderTextEdit(multiline=field_def.field_type == "textarea")
+            widget = PlaceholderTextEdit(
+                multiline=field_def.field_type == "textarea",
+                supports_formatting=field_def.supports_formatting,
+            )
             widget.set_text(value)
             widget.text_changed.connect(
                 lambda text, k=field_def.key: self._on_field_changed(k, text)
             )
+            if field_def.supports_formatting:
+                widget.height_changed.connect(self._on_prose_field_height_changed)
         row_layout.addWidget(widget)
         self._fields_layout.addWidget(card)
         return widget

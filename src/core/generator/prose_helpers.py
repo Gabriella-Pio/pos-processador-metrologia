@@ -5,10 +5,16 @@ from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
+from src.core.domain.markdown_prose import markdown_to_reportlab_html
 from src.core.domain.placeholder_utils import resolve_placeholders
 from src.core.domain.section_numbering import format_numbered_heading, strip_number_prefix
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 from .constants import ReportTheme
+
+
+def format_prose_paragraph(text: str) -> str:
+    """Converte markdown leve do editor para HTML do ReportLab."""
+    return markdown_to_reportlab_html(str(text or ""))
 
 
 def get_section_prose(contexto_extra: dict, section_id: str, key: str, default: str = "") -> str:
@@ -67,7 +73,7 @@ def append_section_prose_paragraph(
     text = get_section_prose(contexto_extra, section_id, key, default)
     if not str(text or "").strip():
         return False
-    story.append(Paragraph(text, styles["texto"]))
+    story.append(Paragraph(format_prose_paragraph(text), styles["texto"]))
     if spacer_after:
         story.append(Spacer(1, spacer_after))
     return True
@@ -179,5 +185,5 @@ def append_section_footer_note(story, styles, section_id: str, contexto_extra: d
         leading=11,
     )
     story.append(Spacer(1, 6))
-    story.append(Paragraph(f"<i>{note}</i>", estilo))
+    story.append(Paragraph(f"<i>{format_prose_paragraph(note)}</i>", estilo))
     story.append(Spacer(1, 6))

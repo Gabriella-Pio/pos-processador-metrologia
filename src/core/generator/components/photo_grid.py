@@ -1,7 +1,6 @@
 """Grade de fotos 2 colunas para o PDF (imagem + legenda por path)."""
 from __future__ import annotations
 
-from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
 from src.core.generator.components.image_handler import ReportImageHandler
@@ -42,6 +41,7 @@ def append_photo_grid(
         story.append(
             ReportImageHandler.criar_elemento_foto(
                 path, styles, largura=img_w, altura=img_height,
+                preserve_original=True,
             )
         )
         legenda = caption_for_path(captions, path, fallback=default_caption)
@@ -57,6 +57,7 @@ def append_photo_grid(
         flowables = [
             ReportImageHandler.criar_elemento_foto(
                 path, styles, largura=img_w, altura=img_height,
+                preserve_original=True,
             )
         ]
         legenda = caption_for_path(captions, path, fallback=default_caption)
@@ -80,7 +81,6 @@ def append_photo_grid(
             ("TOPPADDING", (0, 0), (-1, -1), 4),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ("BOX", (0, 0), (-1, -1), 0.4, ReportTheme.COR_LINHA),
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F7F9FC")),
         ]))
         story.append(band)
         story.append(Spacer(1, 6))

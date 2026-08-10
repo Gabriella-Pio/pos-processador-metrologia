@@ -227,6 +227,7 @@ class WorkspaceView(QWidget):
         self._section_editor.image_caption_changed.connect(self._on_image_caption_changed)
         self._section_editor.image_selected.connect(self._on_image_selected)
         self._section_editor.tool_selected.connect(self._on_tool_selected)
+        self._section_editor.bosello_picker_requested.connect(self._on_bosello_picker_requested)
 
         self._vm.project_loaded.connect(self._on_project_loaded)
         self._vm.project_display_name_changed.connect(self._on_project_display_name_changed)
@@ -236,6 +237,9 @@ class WorkspaceView(QWidget):
         self._vm.global_fields_ready.connect(self._on_global_fields_ready)
         self._vm.error_occurred.connect(
             lambda title, msg, details: show_friendly_error(self, title, msg, details)
+        )
+        self._vm.import_notice.connect(
+            lambda title, msg: show_info(self, title, msg)
         )
         self._vm.export_finished.connect(self._on_export_finished)
         self._vm.layout_dirty_changed.connect(self._on_layout_dirty_changed)
@@ -502,6 +506,52 @@ class WorkspaceView(QWidget):
         document = self._app_state.active_document
         if document is not None:
             self._section_editor.render_images(document.images)
+            self._section_editor.set_bosello_captures_available(
+                len(document.bosello_captured_paths) > 0
+            )
+
+    def _on_bosello_picker_requested(self) -> None:
+        document = self._app_state.active_document
+        section_id = self._section_editor.editing_section_id() or self._active_section_id
+        if document is None or section_id is None:
+            show_friendly_error(
+                self,
+                "Selecione uma seção",
+                "Abra a edição de uma seção antes de adicionar capturas Bosello.",
+            )
+            return
+        captures = [path for path in document.bosello_captured_paths if path.is_file()]
+        if not captures:
+            show_friendly_error(
+                self,
+                "Sem capturas Bosello",
+                "Não há imagens capturadas do PDF Bosello neste projeto.",
+            )
+            return
+
+        from src.core.application.bosello_image_import import section_image_paths
+        from src.ui.features.workspace.dialogs.bosello_capture_picker_dialog import (
+            BoselloCapturePickerDialog,
+        )
+
+        dialog = BoselloCapturePickerDialog(
+            captures,
+            section_id=section_id,
+            paths_in_section=section_image_paths(document, section_id),
+            parent=self,
+        )
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        selected = dialog.selected_paths()
+        if not selected:
+            return
+        added = self._vm.add_bosello_captures_to_section(selected, section_id)
+        if added:
+            show_info(
+                self,
+                "Fotos adicionadas",
+                f"{added} captura(s) Bosello adicionada(s) à seção.",
+            )
 
     def _refresh_versions(self) -> None:
         self._section_editor.render_versions(self._vm.list_version_timeline())

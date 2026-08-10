@@ -59,6 +59,22 @@ class RelatorioInspEctDto:
 class InspEctParser:
     """Extrai resumo de volume e poros (Vp) de PDFs ZEISS INSP ECT."""
 
+    _RENDER_ZOOM = 2.0
+    _MIN_VIEWPORT_PT = 80.0
+
+    @staticmethod
+    def extract_graphic_images_from_pdf(caminho_pdf: str, max_pages: int = 3) -> list[str]:
+        """Renderiza vistas visíveis do PDF (inclui eixos e overlays vetoriais)."""
+        from src.core.domain.pdf_source import is_usable_source_pdf
+
+        if not is_usable_source_pdf(caminho_pdf):
+            return []
+        doc = fitz.open(caminho_pdf)
+        try:
+            return InspEctParser._extract_graphic_images(doc, max_pages=max_pages)
+        finally:
+            doc.close()
+
     @staticmethod
     def parse(caminho_pdf: str, extract_images: bool = False) -> RelatorioInspEctDto:
         doc = fitz.open(caminho_pdf)
@@ -176,20 +192,44 @@ class InspEctParser:
         return unique
 
     @staticmethod
+    def _graphic_page_indices(doc: fitz.Document, max_pages: int) -> list[int]:
+        """Páginas com vistas gráficas: resumos (p.1/3) e grade 2×2 (p.2)."""
+        return list(range(min(max_pages, doc.page_count)))
+
+    @staticmethod
     def _extract_graphic_images(doc: fitz.Document, max_pages: int = 3) -> list[str]:
-        """Salva imagens das primeiras páginas gráficas em diretório temporário."""
+        """Renderiza regiões visíveis do PDF (inclui eixos, grid e rótulos vetoriais)."""
         out_dir = Path(tempfile.mkdtemp(prefix="insp_ect_imgs_"))
         paths: list[str] = []
-        for page_index in range(min(max_pages, doc.page_count)):
+        matrix = fitz.Matrix(InspEctParser._RENDER_ZOOM, InspEctParser._RENDER_ZOOM)
+        page_indices = InspEctParser._graphic_page_indices(doc, max_pages)
+
+        for page_index in page_indices:
             page = doc[page_index]
+            seen_xrefs: set[int] = set()
             for img_index, img in enumerate(page.get_images(full=True)):
                 xref = img[0]
+                if xref in seen_xrefs:
+                    continue
+                seen_xrefs.add(xref)
                 try:
-                    extracted = doc.extract_image(xref)
+                    info = doc.extract_image(xref)
+                    embedded_w = int(info.get("width", 0))
+                    embedded_h = int(info.get("height", 0))
                 except Exception:
                     continue
-                ext = extracted.get("ext", "png")
-                target = out_dir / f"p{page_index + 1}_{img_index + 1}.{ext}"
-                target.write_bytes(extracted["image"])
-                paths.append(str(target))
+                if min(embedded_w, embedded_h) <= 2:
+                    continue
+
+                for rect_index, rect in enumerate(page.get_image_rects(xref)):
+                    if (
+                        rect.width < InspEctParser._MIN_VIEWPORT_PT
+                        or rect.height < InspEctParser._MIN_VIEWPORT_PT
+                    ):
+                        continue
+                    clip = fitz.Rect(rect) & page.rect
+                    pix = page.get_pixmap(matrix=matrix, clip=clip, alpha=False)
+                    target = out_dir / f"p{page_index + 1}_{img_index + 1}_{rect_index + 1}.png"
+                    pix.save(str(target))
+                    paths.append(str(target))
         return paths

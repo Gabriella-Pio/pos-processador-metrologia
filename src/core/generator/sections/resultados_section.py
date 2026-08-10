@@ -3,7 +3,7 @@ from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import ParagraphStyle
 from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
-from ..prose_helpers import get_section_prose, get_section_heading
+from ..prose_helpers import format_prose_paragraph, get_section_prose, get_section_heading
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 
@@ -15,7 +15,7 @@ class ResultadosSection(BaseSection):
         story.append(anchored_section_title(heading, styles['secao'], "resultados", contexto_extra.get("section_anchor_map")))
         intro_default = PROSE_TEMPLATES.get("resultados", {}).get("intro", "")
         intro_text = get_section_prose(contexto_extra, "resultados", "intro", intro_default)
-        story.append(Paragraph(intro_text, styles['texto']))
+        story.append(Paragraph(format_prose_paragraph(intro_text), styles['texto']))
 
         estilo_cabecalho_tabela = ParagraphStyle('CelulaCabecalho', parent=styles['celula_centro'], textColor=colors.white, fontName="Helvetica-Bold")
         estilo_cabecalho_esquerda = ParagraphStyle('CelulaCabecalhoEsquerda', parent=styles['celula'], textColor=colors.white, fontName="Helvetica-Bold")

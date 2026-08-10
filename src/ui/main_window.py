@@ -248,13 +248,15 @@ class MainWindow(QMainWindow):
                 return
             data = dialog.get_result()
             entries = data["pdf_entries"]
-            if not entries:
+            report_mode = data.get("report_mode", "auto")
+            if not entries and report_mode != "tomo_only":
                 return
             self._workspace_vm.load_project(
                 data["client_project"],
                 entries,
                 template_id=data["template_id"],
-                report_mode=data.get("report_mode", "auto"),
+                report_mode=report_mode,
+                default_component=data.get("default_component", ""),
             )
             self._nav_controller.navigate_to(1)
 

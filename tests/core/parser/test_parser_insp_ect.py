@@ -44,3 +44,16 @@ def test_adapter_sets_source_kind(require_insp_ect_fixture: Path) -> None:
     assert doc.source_kind == "insp_ect"
     assert doc.raw_parsed_data is not None
     assert doc.evaluated_component
+
+
+def test_extract_graphic_images_renders_viewports_with_axes(require_insp_ect_fixture: Path) -> None:
+    from PIL import Image
+
+    paths = InspEctParser.extract_graphic_images_from_pdf(str(require_insp_ect_fixture))
+    assert len(paths) == 6
+    widths = []
+    for path in paths:
+        with Image.open(path) as img:
+            widths.append(img.width)
+    assert sum(1 for width in widths if width > 1000) == 2
+    assert sum(1 for width in widths if 600 < width < 900) == 4

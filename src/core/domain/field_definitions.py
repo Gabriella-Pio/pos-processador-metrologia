@@ -12,6 +12,24 @@ class SectionFieldDef:
     label: str
     field_type: str = "text"  # text | textarea | computed
     editable: bool = True
+    supports_formatting: bool = False
+
+
+def _prose(
+    key: str,
+    label: str,
+    field_type: str = "textarea",
+    *,
+    editable: bool = True,
+    supports_formatting: bool = True,
+) -> SectionFieldDef:
+    return SectionFieldDef(
+        key,
+        label,
+        field_type,
+        editable=editable,
+        supports_formatting=supports_formatting and field_type == "textarea",
+    )
 
 
 @dataclass(frozen=True)
@@ -29,71 +47,71 @@ class SectionMediaDef:
     label: str
 
 
-_SECTION_FOOTER_NOTE = SectionFieldDef("nota", "Nota de rodapé", "textarea")
+_SECTION_FOOTER_NOTE = _prose("nota", "Nota de rodapé")
 
 _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
     "introducao": (
-        SectionFieldDef("objetivo", "Objetivo", "textarea"),
-        SectionFieldDef("escopo", "Escopo da análise", "textarea"),
-        SectionFieldDef("referencia", "Referência de medição", "textarea"),
+        _prose("objetivo", "Objetivo"),
+        _prose("escopo", "Escopo da análise"),
+        _prose("referencia", "Referência de medição"),
         _SECTION_FOOTER_NOTE,
     ),
     "identificacao": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _prose("intro", "Texto introdutório"),
         _SECTION_FOOTER_NOTE,
     ),
     "metodo_escopo": (
-        SectionFieldDef("body", "Texto do método e escopo", "textarea"),
+        _prose("body", "Texto do método e escopo"),
         _SECTION_FOOTER_NOTE,
     ),
     "registro_componente": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _prose("intro", "Texto introdutório"),
         _SECTION_FOOTER_NOTE,
     ),
     "controle_tecnico": (
-        SectionFieldDef("intro", "Texto introdutório / subtítulo", "textarea"),
+        _prose("intro", "Texto introdutório / subtítulo"),
         _SECTION_FOOTER_NOTE,
     ),
     "resultados": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _prose("intro", "Texto introdutório"),
         _SECTION_FOOTER_NOTE,
     ),
     "grafica": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _prose("intro", "Texto introdutório"),
         _SECTION_FOOTER_NOTE,
     ),
     "tomografia": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _prose("intro", "Texto introdutório"),
         _SECTION_FOOTER_NOTE,
     ),
     "resultados_inspecao": (
-        SectionFieldDef("body", "Texto dos resultados", "textarea"),
+        _prose("body", "Texto dos resultados"),
         _SECTION_FOOTER_NOTE,
     ),
     "interpretacao": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
-        SectionFieldDef("bullet_1", "Interpretação 1", "textarea"),
-        SectionFieldDef("bullet_2", "Interpretação 2", "textarea"),
-        SectionFieldDef("bullet_3", "Interpretação 3", "textarea"),
-        SectionFieldDef("bullet_4", "Interpretação 4", "textarea"),
+        _prose("intro", "Texto introdutório"),
+        _prose("bullet_1", "Interpretação 1"),
+        _prose("bullet_2", "Interpretação 2"),
+        _prose("bullet_3", "Interpretação 3"),
+        _prose("bullet_4", "Interpretação 4"),
         _SECTION_FOOTER_NOTE,
     ),
     "conclusao": (
-        SectionFieldDef("texto", "Texto da conclusão", "textarea"),
+        _prose("texto", "Texto da conclusão"),
         SectionFieldDef("modo", "Modo", "text", editable=False),
         SectionFieldDef("aprovacao", "Aprovação / Coordenação CEM", "text"),
         _SECTION_FOOTER_NOTE,
     ),
     "observacoes_limitacoes": (
-        SectionFieldDef("body", "Texto das observações", "textarea"),
+        _prose("body", "Texto das observações"),
         _SECTION_FOOTER_NOTE,
     ),
     "historico_versoes": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _prose("intro", "Texto introdutório"),
         _SECTION_FOOTER_NOTE,
     ),
     "anexos": (
-        SectionFieldDef("intro", "Texto introdutório", "textarea"),
+        _prose("intro", "Texto introdutório"),
         _SECTION_FOOTER_NOTE,
     ),
 }
@@ -133,7 +151,7 @@ GLOBAL_FIELDS: tuple[GlobalFieldDef, ...] = (
 
 _CUSTOM_DEFAULT_FIELDS = (
     SectionFieldDef("title", "Título"),
-    SectionFieldDef("body", "Conteúdo", "textarea"),
+    _prose("body", "Conteúdo"),
     _SECTION_FOOTER_NOTE,
 )
 _CUSTOM_DEFAULT_MEDIA = (
@@ -164,7 +182,7 @@ def get_edit_fields(section_id: str, *, defaults_mode: bool = False) -> tuple[Se
     if section_id.startswith("custom_"):
         return _CUSTOM_DEFAULT_FIELDS
     fields = _SECTION_FIELDS.get(
-        section_id, (SectionFieldDef("intro", "Texto introdutório", "textarea"),)
+        section_id, (_prose("intro", "Texto introdutório"),)
     )
     if not defaults_mode:
         return fields
@@ -172,7 +190,15 @@ def get_edit_fields(section_id: str, *, defaults_mode: bool = False) -> tuple[Se
     for field in fields:
         if field.editable or (defaults_mode and section_id == "interpretacao" and field.key == "intro"):
             editable.append(
-                field if field.editable else SectionFieldDef(field.key, field.label, field.field_type, editable=True)
+                field
+                if field.editable
+                else SectionFieldDef(
+                    field.key,
+                    field.label,
+                    field.field_type,
+                    editable=True,
+                    supports_formatting=field.supports_formatting,
+                )
             )
     return tuple(editable)
 
