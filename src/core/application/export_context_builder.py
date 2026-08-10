@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from src.core.domain.parsed_overrides import build_effective_dto, build_prose_context
+from src.core.domain.image_workspace import (
+    build_foto_edits_index,
+    resolve_image_id,
+    serialize_annotation,
+    serialize_crop,
+)
 from src.core.domain.placeholder_utils import build_placeholder_context
 from src.core.domain.ports import ReportDocument, VersionEntry
 from src.core.domain.report_field_registry import PROSE_TEMPLATES, merge_section_prose
@@ -25,6 +31,7 @@ class ExportContext:
     historico_versoes: list[dict]
     report_kind: str
     foto_captions: dict[str, str]
+    foto_edits: dict[str, dict]
     anexo_pdfs: list[str]
 
 
@@ -42,6 +49,7 @@ def build_export_context(document: ReportDocument) -> ExportContext:
         historico_versoes=build_historico_versoes(document),
         report_kind=report_kind,
         foto_captions=build_foto_captions(document),
+        foto_edits=build_foto_edits(document),
         anexo_pdfs=build_anexo_pdfs(document),
     )
 
@@ -81,6 +89,11 @@ def build_foto_captions(document: ReportDocument) -> dict[str, str]:
         if imagem.caption:
             captions[str(imagem.image_path)] = imagem.caption
     return captions
+
+
+def build_foto_edits(document: ReportDocument) -> dict[str, dict]:
+    """Metadados de crop/marcações por path de imagem para o generator."""
+    return build_foto_edits_index(document)
 
 
 def resolve_versao_atual(document: ReportDocument) -> str:

@@ -28,6 +28,7 @@ class SectionEditorPanel(BaseSidebarPanel):
     image_remove_requested = pyqtSignal(object)
     image_caption_changed = pyqtSignal(object, str)
     image_selected = pyqtSignal(object)
+    image_edits_changed = pyqtSignal(object)
     tool_selected = pyqtSignal(str)
     bosello_picker_requested = pyqtSignal()
 
@@ -77,6 +78,7 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._edit_view.image_remove_requested.connect(self.image_remove_requested.emit)
         self._edit_view.image_caption_changed.connect(self.image_caption_changed.emit)
         self._edit_view.image_selected.connect(self.image_selected.emit)
+        self._edit_view.image_edits_changed.connect(self.image_edits_changed.emit)
         self._edit_view.tool_selected.connect(self.tool_selected.emit)
         self._edit_view.bosello_picker_requested.connect(self.bosello_picker_requested.emit)
         self._edit_view.itens_medicao_changed.connect(view_model.update_itens_medicao)

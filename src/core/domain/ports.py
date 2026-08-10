@@ -21,14 +21,29 @@ from typing import Any, Protocol
 
 @dataclass
 class Annotation:
-    """Uma marcação (seta, círculo, caixa de texto ou número) sobre uma imagem."""
+    """Uma marcação (seta, círculo, caixa de texto ou número) sobre uma imagem.
 
-    kind: str  # "arrow" | "circle" | "text_box" | "number"
+    Coordenadas normalizadas (0–1) relativas à imagem original.
+    """
+
+    kind: str  # "arrow" | "circle" | "text_box" | "number" | "crop"
     x: float
     y: float
     width: float = 0.0
     height: float = 0.0
     text: str = ""
+    color: str = "#E85D04"
+    legend: str = ""  # descrição do marcador numerado (legenda automática no PDF)
+
+
+@dataclass
+class ImageCrop:
+    """Recorte manual normalizado (0–1) relativo à imagem original."""
+
+    x: float
+    y: float
+    width: float
+    height: float
 
 
 @dataclass
@@ -37,7 +52,9 @@ class ReportImage:
 
     image_path: Path
     section_id: str
+    image_id: str = ""
     annotations: list[Annotation] = field(default_factory=list)
+    crop: ImageCrop | None = None
     caption: str = ""
     bosello_import: bool = False
 

@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 PREVIEW_DEBOUNCE_MS = 600
 
 
+def build_preview_metadata(exporter) -> dict:
+    sections = dict(getattr(exporter, "_last_section_anchor_map", {}) or {})
+    photo_anchors = list(getattr(exporter, "_last_photo_anchors", []) or [])
+    return {"sections": sections, "photo_anchors": photo_anchors}
+
+
 class PreviewWorkerSignals(QObject):
     finished = pyqtSignal(int, list, dict)
     failed = pyqtSignal(int, str)
@@ -37,11 +43,9 @@ class PreviewWorker(QRunnable):
     def run(self) -> None:
         try:
             pages = self._preview_service.render_pages(self._document)
-            anchor_map: dict = {}
             exporter = self._preview_service._exporter
-            if hasattr(exporter, "_last_section_anchor_map"):
-                anchor_map = dict(getattr(exporter, "_last_section_anchor_map", {}))
-            self.signals.finished.emit(self._generation, pages, anchor_map)
+            metadata = build_preview_metadata(exporter)
+            self.signals.finished.emit(self._generation, pages, metadata)
         except Exception:
             logger.exception("Falha ao gerar preview em background")
             self.signals.failed.emit(self._generation, traceback.format_exc())

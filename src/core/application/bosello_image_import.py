@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 
 from src.core.domain.pdf_source import is_usable_source_pdf
+from src.core.domain.image_workspace import new_image_id
 from src.core.domain.ports import ReportDocument, ReportImage
 from src.core.parser.insp_ect_parser import InspEctParser, RelatorioInspEctDto
 
@@ -172,6 +173,7 @@ def attach_bosello_captures(
             ReportImage(
                 image_path=path,
                 section_id=section_id,
+                image_id=new_image_id(),
                 bosello_import=True,
             )
         )
@@ -322,6 +324,11 @@ def import_bosello_images(
 ) -> list[ReportImage]:
     library = render_bosello_capture_paths(source_pdf, replace_library=replace_auto_imported)
     return [
-        ReportImage(image_path=path, section_id=section_id, bosello_import=True)
+        ReportImage(
+            image_path=path,
+            section_id=section_id,
+            image_id=new_image_id(),
+            bosello_import=True,
+        )
         for path in library
     ]

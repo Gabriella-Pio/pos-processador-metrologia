@@ -102,6 +102,8 @@ class ReportGenerator:
             "section_number_map": build_section_number_map(template_config),
             "report_kind": opcoes_extras.get("report_kind", ""),
             "foto_captions": opcoes_extras.get("foto_captions") or {},
+            "foto_edits": opcoes_extras.get("foto_edits") or {},
+            "photo_anchors": opcoes_extras.get("_photo_anchors_out") or [],
             "anexo_pdfs": list(opcoes_extras.get("anexo_pdfs") or []),
         }
 

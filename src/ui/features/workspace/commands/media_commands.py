@@ -1,15 +1,27 @@
 """Comandos de mídia (imagens e anotações) no documento."""
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
-from src.core.domain.ports import Annotation, ReportDocument, ReportImage
+from src.core.domain.image_workspace import new_image_id, workspace_images_dir
+from src.core.domain.ports import Annotation, ImageCrop, ReportDocument, ReportImage
 
 
 class MediaCommands:
     @staticmethod
     def add_image(document: ReportDocument, image_path: Path, section_id: str) -> ReportImage:
-        image = ReportImage(image_path=image_path, section_id=section_id)
+        src = Path(image_path)
+        stored_path = src
+        if src.is_file():
+            image_id = new_image_id()
+            dest_dir = workspace_images_dir(document)
+            dest = dest_dir / f"{image_id}{src.suffix.lower() or '.png'}"
+            shutil.copy2(src, dest)
+            stored_path = dest
+        else:
+            image_id = new_image_id()
+        image = ReportImage(image_path=stored_path, section_id=section_id, image_id=image_id)
         document.images.append(image)
         return image
 
@@ -62,3 +74,11 @@ class MediaCommands:
     @staticmethod
     def add_annotation(image: ReportImage, annotation: Annotation) -> None:
         image.annotations.append(annotation)
+
+    @staticmethod
+    def set_image_crop(image: ReportImage, crop: ImageCrop | None) -> None:
+        image.crop = crop
+
+    @staticmethod
+    def clear_image_annotations(image: ReportImage) -> None:
+        image.annotations.clear()

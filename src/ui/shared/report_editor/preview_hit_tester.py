@@ -9,6 +9,8 @@ class PreviewHit:
     section_id: str
     page_number: int
     field_key: str | None = None
+    image_path: str | None = None
+    image_id: str | None = None
 
 
 def pixmap_display_offset(
@@ -124,6 +126,27 @@ def hit_test_section_at_point(
     return matches[0][1]
 
 
+def hit_test_photo_at_point(
+    page_number: int,
+    pdf_x: float,
+    pdf_y: float,
+    photo_anchors: list[dict],
+    *,
+    padding_pts: float = 2.0,
+) -> dict | None:
+    matches: list[tuple[float, dict]] = []
+    for anchor in photo_anchors:
+        if int(anchor.get("page") or 0) != page_number:
+            continue
+        if point_in_anchor(pdf_x, pdf_y, anchor, padding_pts=padding_pts):
+            area = float(anchor.get("width") or 0) * float(anchor.get("height") or 0)
+            matches.append((area, anchor))
+    if not matches:
+        return None
+    matches.sort(key=lambda item: item[0])
+    return matches[0][1]
+
+
 def hit_test_at_click(
     page_number: int,
     click_x: float,
@@ -136,6 +159,7 @@ def hit_test_at_click(
     page_height_pts: float,
     zoom: float,
     anchor_map: dict[str, dict],
+    photo_anchors: list[dict] | None = None,
 ) -> PreviewHit | None:
     pdf_point = click_to_pdf_point(
         click_x,
@@ -150,6 +174,22 @@ def hit_test_at_click(
     if pdf_point is None:
         return None
     pdf_x, pdf_y = pdf_point
+
+    photo_hit = hit_test_photo_at_point(
+        page_number,
+        pdf_x,
+        pdf_y,
+        photo_anchors or [],
+    )
+    if photo_hit is not None:
+        return PreviewHit(
+            section_id=str(photo_hit.get("section_id") or ""),
+            page_number=page_number,
+            field_key="photos",
+            image_path=str(photo_hit.get("image_path") or "") or None,
+            image_id=str(photo_hit.get("image_id") or "") or None,
+        )
+
     section_id = hit_test_section_at_point(page_number, pdf_x, pdf_y, anchor_map)
     if section_id is not None:
         return PreviewHit(section_id=section_id, page_number=page_number, field_key="section_title")

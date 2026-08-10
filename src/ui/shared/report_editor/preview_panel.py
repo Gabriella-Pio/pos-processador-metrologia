@@ -20,12 +20,13 @@ class PreviewPanel(QFrame):
     """Renderiza páginas PNG do preview e emite clique para navegação por seção."""
 
     page_clicked = pyqtSignal(int)
-    section_clicked = pyqtSignal(str, str)  # section_id, focus_target
+    section_clicked = pyqtSignal(str, str, str)  # section_id, focus_target, image_path
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("WorkspacePreviewPanel")
         self._anchor_map: dict[str, dict] = {}
+        self._photo_anchors: list[dict] = []
         self._page_items: list[dict] = []
         self._highlighted_section_id: str | None = None
         self._zoom = PREVIEW_ZOOM
@@ -71,6 +72,9 @@ class PreviewPanel(QFrame):
     def set_anchor_map(self, anchor_map: dict[str, dict]) -> None:
         self._anchor_map = dict(anchor_map)
         self._apply_highlight()
+
+    def set_photo_anchors(self, photo_anchors: list[dict]) -> None:
+        self._photo_anchors = list(photo_anchors or [])
 
     def update_anchor_map(self, anchor_map: dict[str, dict]) -> None:
         for section_id, info in anchor_map.items():
@@ -283,12 +287,14 @@ class PreviewPanel(QFrame):
             page_height_pts=page_item["page_height_pts"],
             zoom=self._zoom,
             anchor_map=self._anchor_map,
+            photo_anchors=self._photo_anchors,
         )
         if hit is None:
             self.page_clicked.emit(page_number)
             return
         self.highlight_section(hit.section_id)
-        self.section_clicked.emit(hit.section_id, hit.field_key or "section_title")
+        focus_target = hit.field_key or "section_title"
+        self.section_clicked.emit(hit.section_id, focus_target, hit.image_path or "")
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)

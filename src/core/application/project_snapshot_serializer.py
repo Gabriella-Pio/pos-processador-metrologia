@@ -7,21 +7,14 @@ from pathlib import Path
 from typing import Any
 
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
-from src.core.domain.ports import ReportDocument, ReportImage, VersionEntry
+from src.core.domain.image_workspace import deserialize_report_image, serialize_report_image
+from src.core.domain.ports import ReportDocument, VersionEntry
 
 SCHEMA_VERSION = 1
 
 
 def serialize_document_workspace(document: ReportDocument) -> dict[str, Any]:
-    images = [
-        {
-            "path": str(img.image_path),
-            "section_id": img.section_id,
-            "caption": img.caption or "",
-            "bosello_import": bool(img.bosello_import),
-        }
-        for img in document.images
-    ]
+    images = [serialize_report_image(img) for img in document.images]
     return {
         "template_id": document.template_id,
         "section_overrides": document.section_overrides,
@@ -43,14 +36,9 @@ def apply_workspace_to_document(document: ReportDocument, workspace: dict[str, A
     document.section_order = list(order_raw) if order_raw else None
     images_raw = workspace.get("images") or []
     document.images = [
-        ReportImage(
-            image_path=Path(item["path"]),
-            section_id=item["section_id"],
-            caption=str(item.get("caption") or ""),
-            bosello_import=bool(item.get("bosello_import")),
-        )
+        image
         for item in images_raw
-        if item.get("path") and item.get("section_id")
+        if (image := deserialize_report_image(item)) is not None
     ]
     document.custom_sections = list(workspace.get("custom_sections") or [])
     document.deleted_section_ids = list(workspace.get("deleted_section_ids") or [])

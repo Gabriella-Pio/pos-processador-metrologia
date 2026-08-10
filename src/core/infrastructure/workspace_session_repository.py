@@ -5,7 +5,8 @@ import json
 import sqlite3
 from pathlib import Path
 
-from src.core.domain.ports import ReportDocument, ReportImage, WorkspaceSessionPort
+from src.core.domain.image_workspace import deserialize_report_image, serialize_report_image
+from src.core.domain.ports import ReportDocument, WorkspaceSessionPort
 
 
 class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
@@ -58,15 +59,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
             document.client_project,
             document.evaluated_component,
         )
-        images = [
-            {
-                "path": str(img.image_path),
-                "section_id": img.section_id,
-                "caption": img.caption or "",
-                "bosello_import": bool(img.bosello_import),
-            }
-            for img in document.images
-        ]
+        images = [serialize_report_image(img) for img in document.images]
         attachment_paths = [str(path) for path in document.attachment_pdf_paths]
         bosello_paths = [str(path) for path in document.bosello_captured_paths]
         with self._connect() as conn:
@@ -131,14 +124,9 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
         document.section_order = json.loads(order_raw) if order_raw else None
         images_raw = json.loads(row[4] or "[]")
         document.images = [
-            ReportImage(
-                image_path=Path(item["path"]),
-                section_id=item["section_id"],
-                caption=str(item.get("caption") or ""),
-                bosello_import=bool(item.get("bosello_import")),
-            )
+            image
             for item in images_raw
-            if item.get("path") and item.get("section_id")
+            if (image := deserialize_report_image(item)) is not None
         ]
         document.custom_sections = json.loads(row[5] or "[]")
         document.deleted_section_ids = json.loads(row[6] or "[]")

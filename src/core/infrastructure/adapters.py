@@ -63,9 +63,11 @@ class RealReportExporterAdapter:
     def __init__(self, template_repository: Optional[JSONTemplateRepository] = None) -> None:
         self._template_repository = template_repository
         self._last_section_anchor_map: dict[str, dict] = {}
+        self._last_photo_anchors: list[dict] = []
 
     def export(self, document: ReportDocument, output_path: Path) -> Path:
         section_anchor_map: dict[str, dict] = {}
+        photo_anchors: list[dict] = []
         ctx = build_export_context(document)
         template_config = resolve_active_template_blocks(document, self._template_repository)
         ReportGenerator.gerar_relatorio_enriquecido(
@@ -85,10 +87,13 @@ class RealReportExporterAdapter:
             opcoes_extras={
                 "report_kind": ctx.report_kind,
                 "foto_captions": ctx.foto_captions,
+                "foto_edits": ctx.foto_edits,
                 "anexo_pdfs": ctx.anexo_pdfs,
+                "_photo_anchors_out": photo_anchors,
             },
         )
         self._last_section_anchor_map = section_anchor_map
+        self._last_photo_anchors = photo_anchors
         document.last_export_path = output_path
         return output_path
 

@@ -61,7 +61,7 @@ from src.ui.features.workspace.services.preview_service import PreviewService
 from src.ui.features.workspace.services.template_workspace_service import TemplateWorkspaceService
 from src.ui.features.workspace.undo_stack import DocumentUndoStack
 from src.ui.controllers.app_state import AppState
-from src.ui.shared.report_editor.preview_worker import DebouncedPreviewRunner
+from src.ui.shared.report_editor.preview_worker import DebouncedPreviewRunner, build_preview_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -552,9 +552,9 @@ class WorkspaceViewModel(QObject):
     def generate_preview(self) -> None:
         self.schedule_preview()
 
-    def _on_preview_finished(self, pages: list[bytes], anchor_map: dict) -> None:
+    def _on_preview_finished(self, pages: list[bytes], metadata: dict) -> None:
         self.preview_ready.emit(pages)
-        self.preview_metadata_ready.emit(anchor_map)
+        self.preview_metadata_ready.emit(metadata)
 
     def _document_for_preview(self) -> ReportDocument | None:
         return self._document_with_project_timeline(self._active_document())
@@ -617,6 +617,12 @@ class WorkspaceViewModel(QObject):
 
     def add_annotation(self, image: ReportImage, annotation: Annotation) -> None:
         MediaCommands.add_annotation(image, annotation)
+        self._notify_image_edits_changed()
+
+    def notify_image_edits_changed(self) -> None:
+        self._notify_image_edits_changed()
+
+    def _notify_image_edits_changed(self) -> None:
         self._app_state.notify_images_changed()
         self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
 
@@ -750,11 +756,9 @@ class WorkspaceViewModel(QObject):
         self.version_status_changed.emit(self.version_status_text())
         try:
             pages = self._preview_service.render_pages(document)
-            anchor_map: dict = {}
-            if hasattr(self._exporter, "_last_section_anchor_map"):
-                anchor_map = dict(getattr(self._exporter, "_last_section_anchor_map", {}))
+            metadata = build_preview_metadata(self._exporter)
             self.preview_ready.emit(pages)
-            self.preview_metadata_ready.emit(anchor_map)
+            self.preview_metadata_ready.emit(metadata)
         except Exception:
             logger.exception("Falha ao gerar preview da versão v%s", version_number)
             self.error_occurred.emit(

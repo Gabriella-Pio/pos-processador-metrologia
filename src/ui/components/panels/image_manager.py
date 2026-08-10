@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -30,14 +31,20 @@ from src.ui.styles.helpers import workspace_drop_hint_style, workspace_image_lis
 class _ImageListRow(QFrame):
     remove_requested = pyqtSignal(object)
     _ROW_HEIGHT = 56
+    _ROW_HEIGHT_COMPACT = 44
     _MIN_ROW_WIDTH = 260
+    _MIN_ROW_WIDTH_COMPACT = 168
     _THUMB = 40
+    _THUMB_COMPACT = 32
 
-    def __init__(self, image: ReportImage, parent=None) -> None:
+    def __init__(self, image: ReportImage, parent=None, *, compact: bool = False) -> None:
         super().__init__(parent)
         self.image = image
         self._selected = False
-        self.setMinimumHeight(self._ROW_HEIGHT)
+        self._compact = compact
+        row_h = self._ROW_HEIGHT_COMPACT if compact else self._ROW_HEIGHT
+        thumb = self._THUMB_COMPACT if compact else self._THUMB
+        self.setMinimumHeight(row_h)
         self.setObjectName("ImageListRow")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 6, 6, 6)
@@ -45,7 +52,7 @@ class _ImageListRow(QFrame):
         layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         self._thumb = QLabel()
-        self._thumb.setFixedSize(self._THUMB, self._THUMB)
+        self._thumb.setFixedSize(thumb, thumb)
         self._thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._thumb.setStyleSheet(
             f"background: {PALETTE.bg_surface_alt}; border-radius: 4px; border: 1px solid {PALETTE.border_subtle};"
@@ -54,8 +61,8 @@ class _ImageListRow(QFrame):
         if not pixmap.isNull():
             self._thumb.setPixmap(
                 pixmap.scaled(
-                    self._THUMB,
-                    self._THUMB,
+                    thumb,
+                    thumb,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
@@ -74,7 +81,8 @@ class _ImageListRow(QFrame):
             f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
         )
         meta.addWidget(name)
-        meta.addWidget(self._status)
+        if not compact:
+            meta.addWidget(self._status)
 
         remove_btn = IconButton(icon_close(), "Remover foto")
         remove_btn.setFixedSize(28, 28)
@@ -98,13 +106,15 @@ class _ImageListRow(QFrame):
             f"}}"
         )
         self._status.setText("Selecionada — editar legenda abaixo" if selected else "Clique para selecionar")
-        self._status.setStyleSheet(
-            f"color: {PALETTE.senai_blue_light if selected else PALETTE.text_muted}; "
-            f"font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
-        )
+        if not self._compact:
+            self._status.setStyleSheet(
+                f"color: {PALETTE.senai_blue_light if selected else PALETTE.text_muted}; "
+                f"font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
+            )
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(super().sizeHint().width(), self._ROW_HEIGHT)
+        height = self._ROW_HEIGHT_COMPACT if self._compact else self._ROW_HEIGHT
+        return QSize(super().sizeHint().width(), height)
 
 
 class ImageManagerPanel(QFrame):
@@ -112,14 +122,18 @@ class ImageManagerPanel(QFrame):
 
     image_dropped = pyqtSignal(Path)
     image_selected = pyqtSignal(object)
+    image_edit_requested = pyqtSignal(object)
     image_remove_requested = pyqtSignal(object)
     image_caption_changed = pyqtSignal(object, str)
     choose_file_requested = pyqtSignal()
     bosello_picker_requested = pyqtSignal()
 
-    def __init__(self, parent=None, *, show_header: bool = True) -> None:
+    def __init__(self, parent=None, *, show_header: bool = True, compact: bool = False, show_caption: bool = True, expand_list: bool = False) -> None:
         super().__init__(parent)
         self.setAcceptDrops(True)
+        self._compact = compact
+        self._expand_list = expand_list
+        self._show_caption = show_caption
         self._drop_active = False
         self._selected_image: ReportImage | None = None
         self._loading_caption = False
@@ -135,8 +149,12 @@ class ImageManagerPanel(QFrame):
         self._list.setSpacing(6)
         self._list.setFrameShape(QFrame.Shape.NoFrame)
         self._list.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
-        self._list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._list.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding if (compact or expand_list) else QSizePolicy.Policy.Fixed,
+        )
         self._list.itemClicked.connect(self._on_item_clicked)
+        self._list.itemDoubleClicked.connect(self._on_item_double_clicked)
         self._list.currentItemChanged.connect(self._on_current_changed)
 
         self._drop_hint = QLabel("Solte imagens PNG ou JPG aqui")
@@ -144,16 +162,16 @@ class ImageManagerPanel(QFrame):
         self._drop_hint.setWordWrap(True)
         self._drop_hint.setMinimumHeight(48)
 
-        self._choose_btn = SecondaryButton("+ Escolher arquivo…")
+        self._choose_btn = SecondaryButton("+ Arquivo" if compact else "+ Escolher arquivo…")
         self._choose_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._choose_btn.clicked.connect(self.choose_file_requested.emit)
 
-        self._bosello_btn = SecondaryButton("Capturas Bosello…")
+        self._bosello_btn = SecondaryButton("Bosello…" if compact else "Capturas Bosello…")
         self._bosello_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._bosello_btn.setVisible(False)
         self._bosello_btn.clicked.connect(self.bosello_picker_requested.emit)
 
-        self._hint = QLabel("Fotos desta seção")
+        self._hint = QLabel("Fotos" if compact else "Fotos desta seção")
         self._hint.setObjectName("GlobalFieldLabel")
         self._hint.setWordWrap(True)
 
@@ -169,15 +187,16 @@ class ImageManagerPanel(QFrame):
         selection_layout.setSpacing(SPACING.xs)
         selection_layout.addWidget(self._hint)
         selection_layout.addWidget(self._empty_list_hint)
-        selection_layout.addWidget(self._list)
+        selection_layout.addWidget(self._list, stretch=1 if (compact or expand_list) else 0)
         self._caption_label = QLabel("Legenda")
         self._caption_label.setObjectName("GlobalFieldLabel")
         self._caption_edit = PlaceholderTextEdit(multiline=False)
         self._caption_edit.set_text("")
         self._caption_edit.setEnabled(False)
         self._caption_edit.text_changed.connect(self._on_caption_changed)
-        selection_layout.addWidget(self._caption_label)
-        selection_layout.addWidget(self._caption_edit)
+        if show_caption:
+            selection_layout.addWidget(self._caption_label)
+            selection_layout.addWidget(self._caption_edit)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -197,14 +216,43 @@ class ImageManagerPanel(QFrame):
             hint_legacy.setWordWrap(True)
             hint_legacy.setStyleSheet(caption_style())
             inner_layout.addWidget(hint_legacy)
-        inner_layout.addWidget(self._drop_hint)
-        inner_layout.addWidget(self._choose_btn)
-        inner_layout.addWidget(self._bosello_btn)
-        inner_layout.addWidget(self._selection_block)
-        inner_layout.addStretch(1)
+        self._toggle_add_btn = QPushButton("+ Adicionar fotos")
+        self._toggle_add_btn.setVisible(compact)
+        self._toggle_add_btn.clicked.connect(self._toggle_add_section)
+
+        self._add_block = QWidget()
+        add_block_layout = QVBoxLayout(self._add_block)
+        add_block_layout.setContentsMargins(0, 0, 0, 0)
+        add_block_layout.setSpacing(SPACING.xs)
+        if compact:
+            btn_row = QHBoxLayout()
+            btn_row.setSpacing(SPACING.xs)
+            btn_row.addWidget(self._choose_btn)
+            btn_row.addWidget(self._bosello_btn)
+            add_block_layout.addWidget(self._drop_hint)
+            add_block_layout.addLayout(btn_row)
+        else:
+            add_block_layout.addWidget(self._drop_hint)
+            add_block_layout.addWidget(self._choose_btn)
+            add_block_layout.addWidget(self._bosello_btn)
+
+        inner_layout.addWidget(self._toggle_add_btn)
+        inner_layout.addWidget(self._add_block)
+        inner_layout.addWidget(self._selection_block, stretch=1 if (compact or expand_list) else 0)
+        if not compact and not expand_list:
+            inner_layout.addStretch(1)
         layout.addWidget(inner, stretch=1)
 
         self.refresh_appearance()
+
+    def _toggle_add_section(self) -> None:
+        self._add_block.setVisible(not self._add_block.isVisible())
+
+    def _row_height(self) -> int:
+        return _ImageListRow._ROW_HEIGHT_COMPACT if self._compact else _ImageListRow._ROW_HEIGHT
+
+    def _min_row_width(self) -> int:
+        return _ImageListRow._MIN_ROW_WIDTH_COMPACT if self._compact else _ImageListRow._MIN_ROW_WIDTH
 
     def selected_image(self) -> ReportImage | None:
         return self._selected_image
@@ -246,7 +294,7 @@ class ImageManagerPanel(QFrame):
         self._drop_hint.setStyleSheet(workspace_drop_hint_style(active=self._drop_active))
 
     def is_caption_editing(self) -> bool:
-        return self._caption_edit.has_editor_focus()
+        return self._show_caption and self._caption_edit.has_editor_focus()
 
     def render_images(self, images: list[ReportImage]) -> None:
         selected_path = (
@@ -258,17 +306,22 @@ class ImageManagerPanel(QFrame):
         self._list.clear()
         self._row_widgets.clear()
         has_images = len(images) > 0
-        self._drop_hint.setVisible(True)
+        if self._compact:
+            self._add_block.setVisible(not has_images)
+            self._toggle_add_btn.setVisible(has_images)
+            self._drop_hint.setMinimumHeight(36)
+        else:
+            self._drop_hint.setVisible(True)
         self._list.setVisible(has_images)
         self._empty_list_hint.setVisible(not has_images)
         self._hint.setVisible(True)
-        self._caption_label.setVisible(has_images)
-        self._caption_edit.setVisible(has_images)
+        self._caption_label.setVisible(has_images and self._show_caption)
+        self._caption_edit.setVisible(has_images and self._show_caption)
         restore_row = 0
         for index, image in enumerate(images):
             item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, image)
-            row = _ImageListRow(image)
+            row = _ImageListRow(image, compact=self._compact)
             row.remove_requested.connect(self.image_remove_requested.emit)
             self._row_widgets.append(row)
             self._list.addItem(item)
@@ -299,11 +352,12 @@ class ImageManagerPanel(QFrame):
         self._sync_list_item_widths()
 
     def _sync_list_item_widths(self) -> None:
-        width = max(_ImageListRow._MIN_ROW_WIDTH, self._list.viewport().width())
+        width = max(self._min_row_width(), self._list.viewport().width())
+        row_h = self._row_height()
         for index in range(self._list.count()):
             item = self._list.item(index)
             if item is not None:
-                item.setSizeHint(QSize(width, _ImageListRow._ROW_HEIGHT))
+                item.setSizeHint(QSize(width, row_h))
             row = self._row_widgets[index] if index < len(self._row_widgets) else None
             if row is not None:
                 row.setMinimumWidth(width)
@@ -313,8 +367,13 @@ class ImageManagerPanel(QFrame):
         if count == 0:
             self._list.setFixedHeight(0)
             return
+        if self._compact or self._expand_list:
+            self._list.setMinimumHeight(120)
+            self._list.setMaximumHeight(16777215)
+            return
         spacing = self._list.spacing()
-        content_h = count * _ImageListRow._ROW_HEIGHT + max(0, count - 1) * spacing + 4
+        row_h = self._row_height()
+        content_h = count * row_h + max(0, count - 1) * spacing + 4
         max_h = 180
         self._list.setFixedHeight(min(content_h, max_h))
         if content_h > max_h:
@@ -326,11 +385,35 @@ class ImageManagerPanel(QFrame):
         image = item.data(Qt.ItemDataRole.UserRole)
         self._select_image(image, emit=True)
 
+    def _on_item_double_clicked(self, item: QListWidgetItem) -> None:
+        image = item.data(Qt.ItemDataRole.UserRole)
+        if image is not None:
+            self._select_image(image, emit=True)
+            self.image_edit_requested.emit(image)
+
     def _on_current_changed(self, current: QListWidgetItem | None, _previous) -> None:
         if current is None:
             return
         image = current.data(Qt.ItemDataRole.UserRole)
         self._select_image(image, emit=True)
+
+    def select_image_by_path(self, image_path: str, *, image_id: str = "") -> bool:
+        from src.core.domain.image_workspace import image_matches_reference
+
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            if item is None:
+                continue
+            image = item.data(Qt.ItemDataRole.UserRole)
+            if image is not None and image_matches_reference(
+                image,
+                path=image_path,
+                image_id=image_id,
+            ):
+                self._list.setCurrentRow(index)
+                self._select_image(image, emit=True)
+                return True
+        return False
 
     def _select_image(
         self,
@@ -348,7 +431,11 @@ class ImageManagerPanel(QFrame):
         self._selected_image = image
         for row in self._row_widgets:
             row.set_selected(selected_path is not None and str(row.image.image_path) == selected_path)
-        self._caption_edit.setEnabled(image is not None)
+        self._caption_edit.setEnabled(image is not None and self._show_caption)
+        if not self._show_caption:
+            if emit and changed:
+                self.image_selected.emit(image)
+            return
         if preserve_caption and not changed:
             if caption_override is not None and image is not None:
                 image.caption = caption_override

@@ -21,6 +21,14 @@ class GraficaSection(BaseSection):
         captions = contexto_extra.get("foto_captions") or {}
         if fotos_secao:
             story.append(Spacer(1, 4))
-            append_photo_grid(story, list(fotos_secao), captions, styles)
+            append_photo_grid(
+                story,
+                list(fotos_secao),
+                captions,
+                styles,
+                section_id="grafica",
+                foto_edits=contexto_extra.get("foto_edits"),
+                photo_anchors=contexto_extra.get("photo_anchors"),
+            )
 
         story.append(Spacer(1, 10))

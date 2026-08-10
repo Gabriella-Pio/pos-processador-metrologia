@@ -71,6 +71,50 @@ def test_hit_test_at_click_returns_preview_hit() -> None:
     assert hit.field_key == "section_title"
 
 
+def test_hit_test_at_click_prefers_photo_anchor() -> None:
+    page_height = 792.0
+    zoom = 1.6
+    pixmap_w = int(612 * zoom)
+    pixmap_h = int(page_height * zoom)
+    anchor_map = {
+        "tomografia": {
+            "page_start": 1,
+            "anchor_rect": {"page": 1, "x": 72, "y": 650, "width": 180, "height": 16},
+        }
+    }
+    photo_anchors = [
+        {
+            "section_id": "tomografia",
+            "image_path": "/tmp/foto.png",
+            "image_id": "abc",
+            "page": 1,
+            "x": 72,
+            "y": 400,
+            "width": 200,
+            "height": 120,
+        }
+    ]
+    photo_top = (page_height - 400 - 120) * zoom + 20
+    hit = hit_test_at_click(
+        1,
+        150,
+        photo_top,
+        label_width=pixmap_w,
+        label_height=pixmap_h,
+        pixmap_width=pixmap_w,
+        pixmap_height=pixmap_h,
+        page_height_pts=page_height,
+        zoom=zoom,
+        anchor_map=anchor_map,
+        photo_anchors=photo_anchors,
+    )
+    assert hit is not None
+    assert hit.section_id == "tomografia"
+    assert hit.field_key == "photos"
+    assert hit.image_path == "/tmp/foto.png"
+    assert hit.image_id == "abc"
+
+
 def test_anchor_widget_rect_matches_pdf_bounds() -> None:
     page_height = 792.0
     zoom = 1.0

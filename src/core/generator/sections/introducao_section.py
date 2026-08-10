@@ -3,8 +3,10 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from .base import BaseSection, anchored_section_title
 from ..constants import ReportTheme
+from ..components.anchored_photo import AnchoredPhoto
 from ..components.image_handler import ReportImageHandler
-from ..components.photo_grid import append_photo_grid, caption_for_path
+from ..components.photo_grid import _combined_caption, append_photo_grid, caption_for_path
+from src.core.domain.image_workspace import lookup_foto_edits
 from ..prose_helpers import format_prose_paragraph, get_section_prose, get_section_heading
 from src.core.domain.placeholder_utils import resolve_placeholders
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
@@ -106,18 +108,46 @@ class IntroducaoSection(BaseSection):
         has_photo = bool(foto_principal)
 
         captions = contexto_extra.get("foto_captions") or {}
+        foto_edits = contexto_extra.get("foto_edits") or {}
+        photo_anchors = contexto_extra.get("photo_anchors")
 
         if has_photo:
-            # Metade / metade; imagem cabe na coluna (padding incluso).
-            foto = ReportImageHandler.criar_elemento_foto(
-                foto_principal, styles, largura=248, altura=168,
+            edits = lookup_foto_edits(foto_edits, foto_principal)
+            foto_element = ReportImageHandler.criar_elemento_foto(
+                foto_principal,
+                styles,
+                largura=248,
+                altura=168,
+                preserve_original=True,
+                edits=edits,
             )
-            legenda = caption_for_path(
+            if photo_anchors is not None:
+                foto = AnchoredPhoto(
+                    foto_element,
+                    section_id="introducao",
+                    image_path=foto_principal,
+                    image_id=str(edits.get("image_id") or ""),
+                    anchor_list=photo_anchors,
+                )
+            else:
+                foto = foto_element
+            legenda = _combined_caption(
                 captions,
                 foto_principal,
-                fallback=_DEFAULT_PHOTO_CAPTION,
+                edits,
+                default_caption=_DEFAULT_PHOTO_CAPTION,
             )
-            right_flowables = [foto]
+            photo_col_w = 254
+            photo_table = Table([[foto]], colWidths=[photo_col_w])
+            photo_table.setStyle(TableStyle([
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            right_flowables = [photo_table]
             if legenda:
                 right_flowables.append(Paragraph(f"<i>{legenda}</i>", estilo_legenda))
             hero = Table(
@@ -126,6 +156,7 @@ class IntroducaoSection(BaseSection):
             )
             hero.setStyle(TableStyle([
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (1, 0), (1, 0), "CENTER"),
                 ("BOX", (0, 0), (-1, -1), 0.5, ReportTheme.COR_LINHA),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 8),

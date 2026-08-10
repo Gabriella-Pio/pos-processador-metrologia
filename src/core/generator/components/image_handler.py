@@ -3,6 +3,9 @@ import hashlib
 import os
 from reportlab.platypus import Image as RLImage, Paragraph
 
+from src.core.application.image_edit_compositor import render_edited_image
+from src.core.domain.image_workspace import deserialize_annotation, deserialize_crop
+
 
 class ReportImageHandler:
     @staticmethod
@@ -53,11 +56,13 @@ class ReportImageHandler:
         largura: int = 180,
         altura: int = 105,
         preserve_original: bool = False,
+        edits: dict | None = None,
     ):
         """Processa a imagem e retorna o elemento gráfico pronto para o ReportLab."""
+        source_path = cls._resolve_source_path(caminho_imagem, edits)
         if preserve_original:
             elemento = cls._criar_elemento_foto_preservado(
-                caminho_imagem,
+                source_path,
                 largura=largura,
                 altura=altura,
             )
@@ -65,13 +70,36 @@ class ReportImageHandler:
                 return elemento
 
         caminho_tratado = cls.processar_foto_peca(
-            caminho_imagem, largura_alvo=largura, altura_alvo=altura,
+            source_path, largura_alvo=largura, altura_alvo=altura,
         )
 
         if caminho_tratado and os.path.exists(caminho_tratado):
             return RLImage(caminho_tratado, width=max(largura - 5, 1), height=max(altura - 5, 1))
         fallback_style = styles.get("celula_centro") or styles.get("texto")
         return Paragraph("<b>[ FOTO DA PEÇA ]</b>", fallback_style)
+
+    @staticmethod
+    def _resolve_source_path(caminho_imagem: str, edits: dict | None) -> str:
+        if not edits:
+            return caminho_imagem
+        crop = deserialize_crop(edits.get("crop"))
+        annotations = [
+            item
+            for item in (
+                deserialize_annotation(entry)
+                for entry in (edits.get("annotations") or [])
+                if isinstance(entry, dict)
+            )
+            if item is not None
+        ]
+        if crop is None and not annotations:
+            return caminho_imagem
+        edited = render_edited_image(
+            caminho_imagem,
+            crop=crop,
+            annotations=annotations,
+        )
+        return str(edited) if edited is not None else caminho_imagem
 
     @staticmethod
     def _criar_elemento_foto_preservado(

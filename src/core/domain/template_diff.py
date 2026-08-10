@@ -65,4 +65,7 @@ def is_data_dirty(document: ReportDocument) -> bool:
     if any(img.annotations for img in document.images):
         return True
 
+    if any(img.crop is not None for img in document.images):
+        return True
+
     return False

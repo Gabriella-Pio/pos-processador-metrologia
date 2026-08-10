@@ -26,7 +26,6 @@ class SectionTabPages:
     tables_layout: QVBoxLayout
     table_rows_editor: QWidget
     medicoes_editor: QWidget
-    annotation_toolbar: QWidget
 
 
 class SectionTabsBuilder:
@@ -112,6 +111,4 @@ class SectionTabsBuilder:
             index = tabs.addTab(page, labels.get(kind, kind))
             tabs.setTabIcon(index, icons[kind]())
 
-        has_photos = any(b.kind == "photos" for b in media_blocks)
-        pages.annotation_toolbar.setVisible(has_photos)
         tabs.tabBar().setVisible(tabs.count() > 1)

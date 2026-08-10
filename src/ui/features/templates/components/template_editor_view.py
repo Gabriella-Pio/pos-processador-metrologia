@@ -170,7 +170,9 @@ class TemplateEditorView(QWidget):
                 "Atualizando preview…" if generating else ""
             )
         )
-        self._vm.preview_metadata_ready.connect(self._preview_panel.update_anchor_map)
+        self._vm.preview_metadata_ready.connect(
+            lambda metadata: self._preview_panel.update_anchor_map(metadata.get("sections", metadata))
+        )
         self._vm.saved.connect(self.saved.emit)
         self._vm.error_occurred.connect(
             lambda title, msg, details: show_friendly_error(self, title, msg, details)
@@ -245,12 +247,15 @@ class TemplateEditorView(QWidget):
         if section_id:
             self._on_preview_section_clicked(section_id)
 
-    def _on_preview_section_clicked(self, section_id: str, focus_target: str = "section_title") -> None:
+    def _on_preview_section_clicked(
+        self,
+        section_id: str,
+        focus_target: str = "section_title",
+        image_path: str = "",
+    ) -> None:
         self._active_section_id = section_id
         self._vm.set_active_section(section_id)
         self._sidebar.open_edit_for_section(section_id)
         self._on_section_selected(section_id)
         if focus_target == "section_title":
             QTimer.singleShot(0, self._sidebar.edit_view.focus_section_title)
-        elif focus_target == "photos":
-            self._sidebar.edit_view.focus_tab_for_kind("photos")

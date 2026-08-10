@@ -226,6 +226,7 @@ class WorkspaceView(QWidget):
         self._section_editor.image_remove_requested.connect(self._on_image_remove)
         self._section_editor.image_caption_changed.connect(self._on_image_caption_changed)
         self._section_editor.image_selected.connect(self._on_image_selected)
+        self._section_editor.image_edits_changed.connect(self._on_image_edits_changed)
         self._section_editor.tool_selected.connect(self._on_tool_selected)
         self._section_editor.bosello_picker_requested.connect(self._on_bosello_picker_requested)
 
@@ -494,13 +495,11 @@ class WorkspaceView(QWidget):
     def _on_image_selected(self, image) -> None:
         self._active_annotation_image = image
 
+    def _on_image_edits_changed(self, _image) -> None:
+        self._vm.notify_image_edits_changed()
+
     def _on_tool_selected(self, tool_id: str) -> None:
         self._active_annotation_tool = tool_id
-        target = getattr(self._active_annotation_image, "image_path", None)
-        name = Path(target).name if target else "nenhuma foto"
-        self._preview_panel.scroll_area().setToolTip(
-            f"Ferramenta: {tool_id} · foto: {name}. Clique na preview para aplicar (MVP)."
-        )
 
     def _refresh_images(self) -> None:
         document = self._app_state.active_document
@@ -601,7 +600,12 @@ class WorkspaceView(QWidget):
         if section_id:
             self._on_preview_section_clicked(section_id)
 
-    def _on_preview_section_clicked(self, section_id: str, focus_target: str = "section_title") -> None:
+    def _on_preview_section_clicked(
+        self,
+        section_id: str,
+        focus_target: str = "section_title",
+        image_path: str = "",
+    ) -> None:
         self._active_section_id = section_id
         self._section_editor.open_edit_for_section(section_id)
         anchor = self._section_anchor_map.get(section_id, {})
@@ -610,12 +614,13 @@ class WorkspaceView(QWidget):
         self._sync_section_meta_row()
         if focus_target == "section_title":
             QTimer.singleShot(0, self._section_editor.focus_section_title)
-        elif focus_target == "photos":
-            self._section_editor.focus_section_tab("photos")
 
-    def _on_preview_metadata(self, anchor_map: dict) -> None:
-        self._preview_panel.update_anchor_map(anchor_map)
-        for section_id, info in anchor_map.items():
+    def _on_preview_metadata(self, metadata: dict) -> None:
+        sections = metadata.get("sections", metadata)
+        photo_anchors = metadata.get("photo_anchors", [])
+        self._preview_panel.set_photo_anchors(photo_anchors)
+        self._preview_panel.update_anchor_map(sections)
+        for section_id, info in sections.items():
             if section_id in self._section_anchor_map:
                 self._section_anchor_map[section_id]["page_start"] = info.get("page")
                 self._section_anchor_map[section_id]["anchor_rect"] = info
