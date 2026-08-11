@@ -1,6 +1,7 @@
 """Monta o sumário de seções a partir do documento e do exportador."""
 from __future__ import annotations
 
+from src.core.domain.chart_figure_defs import enabled_chart_count, section_has_graphics
 from src.core.domain.parsed_overrides import (
     build_effective_dto,
     build_prose_context,
@@ -9,6 +10,7 @@ from src.core.domain.parsed_overrides import (
 from src.core.domain.ports import ReportDocument, ReportExporter
 from src.core.domain.report_field_registry import (
     default_prose_values,
+    effective_media_kinds,
     get_global_fields_for_section,
     section_has_overrides,
 )
@@ -125,6 +127,11 @@ class SectionSummaryPresenter:
                 section_has_overrides(section_id, document.section_overrides)
                 or (section_id == "resultados" and is_itens_overridden(document.parsed_overrides))
             )
+            media_kinds = effective_media_kinds(section_id, overrides)
+            disabled_chart_ids = list(overrides.get("disabled_chart_ids") or [])
+            has_graphics = section_has_graphics(section_id, overrides) and enabled_chart_count(
+                section_id, overrides
+            ) > 0
 
             merged.append(SectionSummaryItem(
                 id=section_id,
@@ -139,6 +146,9 @@ class SectionSummaryPresenter:
                 body=overrides.get("body", fields.get("body", "")),
                 image_count=section.get("image_count", 0),
                 has_images=section.get("has_images", False),
+                has_graphics=has_graphics,
+                media_kinds=media_kinds,
+                disabled_chart_ids=disabled_chart_ids,
                 page_start=section.get("page_start"),
                 anchor_rect=section.get("anchor_rect"),
                 global_fields=[

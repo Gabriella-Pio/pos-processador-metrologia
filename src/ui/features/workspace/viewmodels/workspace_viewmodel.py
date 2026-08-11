@@ -33,6 +33,7 @@ from src.core.application.document_editing import (
     get_measurement_rows,
 )
 from src.core.application.template_layout import document_has_data_changes
+from src.core.domain.field_definitions import CHART_SECTION_IDS
 from src.core.domain.pdf_source import has_source_pdf_reference, is_usable_source_pdf
 from src.core.domain.project_session import ProjectSession
 from src.core.domain.ports import (
@@ -91,6 +92,9 @@ class WorkspaceViewModel(QObject):
     error_occurred = pyqtSignal(str, str, str)
     version_timeline_changed = pyqtSignal(list)
     version_status_changed = pyqtSignal(str)
+    # busy, título, detalhe (ex.: nome do PDF)
+    busy_changed = pyqtSignal(bool, str, str)
+    busy_progress = pyqtSignal(int, int, str)
 
     def __init__(
         self,
@@ -128,6 +132,7 @@ class WorkspaceViewModel(QObject):
         self._preview_runner.failed.connect(self._on_preview_failed)
         self._undo_stack = DocumentUndoStack()
         self._export_commands = ExportCommands(exporter, recent_files_repo)
+        self._export_mode_unified = False
 
         self._session_timer = QTimer(self)
         self._session_timer.setSingleShot(True)
@@ -240,6 +245,34 @@ class WorkspaceViewModel(QObject):
 
     # ------------------------------------------------------------------ load
 
+    def _begin_busy(self, title: str, detail: str = "") -> None:
+        self.busy_changed.emit(True, title, detail)
+
+    def _update_busy_progress(self, current: int, total: int, detail: str = "") -> None:
+        self.busy_progress.emit(current, total, detail)
+        from PyQt6.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents()
+
+    def _end_busy(self) -> None:
+        self.busy_changed.emit(False, "", "")
+
+    def _parse_session_slots(self, session: ProjectSession) -> bool:
+        total = len(session.documents)
+        for index in range(total):
+            slot = session.documents[index]
+            label = (
+                slot.source_pdf_path.name
+                if slot.source_pdf_path and slot.source_pdf_path.name
+                else slot.evaluated_component or f"arquivo {index + 1}"
+            )
+            self._update_busy_progress(index + 1, total, label)
+            if not self._parse_slot(session, index):
+                return False
+        return True
+
     def load_project(
         self,
         client_project: str,
@@ -249,22 +282,28 @@ class WorkspaceViewModel(QObject):
         *,
         default_component: str = "",
     ) -> None:
-        session = self._doc_service.build_project_session(
-            client_project,
-            pdf_entries,
-            template_id,
-            report_mode=report_mode,
-            default_component=default_component or (pdf_entries[0][1] if pdf_entries else ""),
+        total = len(pdf_entries)
+        self._begin_busy(
+            "Preparando projeto…" if total <= 1 else f"Importando lote ({total} PDFs)…",
         )
-        self._app_state.set_project_session(session)
-        self.project_loaded.emit(session)
+        try:
+            session = self._doc_service.build_project_session(
+                client_project,
+                pdf_entries,
+                template_id,
+                report_mode=report_mode,
+                default_component=default_component or (pdf_entries[0][1] if pdf_entries else ""),
+            )
+            self._app_state.set_project_session(session)
+            self.project_loaded.emit(session)
 
-        for index in range(len(session.documents)):
-            if not self._parse_slot(session, index):
+            if not self._parse_session_slots(session):
                 return
-        ProjectCommands.ensure_project_attachment_paths(session)
-        self._persist_project()
-        self.switch_document(0)
+            ProjectCommands.ensure_project_attachment_paths(session)
+            self._persist_project()
+            self.switch_document(0)
+        finally:
+            self._end_busy()
 
     def load_project_by_id(self, project_id: str) -> bool:
         if self._project_service is None:
@@ -274,36 +313,45 @@ class WorkspaceViewModel(QObject):
                 "",
             )
             return False
-        session = self._project_service.load_session(project_id)
-        if session is None:
-            self.error_occurred.emit(
-                "Projeto não encontrado",
-                "Este projeto não existe mais ou foi removido.",
-                "",
-            )
-            return False
-        missing = [
-            slot.source_pdf_path
-            for slot in session.documents
-            if has_source_pdf_reference(slot.source_pdf_path) and not slot.source_pdf_path.exists()
-        ]
-        if missing:
-            self.error_occurred.emit(
-                "Arquivos ausentes",
-                "Um ou mais PDFs de origem não foram encontrados:\n"
-                + "\n".join(str(path) for path in missing[:3]),
-                "",
-            )
-            return False
-        self._app_state.set_project_session(session)
-        self.project_loaded.emit(session)
-        for index in range(len(session.documents)):
-            if not self._parse_slot(session, index):
+        self._begin_busy("Abrindo projeto…")
+        try:
+            session = self._project_service.load_session(project_id)
+            if session is None:
+                self.error_occurred.emit(
+                    "Projeto não encontrado",
+                    "Este projeto não existe mais ou foi removido.",
+                    "",
+                )
                 return False
-        ProjectCommands.ensure_project_attachment_paths(session)
-        active = min(max(session.active_index, 0), len(session.documents) - 1)
-        self.switch_document(active)
-        return True
+            missing = [
+                slot.source_pdf_path
+                for slot in session.documents
+                if has_source_pdf_reference(slot.source_pdf_path) and not slot.source_pdf_path.exists()
+            ]
+            if missing:
+                self.error_occurred.emit(
+                    "Arquivos ausentes",
+                    "Um ou mais PDFs de origem não foram encontrados:\n"
+                    + "\n".join(str(path) for path in missing[:3]),
+                    "",
+                )
+                return False
+            self._app_state.set_project_session(session)
+            self.project_loaded.emit(session)
+            from src.core.application.piece_ordering import sort_session_documents
+
+            sort_session_documents(session)
+            n = len(session.documents)
+            if n > 1:
+                self.busy_changed.emit(True, f"Lendo {n} PDFs do projeto…", "")
+            if not self._parse_session_slots(session):
+                return False
+            ProjectCommands.ensure_project_attachment_paths(session)
+            active = min(max(session.active_index, 0), len(session.documents) - 1)
+            self.switch_document(active)
+            return True
+        finally:
+            self._end_busy()
 
     def load_from_pdf(self, pdf_path: Path, client_project: str, evaluated_component: str) -> None:
         self.load_project(
@@ -316,13 +364,27 @@ class WorkspaceViewModel(QObject):
         session = self._app_state.project_session
         if session is None or not paths:
             return
-        start_index = ProjectCommands.append_document_slots(session, paths, default_component)
-        for index in range(start_index, len(session.documents)):
-            if not self._parse_slot(session, index):
-                return
-        ProjectCommands.ensure_project_attachment_paths(session)
-        self._persist_project()
-        self.project_loaded.emit(session)
+        self._begin_busy(
+            "Adicionando PDF…" if len(paths) == 1 else f"Adicionando {len(paths)} PDFs…",
+        )
+        try:
+            new_indices = ProjectCommands.append_document_slots(session, paths, default_component)
+            total = len(new_indices)
+            for offset, index in enumerate(new_indices, start=1):
+                slot = session.documents[index]
+                label = (
+                    slot.source_pdf_path.name
+                    if slot.source_pdf_path and slot.source_pdf_path.name
+                    else f"arquivo {offset}"
+                )
+                self._update_busy_progress(offset, total, label)
+                if not self._parse_slot(session, index):
+                    return
+            ProjectCommands.ensure_project_attachment_paths(session)
+            self._persist_project()
+            self.project_loaded.emit(session)
+        finally:
+            self._end_busy()
 
     def remove_document_from_project(self, index: int) -> bool:
         session = self._app_state.project_session
@@ -470,7 +532,8 @@ class WorkspaceViewModel(QObject):
         self._mutate_data(ParsedFieldCommands.restore_itens_medicao)
 
     def refresh_sections_summary(self) -> None:
-        document = self._active_document()
+        # Modo unificado: sumário deve espelhar o mesmo documento do preview/PDF.
+        document = self._document_for_preview()
         if document is None:
             return
         try:
@@ -519,17 +582,54 @@ class WorkspaceViewModel(QObject):
         return True
 
     def set_section_enabled(self, section_id: str, enabled: bool) -> None:
-        document = self._active_document()
-        if document is None:
-            return
         from src.core.domain.section_schema import PROTECTED_SECTION_IDS
 
         if section_id in PROTECTED_SECTION_IDS:
+            return
+
+        # Modo unificado: preferência fica no projeto (o PDF consolidado é remontado).
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is None:
+                return
+            deleted = list(session.unified_deleted_section_ids)
+            if enabled:
+                if section_id in deleted:
+                    deleted.remove(section_id)
+            elif section_id not in deleted:
+                deleted.append(section_id)
+            session.unified_deleted_section_ids = deleted
+            self.refresh_sections_summary()
+            self.schedule_preview()
+            return
+
+        document = self._active_document()
+        if document is None:
             return
         SectionEditCommands.set_section_enabled(document, section_id, enabled)
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
 
     def update_section_media_kinds(self, section_id: str, kinds: list[str]) -> None:
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is None:
+                return
+            locked = (
+                []
+                if section_id in CHART_SECTION_IDS
+                else locked_workspace_media_kinds(
+                    section_id, session.active_document, self._template_repo
+                )
+                if session.active_document
+                else []
+            )
+            merged = sanitize_workspace_media_kinds(section_id, locked, kinds)
+            overrides = dict(session.unified_section_overrides.get(section_id) or {})
+            overrides["media_kinds"] = merged
+            session.unified_section_overrides[section_id] = overrides
+            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            return
+
         document = self._active_document()
         if document is None:
             return
@@ -538,7 +638,29 @@ class WorkspaceViewModel(QObject):
         SectionEditCommands.update_section_media_kinds(document, section_id, merged)
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
 
+    def update_disabled_chart_ids(self, section_id: str, disabled_ids: list[str]) -> None:
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is None:
+                return
+            overrides = dict(session.unified_section_overrides.get(section_id) or {})
+            if disabled_ids:
+                overrides["disabled_chart_ids"] = list(disabled_ids)
+            else:
+                overrides.pop("disabled_chart_ids", None)
+            session.unified_section_overrides[section_id] = overrides
+            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            return
+
+        document = self._active_document()
+        if document is None:
+            return
+        SectionEditCommands.update_disabled_chart_ids(document, section_id, disabled_ids)
+        self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+
     def locked_media_kinds(self, section_id: str) -> list[str]:
+        if self._export_mode_unified and self._is_multi_document() and section_id in CHART_SECTION_IDS:
+            return []
         document = self._active_document()
         if document is None:
             return []
@@ -580,7 +702,64 @@ class WorkspaceViewModel(QObject):
         self.preview_metadata_ready.emit(metadata)
 
     def _document_for_preview(self) -> ReportDocument | None:
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is None:
+                return None
+            from src.core.application.unified_export import (
+                UnifiedExportError,
+                build_unified_export_document,
+            )
+
+            try:
+                return self._document_with_project_timeline(
+                    build_unified_export_document(session)
+                )
+            except UnifiedExportError as exc:
+                logger.info("Preview unificado indisponível: %s", exc.message)
+                self.error_occurred.emit(
+                    "Preview unificado indisponível",
+                    exc.message,
+                    "",
+                )
+                return None
+            except Exception:
+                logger.exception("Falha ao montar preview unificado")
+                return None
         return self._document_with_project_timeline(self._active_document())
+
+    def _is_multi_document(self) -> bool:
+        session = self._app_state.project_session
+        return session is not None and len(session.documents) > 1
+
+    @property
+    def export_mode_unified(self) -> bool:
+        return self._export_mode_unified
+
+    def set_export_mode_unified(self, unified: bool) -> None:
+        unified = bool(unified) and self._is_multi_document()
+        if self._export_mode_unified == unified:
+            return
+        self._export_mode_unified = unified
+        if unified:
+            from src.core.application.piece_ordering import sort_session_documents
+
+            session = self._app_state.project_session
+            if session is not None and sort_session_documents(session):
+                self.project_loaded.emit(session)
+            self._begin_busy("Montando relatório unificado…")
+            try:
+                self.refresh_sections_summary()
+                self.schedule_preview()
+                if hasattr(self, "_app_state") and self._active_document() is not None:
+                    refresh_export_validation(self)
+            finally:
+                self._end_busy()
+            return
+        self.refresh_sections_summary()
+        self.schedule_preview()
+        if hasattr(self, "_app_state") and self._active_document() is not None:
+            refresh_export_validation(self)
 
     def _document_with_project_timeline(
         self,
@@ -850,6 +1029,22 @@ class WorkspaceViewModel(QObject):
         outcome = self._export_commands.export_document(
             self._document_with_project_timeline(self._active_document()),
             output_path,
+        )
+        if not outcome.success:
+            self.error_occurred.emit(
+                outcome.error_title,
+                outcome.error_message,
+                outcome.error_details,
+            )
+            return
+        assert outcome.path is not None
+        self.export_finished.emit(outcome.path)
+
+    def export_unified_document(self, output_path: Path) -> None:
+        outcome = self._export_commands.export_unified_document(
+            self._app_state.project_session,
+            output_path,
+            version_history=self.list_version_timeline(),
         )
         if not outcome.success:
             self.error_occurred.emit(

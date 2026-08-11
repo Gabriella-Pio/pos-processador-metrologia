@@ -72,6 +72,18 @@ class SectionEditCommands:
         document.section_overrides.get(section_id, {}).pop("table_rows", None)
 
     @staticmethod
+    def update_disabled_chart_ids(
+        document: ReportDocument,
+        section_id: str,
+        disabled_ids: list[str],
+    ) -> None:
+        section = document.section_overrides.setdefault(section_id, {})
+        if disabled_ids:
+            section["disabled_chart_ids"] = list(disabled_ids)
+        else:
+            section.pop("disabled_chart_ids", None)
+
+    @staticmethod
     def update_section_media_kinds(
         document: ReportDocument,
         section_id: str,

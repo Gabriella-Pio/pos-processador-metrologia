@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -16,6 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.core.domain.chart_figure_defs import chart_figure_defs
 from src.core.domain.report_field_registry import get_edit_fields, get_media_blocks
 from src.core.application.interpretacao_edit import interpretacao_field_defs
 from src.core.domain.ports import ReportImage, VersionEntry
@@ -61,6 +63,7 @@ class SectionEditView(QFrame):
     delete_requested = pyqtSignal(str)
     section_restore_requested = pyqtSignal(str)
     media_kinds_changed = pyqtSignal(str, list)
+    disabled_chart_ids_changed = pyqtSignal(str, list)
     manage_versions_requested = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
@@ -163,13 +166,14 @@ class SectionEditView(QFrame):
         photos_layout.addWidget(self._edit_photo_btn, stretch=0)
 
         self._graphics_page = QWidget()
-        graphics_layout = QVBoxLayout(self._graphics_page)
-        graphics_layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
-        graphics_stub = QLabel("Integração com gráficos Calypso em breve.")
-        graphics_stub.setWordWrap(True)
-        graphics_stub.setObjectName("SidebarHint")
-        graphics_layout.addWidget(graphics_stub)
-        graphics_layout.addStretch(1)
+        self._graphics_layout = QVBoxLayout(self._graphics_page)
+        self._graphics_layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
+        self._graphics_hint = QLabel("Integração com gráficos Calypso em breve.")
+        self._graphics_hint.setWordWrap(True)
+        self._graphics_hint.setObjectName("SidebarHint")
+        self._graphics_layout.addWidget(self._graphics_hint)
+        self._chart_checkboxes: dict[str, QCheckBox] = {}
+        self._graphics_layout.addStretch(1)
 
         self._tables_page = QWidget()
         self._tables_layout = QVBoxLayout(self._tables_page)
@@ -286,6 +290,7 @@ class SectionEditView(QFrame):
         self._rebuild_fields(section_id, overrides, is_custom)
         self._rebuild_editor_tabs(section_id)
         self._update_photos_hint(section)
+        self._rebuild_graphics_page(section_id, overrides)
 
         if section_id == "resultados" and itens_medicao is not None:
             self._medicoes_editor.set_rows(itens_medicao)
@@ -321,6 +326,8 @@ class SectionEditView(QFrame):
         self._loading = True
         scroll_pos = self._content_scroll.verticalScrollBar().value()
         section_id = self._section_id
+        prev_disabled = set(self._section_overrides.get("disabled_chart_ids") or [])
+        prev_media = list(self._section_overrides.get("media_kinds") or [])
         self._section_overrides = dict(overrides)
 
         default = SECTION_HEADING_DEFAULTS.get(section_id, overrides.get("title", section_id))
@@ -344,6 +351,11 @@ class SectionEditView(QFrame):
 
         if section is not None:
             self._update_breadcrumb(section)
+        if chart_figure_defs(section_id):
+            new_disabled = set(self._section_overrides.get("disabled_chart_ids") or [])
+            new_media = list(self._section_overrides.get("media_kinds") or prev_media)
+            if new_disabled != prev_disabled or new_media != prev_media:
+                self._rebuild_graphics_page(section_id, self._section_overrides)
         self._loading = False
         self._content_scroll.verticalScrollBar().setValue(scroll_pos)
 
@@ -504,6 +516,64 @@ class SectionEditView(QFrame):
     def _focus_section_title_editor(self) -> None:
         self._content_scroll.ensureWidgetVisible(self._section_title_host, 0, 40)
         self._section_title_edit.focus_editor(select_all=True)
+
+    def _rebuild_graphics_page(self, section_id: str, overrides: dict) -> None:
+        while self._graphics_layout.count():
+            item = self._graphics_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+        self._chart_checkboxes.clear()
+
+        defs = chart_figure_defs(section_id)
+        if not defs:
+            if section_id == "grafica":
+                self._graphics_hint = QLabel(
+                    "Gráficos analíticos desta seção. Associe imagens exportadas do CALYPSO "
+                    "ou use o layout para reservar espaço no PDF."
+                )
+            else:
+                self._graphics_hint = QLabel("Integração com gráficos Calypso em breve.")
+            self._graphics_hint.setWordWrap(True)
+            self._graphics_hint.setObjectName("SidebarHint")
+            self._graphics_layout.addWidget(self._graphics_hint)
+            self._graphics_layout.addStretch(1)
+            return
+
+        intro = QLabel(
+            "Marque os gráficos que devem aparecer no PDF. "
+            "Para remover todos de uma vez, desmarque <b>Gráficos</b> na aba Layout."
+        )
+        intro.setWordWrap(True)
+        intro.setObjectName("SidebarHint")
+        self._graphics_layout.addWidget(intro)
+
+        disabled = {
+            str(item)
+            for item in (overrides.get("disabled_chart_ids") or [])
+            if item
+        }
+        for figure in defs:
+            cb = QCheckBox(figure.label)
+            cb.setChecked(figure.id not in disabled)
+            cb.stateChanged.connect(
+                lambda _state, section=section_id: self._emit_disabled_chart_ids(section)
+            )
+            self._chart_checkboxes[figure.id] = cb
+            self._graphics_layout.addWidget(cb)
+        self._graphics_layout.addStretch(1)
+
+    def _emit_disabled_chart_ids(self, section_id: str) -> None:
+        if self._loading or self._defaults_mode:
+            return
+        disabled = [
+            figure_id
+            for figure_id, cb in self._chart_checkboxes.items()
+            if not cb.isChecked()
+        ]
+        self.disabled_chart_ids_changed.emit(section_id, disabled)
+        self._section_overrides = dict(self._section_overrides)
+        self._section_overrides["disabled_chart_ids"] = list(disabled)
 
     def _update_photos_hint(self, section: dict | None = None) -> None:
         title = ""

@@ -348,6 +348,8 @@ class SectionSummaryRow(_SummaryRowChromeMixin, QFrame):
             meta_parts.append("Obrigatória")
         if photo_count > 0:
             meta_parts.append(f"{photo_count} foto{'s' if photo_count != 1 else ''}")
+        if section.get("has_graphics") or "graphics" in (section.get("media_kinds") or []):
+            meta_parts.append("Gráficos")
         if section.get("custom") or str(section["id"]).startswith("custom_"):
             meta_parts.append("Personalizada")
         self._meta_label = QLabel(" · ".join(meta_parts))

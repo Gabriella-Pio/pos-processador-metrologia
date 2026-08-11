@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.feedback import confirm_action, show_friendly_error, show_info
 from src.ui.components.icons import icon_ellipsis, icon_edit
+from src.ui.components.preview_status_chip import PreviewStatusChip
 from src.ui.features.templates.components.template_sidebar_panel import TemplateSidebarPanel
 from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
 from src.ui.shared.report_editor.editor_shell import build_editor_column, create_three_column_splitter
@@ -138,11 +139,15 @@ class TemplateEditorView(QWidget):
 
         header = QFrame()
         header.setObjectName("WorkspacePreviewHeader")
-        header_layout = QVBoxLayout(header)
+        header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
+        header_layout.setSpacing(SPACING.sm)
         title = QLabel("Preview do template")
         title.setObjectName("WorkspaceDocTitleCompact")
         header_layout.addWidget(title)
+        header_layout.addStretch(1)
+        self._preview_status = PreviewStatusChip()
+        header_layout.addWidget(self._preview_status, alignment=Qt.AlignmentFlag.AlignVCenter)
         layout.addWidget(header)
         layout.addWidget(self._preview_panel, stretch=1)
         return container
@@ -165,7 +170,7 @@ class TemplateEditorView(QWidget):
         self._vm.sections_summary_ready.connect(self._on_sections_summary)
         self._vm.global_fields_ready.connect(self._sidebar.render_global_fields)
         self._vm.preview_ready.connect(self._preview_panel.render_pages)
-        self._vm.preview_generating.connect(self._preview_panel.set_busy)
+        self._vm.preview_generating.connect(self._on_preview_generating)
         self._vm.preview_metadata_ready.connect(
             lambda metadata: self._preview_panel.update_anchor_map(metadata.get("sections", metadata))
         )
@@ -173,6 +178,9 @@ class TemplateEditorView(QWidget):
         self._vm.error_occurred.connect(
             lambda title, msg, details: show_friendly_error(self, title, msg, details)
         )
+
+    def _on_preview_generating(self, generating: bool) -> None:
+        self._preview_status.set_busy(generating, "Atualizando preview…")
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
         self._edit_stack.setCurrentIndex(1 if visible else 0)

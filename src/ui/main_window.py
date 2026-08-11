@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QKeySequence, QShortcut
+from PyQt6.QtGui import QCursor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import QDialog, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from src.core.application.project_service import ProjectService
@@ -20,20 +20,21 @@ from src.core.domain.ports import (
     WorkspaceSessionPort,
 )
 from src.ui.accessibility import AppearanceManager
+from src.ui.components.busy_overlay import BusyOverlay
 from src.ui.components.feedback import confirm_action, show_friendly_error
 from src.ui.components.header import AppHeader
 from src.ui.components.modal_presentation import present_modal_dialog
-from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog, HelpDialogMode
-from src.ui.features.home.dialogs.project_setup_dialog import ProjectSetupDialog
-from src.ui.styles import base_stylesheet
 from src.ui.controllers.app_state import AppState
-from src.ui.features.home.viewmodels.home_viewmodel import HomeViewModel
 from src.ui.controllers.navigation_controller import NavigationController
-from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
-from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
+from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog, HelpDialogMode
 from src.ui.features.home.components.home_view import HomeView
+from src.ui.features.home.dialogs.project_setup_dialog import ProjectSetupDialog
+from src.ui.features.home.viewmodels.home_viewmodel import HomeViewModel
 from src.ui.features.templates.components.template_editor_view import TemplateEditorView
+from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
 from src.ui.features.workspace.components.workspace_view import WorkspaceView
+from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
+from src.ui.styles import base_stylesheet
 
 
 class MainWindow(QMainWindow):
@@ -96,6 +97,8 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self._stack)
         self.setCentralWidget(central_widget)
 
+        self._busy_overlay = BusyOverlay(central_widget)
+
         self._connect_signals()
         self._setup_shortcuts()
         AppearanceManager.instance().register_refresh(self._refresh_appearance)
@@ -116,6 +119,18 @@ class MainWindow(QMainWindow):
         self._template_editor_view.saved.connect(lambda _tid: self._home_vm.load_dashboard())
         self._template_editor_vm.template_name_changed.connect(self._on_template_name_changed)
         self._workspace_vm.project_display_name_changed.connect(self._on_project_display_name_changed)
+        self._workspace_vm.busy_changed.connect(self._on_busy_changed)
+        self._workspace_vm.busy_progress.connect(self._on_busy_progress)
+
+    def _on_busy_changed(self, busy: bool, title: str, detail: str) -> None:
+        self._busy_overlay.set_busy(busy, title, detail)
+        if busy:
+            self.setCursor(QCursor(Qt.CursorShape.WaitCursor))
+        else:
+            self.unsetCursor()
+
+    def _on_busy_progress(self, current: int, total: int, detail: str) -> None:
+        self._busy_overlay.set_progress(current, total, detail=detail)
 
     def _setup_shortcuts(self) -> None:
         back = QShortcut(QKeySequence("Alt+Left"), self)

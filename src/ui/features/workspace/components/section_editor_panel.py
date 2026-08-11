@@ -85,6 +85,7 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._edit_view.section_restore_requested.connect(view_model.restore_section)
         self._edit_view.manage_versions_requested.connect(self._show_historico_tab)
         self._edit_view.media_kinds_changed.connect(view_model.update_section_media_kinds)
+        self._edit_view.disabled_chart_ids_changed.connect(view_model.update_disabled_chart_ids)
         self._dados_panel.field_changed.connect(view_model.update_parsed_field)
         self._dados_panel.restore_field_requested.connect(view_model.restore_parsed_field)
 

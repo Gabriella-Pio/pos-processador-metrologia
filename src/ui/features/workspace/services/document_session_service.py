@@ -14,6 +14,7 @@ from src.core.application.bosello_image_import import (
     build_bosello_image_document,
     build_manual_tomography_document,
 )
+from src.core.application.piece_ordering import sort_pdf_entries, sort_paths
 from src.core.application.project_serializer import default_display_name
 from src.core.application.template_apply import apply_template_content_defaults, apply_template_layout
 from src.core.domain.pdf_source import is_usable_source_pdf
@@ -155,7 +156,7 @@ class DocumentSessionService:
             session.display_name = default_display_name(session)
             return session
 
-        for pdf_path, component in pdf_entries:
+        for pdf_path, component in sort_pdf_entries(pdf_entries):
             kind = detect_source_kind(pdf_path)
             if session.report_mode == "tomo_only":
                 kind = "insp_ect"

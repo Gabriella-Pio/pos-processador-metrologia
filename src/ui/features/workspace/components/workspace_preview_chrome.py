@@ -8,6 +8,7 @@ from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.inputs import LayoutTemplateSelector
 from src.ui.components.feedback import InlineBanner
 from src.ui.components.icons import icon_ellipsis, icon_export
+from src.ui.components.preview_status_chip import PreviewStatusChip
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
 from src.ui.styles import SPACING
 
@@ -22,7 +23,7 @@ def build_workspace_project_tabs_strip(
     on_export_clicked,
     on_save_layout,
     on_change_layout,
-) -> tuple[QWidget, QLabel, QLabel, ChromeIconButton, PrimaryButton, QMenu]:
+) -> tuple[QWidget, PreviewStatusChip, QLabel, ChromeIconButton, PrimaryButton, QMenu]:
     """Barra superior do workspace: título, abas PDF, status e ações."""
     row = QWidget()
     row.setObjectName("WorkspaceProjectTabsStrip")
@@ -55,9 +56,8 @@ def build_workspace_project_tabs_strip(
     tabs_layout.addWidget(add_pdf_btn, 0, Qt.AlignmentFlag.AlignVCenter)
     layout.addWidget(tabs_region, 1)
 
-    preview_status_label = QLabel("")
-    preview_status_label.setObjectName("WorkspacePreviewStatus")
-    layout.addWidget(preview_status_label, alignment=Qt.AlignmentFlag.AlignVCenter)
+    preview_status = PreviewStatusChip()
+    layout.addWidget(preview_status, alignment=Qt.AlignmentFlag.AlignVCenter)
 
     data_dirty_label = QLabel("")
     data_dirty_label.setObjectName("WorkspaceDataDirty")
@@ -79,20 +79,30 @@ def build_workspace_project_tabs_strip(
     change_layout_action = preview_menu.addAction("Alterar layout…")
     change_layout_action.triggered.connect(on_change_layout)
     preview_menu.addSeparator()
+
+    from PyQt6.QtGui import QActionGroup
+
+    export_mode_group = QActionGroup(preview_menu)
+    export_mode_group.setExclusive(True)
     export_individual_action = preview_menu.addAction("Exportar PDFs individuais")
     export_individual_action.setCheckable(True)
     export_individual_action.setChecked(True)
     export_merged_action = preview_menu.addAction("Exportar um único PDF")
     export_merged_action.setCheckable(True)
     export_merged_action.setChecked(False)
-    export_merged_action.setEnabled(False)
-    export_merged_action.setToolTip("Em breve — mescla seções institucionais")
+    export_merged_action.setEnabled(True)
+    export_merged_action.setToolTip(
+        "Consolida o lote em um PDF: estatístico (N× MMC) ou híbrido (MMC + Bosello)."
+    )
+    export_mode_group.addAction(export_individual_action)
+    export_mode_group.addAction(export_merged_action)
 
     row._preview_menu = preview_menu  # type: ignore[attr-defined]
     row._save_layout_action = save_layout_action  # type: ignore[attr-defined]
     row._export_individual_action = export_individual_action  # type: ignore[attr-defined]
     row._export_merged_action = export_merged_action  # type: ignore[attr-defined]
-    return row, preview_status_label, data_dirty_label, more_btn, export_btn, preview_menu
+    row._export_mode_group = export_mode_group  # type: ignore[attr-defined]
+    return row, preview_status, data_dirty_label, more_btn, export_btn, preview_menu
 
 
 def build_workspace_action_bar(

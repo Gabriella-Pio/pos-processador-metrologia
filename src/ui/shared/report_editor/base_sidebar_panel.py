@@ -54,6 +54,16 @@ class BaseSidebarPanel(QFrame):
     def _set_sections_panel_active(self, section_id: str | None) -> None:
         raise NotImplementedError
 
+    def _section_overrides_from_summary(self, section: dict) -> dict:
+        overrides = dict(section.get("fields") or {})
+        media_kinds = section.get("media_kinds")
+        if isinstance(media_kinds, list):
+            overrides["media_kinds"] = list(media_kinds)
+        disabled_chart_ids = section.get("disabled_chart_ids")
+        if isinstance(disabled_chart_ids, list):
+            overrides["disabled_chart_ids"] = list(disabled_chart_ids)
+        return overrides
+
     def open_edit_for_section(
         self,
         section_id: str,
@@ -63,7 +73,7 @@ class BaseSidebarPanel(QFrame):
         self._active_section_id = section_id
         self._set_sections_panel_active(section_id)
         section = self._sections_map.get(section_id, {"id": section_id, "title": section_id})
-        overrides = dict(section.get("fields") or {})
+        overrides = self._section_overrides_from_summary(section)
         locked_media_kinds: list[str] = []
         if self._vm is not None and hasattr(self._vm, "locked_media_kinds"):
             locked_media_kinds = self._vm.locked_media_kinds(section_id)
@@ -93,7 +103,7 @@ class BaseSidebarPanel(QFrame):
             return
         section = self._sections_map.get(self._active_section_id, {})
         self._edit_view.patch_section(
-            dict(section.get("fields") or {}),
+            self._section_overrides_from_summary(section),
             section.get("table_rows"),
             self._itens_medicao_for_refresh(),
             section,

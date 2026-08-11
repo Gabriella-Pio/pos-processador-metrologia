@@ -22,11 +22,12 @@ def run_workspace_export(
     multi = session is not None and len(session.documents) > 1
 
     if multi and export_merged and not export_individual:
-        show_info(
-            parent,
-            "Exportação unificada",
-            "Em breve — mescla seções institucionais em um único PDF.",
+        output_path, _ = QFileDialog.getSaveFileName(
+            parent, "Exportar PDF unificado", "", "PDF (*.pdf)"
         )
+        if output_path:
+            vm.export_unified_document(Path(output_path))
+        return
 
     if multi and export_individual:
         output_dir = QFileDialog.getExistingDirectory(parent, "Pasta para exportação em lote")

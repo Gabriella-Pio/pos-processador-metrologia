@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.ui.components.app_dialog import AppDialog
-from src.ui.components.buttons import PrimaryButton, SecondaryButton
+from src.ui.components.buttons import IconButton, PrimaryButton, SecondaryButton
 from src.ui.components.icons import icon_close, icon_file_pdf
 from src.ui.components.inputs import LabeledLineEdit
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY

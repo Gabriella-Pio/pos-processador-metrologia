@@ -81,16 +81,26 @@ class ProjectCommands:
         session: ProjectSession,
         paths: list[Path],
         default_component: str,
-    ) -> int:
-        start_index = len(session.documents)
-        for pdf_path in paths:
+    ) -> list[int]:
+        """Inclui PDFs e reordena o lote. Retorna índices dos slots novos."""
+        from src.core.application.piece_ordering import sort_paths, sort_session_documents
+
+        added_keys: set[str] = set()
+        for pdf_path in sort_paths(paths):
+            key = str(pdf_path)
+            added_keys.add(key)
             session.documents.append(
                 ProjectDocumentSlot(
                     source_pdf_path=pdf_path,
                     evaluated_component=default_component,
                 )
             )
-        return start_index
+        sort_session_documents(session)
+        return [
+            index
+            for index, slot in enumerate(session.documents)
+            if str(slot.source_pdf_path) in added_keys
+        ]
 
     @staticmethod
     def parse_slot(

@@ -18,6 +18,9 @@ class SectionSummaryItem:
     body: str = ""
     image_count: int = 0
     has_images: bool = False
+    has_graphics: bool = False
+    media_kinds: list[str] = field(default_factory=list)
+    disabled_chart_ids: list[str] = field(default_factory=list)
     page_start: int | None = None
     anchor_rect: dict | None = None
     global_fields: list[dict[str, str]] = field(default_factory=list)
@@ -39,6 +42,9 @@ class SectionSummaryItem:
             "body": self.body,
             "image_count": self.image_count,
             "has_images": self.has_images,
+            "has_graphics": self.has_graphics,
+            "media_kinds": list(self.media_kinds),
+            "disabled_chart_ids": list(self.disabled_chart_ids),
             "page_start": self.page_start,
             "anchor_rect": self.anchor_rect,
             "global_fields": self.global_fields,

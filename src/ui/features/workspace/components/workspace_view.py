@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.application.project_serializer import resolved_display_name
+from src.core.application.piece_ordering import extract_piece_number_from_name
 from src.core.domain.ports import ReportDocument
 from src.core.domain.project_session import ProjectDocumentSlot
 from src.ui.components.inputs import LayoutTemplateSelector
@@ -52,8 +53,11 @@ from src.ui.shared.report_editor.preview_panel import PreviewPanel
 
 
 def _document_tab_label(slot: ProjectDocumentSlot) -> str:
-    """Rótulo da aba — usa o nome do arquivo de entrada, não o componente avaliado."""
-    if slot.source_pdf_path.name:
+    """Rótulo da aba — número natural do arquivo quando existir."""
+    number = extract_piece_number_from_name(slot.source_pdf_path.name)
+    if number is not None:
+        stem = f"Peça {number}"
+    elif slot.source_pdf_path.name:
         stem = slot.source_pdf_path.stem[:20]
     else:
         stem = (slot.evaluated_component or "Relatório")[:20]
@@ -164,7 +168,7 @@ class WorkspaceView(QWidget):
 
         (
             self._project_tabs_strip,
-            self._preview_status_label,
+            self._preview_status,
             self._data_dirty_label,
             self._more_btn,
             self._export_btn,
@@ -182,6 +186,8 @@ class WorkspaceView(QWidget):
         self._save_layout_action = self._project_tabs_strip._save_layout_action
         self._export_individual_action = self._project_tabs_strip._export_individual_action
         self._export_merged_action = self._project_tabs_strip._export_merged_action
+        self._export_individual_action.toggled.connect(self._on_export_mode_toggled)
+        self._export_merged_action.toggled.connect(self._on_export_mode_toggled)
         outer.addWidget(self._project_tabs_strip)
 
         self._edit_placeholder = QLabel(
@@ -345,11 +351,53 @@ class WorkspaceView(QWidget):
         multi = session is not None and len(session.documents) > 1
         self._export_individual_action.setVisible(multi)
         self._export_merged_action.setVisible(multi)
+        if not multi:
+            self._export_individual_action.setChecked(True)
+            self._vm.set_export_mode_unified(False)
+        else:
+            self._vm.set_export_mode_unified(self._export_merged_action.isChecked())
+        if session is not None:
+            self._rebuild_project_tabs(session)
+
+    def _on_export_mode_toggled(self, checked: bool) -> None:
+        if not checked:
+            return
+        unified = self._export_merged_action.isChecked()
+        self._vm.set_export_mode_unified(unified)
+        session = self._app_state.project_session
+        if session is not None:
+            self._rebuild_project_tabs(session)
+        if unified:
+            self._banner.set_level(FeedbackLevel.INFO)
+            self._banner.set_message(
+                "Modo unificado — preview e export usam o PDF consolidado do lote."
+            )
+        else:
+            self._banner.set_message("")
+            self._banner.sync_visibility()
 
     def _rebuild_project_tabs(self, session) -> None:
         self._project_tabs.blockSignals(True)
         while self._project_tabs.count():
             self._project_tabs.removeTab(0)
+
+        unified = self._vm.export_mode_unified and len(session.documents) > 1
+        self._add_pdf_btn.setVisible(not unified)
+
+        if unified:
+            n = len(session.documents)
+            self._project_tabs.addTab(f"Relatório unificado ({n} arquivos)")
+            self._project_tabs.setTabToolTip(
+                0,
+                "PDF consolidado do lote.\n"
+                "Volte para “Exportar PDFs individuais” no menu ⋯ para ver as abas por arquivo.",
+            )
+            self._project_tabs.setCurrentIndex(0)
+            self._project_tabs.setVisible(True)
+            self._project_tabs.blockSignals(False)
+            self._project_tabs.updateGeometry()
+            return
+
         multi = len(session.documents) > 1
         for index, slot in enumerate(session.documents):
             label = _document_tab_label(slot)
@@ -427,6 +475,8 @@ class WorkspaceView(QWidget):
     def _on_project_tab_changed(self, index: int) -> None:
         if index < 0:
             return
+        if self._vm.export_mode_unified:
+            return
         self._vm.switch_document(index)
 
     def _on_document_changed(self, document: ReportDocument | None) -> None:
@@ -463,9 +513,13 @@ class WorkspaceView(QWidget):
         self._section_editor.render_global_fields(values, overridden)
 
     def _on_preview_generating(self, generating: bool) -> None:
-        self._preview_panel.set_busy(generating)
+        # Status só no chrome — sem overlay flutuando sobre o PDF.
+        self._preview_status.set_busy(generating, "Atualizando preview…")
         if not generating:
             self._on_version_status_changed(self._vm.version_status_text())
+
+    def _on_version_status_changed(self, text: str) -> None:
+        self._preview_status.set_idle_text(text)
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
         self._edit_stack.setCurrentIndex(1 if visible else 0)
@@ -595,10 +649,6 @@ class WorkspaceView(QWidget):
 
     def _on_version_timeline_changed(self, entries: list) -> None:
         self._section_editor.render_versions(entries)
-
-    def _on_version_status_changed(self, text: str) -> None:
-        if text:
-            self._preview_status_label.setText(text)
 
     def _on_preview_version(self, version_number: int) -> None:
         self._vm.preview_version(version_number)

@@ -652,20 +652,55 @@ QLabel#WorkspaceDataDirty {{
     color: {senai_orange};
     background: transparent;
 }}
-QLabel#WorkspacePreviewStatus {{
+QWidget#PreviewStatusChip {{
+    background: transparent;
+    padding: 0px;
+}}
+QWidget#PreviewStatusChip[busy="true"] {{
+    background: {senai_orange_glow};
+    border: 1px solid {senai_orange};
+    border-radius: 8px;
+    padding: 4px 10px;
+}}
+QLabel#PreviewStatusChipLabel {{
     font-size: {size_caption}px;
     color: {text_muted};
     background: transparent;
 }}
-QWidget#PreviewBusyOverlay {{
+QWidget#PreviewStatusChip[busy="true"] QLabel#PreviewStatusChipLabel {{
+    color: {senai_orange};
+    font-weight: {weight_semibold};
+}}
+QLabel#PreviewStatusChipIcon {{
     background: transparent;
 }}
-QProgressBar#PreviewBusyIndicator {{
+QWidget#AppBusyOverlay {{
+    background: rgba(10, 18, 32, 0.55);
+}}
+QFrame#AppBusyCard {{
+    background: {bg_surface};
+    border: 1px solid {border_subtle};
+    border-radius: 12px;
+}}
+QLabel#AppBusyTitle {{
+    font-size: {size_body}px;
+    font-weight: {weight_semibold};
+    color: {text_primary};
+    background: transparent;
+}}
+QLabel#AppBusyDetail {{
+    font-size: {size_caption}px;
+    color: {text_muted};
+    background: transparent;
+    padding: 2px 4px;
+    min-height: 1.3em;
+}}
+QProgressBar#AppBusyIndicator {{
     border: none;
     border-radius: 2px;
     background: {bg_surface_alt};
 }}
-QProgressBar#PreviewBusyIndicator::chunk {{
+QProgressBar#AppBusyIndicator::chunk {{
     background: {senai_orange};
     border-radius: 2px;
 }}

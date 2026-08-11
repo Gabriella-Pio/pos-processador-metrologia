@@ -72,6 +72,46 @@ class ExportCommands:
 
         return ExportOutcome(success=True, path=final_path)
 
+    def export_unified_document(
+        self,
+        session: ProjectSession | None,
+        output_path: Path,
+        *,
+        version_history: list | None = None,
+    ) -> ExportOutcome:
+        if session is None or len(session.documents) < 2:
+            return ExportOutcome(
+                success=False,
+                error_title="Projeto insuficiente",
+                error_message="O PDF unificado exige um projeto com pelo menos dois relatórios.",
+            )
+        from dataclasses import replace
+
+        from src.core.application.unified_export import (
+            UnifiedExportError,
+            build_unified_export_document,
+        )
+
+        try:
+            document = build_unified_export_document(session)
+        except UnifiedExportError as exc:
+            return ExportOutcome(
+                success=False,
+                error_title="Exportação unificada indisponível",
+                error_message=exc.message,
+            )
+        except Exception:
+            logger.exception("Falha ao consolidar documento unificado")
+            return ExportOutcome(
+                success=False,
+                error_title="Falha ao consolidar o lote",
+                error_message="Não foi possível montar o PDF unificado a partir dos relatórios do projeto.",
+                error_details=traceback.format_exc(),
+            )
+        if version_history:
+            document = replace(document, version_history=list(version_history))
+        return self.export_document(document, output_path)
+
     def export_all_documents(
         self,
         session: ProjectSession | None,
