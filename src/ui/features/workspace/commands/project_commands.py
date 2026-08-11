@@ -63,6 +63,20 @@ class ProjectCommands:
                 doc.attachment_pdf_paths = list(originals)
 
     @staticmethod
+    def remove_document_slot(session: ProjectSession, index: int) -> tuple[bool, str]:
+        """Remove um PDF do lote do projeto (não apaga o arquivo no disco)."""
+        if len(session.documents) <= 1:
+            return False, "O projeto precisa ter pelo menos um relatório."
+        if not 0 <= index < len(session.documents):
+            return False, "Relatório inválido."
+        session.documents.pop(index)
+        if session.active_index >= len(session.documents):
+            session.active_index = len(session.documents) - 1
+        elif session.active_index > index:
+            session.active_index -= 1
+        return True, ""
+
+    @staticmethod
     def append_document_slots(
         session: ProjectSession,
         paths: list[Path],

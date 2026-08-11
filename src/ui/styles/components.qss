@@ -436,7 +436,8 @@ QListWidget#SectionSummaryList::item:hover {{
 QListWidget#SectionSummaryList[dragging="true"]::item:hover {{
     background: transparent;
 }}
-QListWidget#SectionSummaryList[dragging="true"] QFrame#SectionSummaryRow:hover {{
+QListWidget#SectionSummaryList[dragging="true"] QFrame#SectionSummaryRow:hover,
+QListWidget#SectionSummaryList[dragging="true"] QFrame#SectionSummaryRow[hovered="true"] {{
     background: transparent;
     border-color: transparent;
 }}
@@ -450,20 +451,20 @@ QFrame#SectionSummaryRow {{
     border-radius: {radius_sm}px;
     min-height: 48px;
 }}
-QFrame#SectionSummaryRow:hover,
-QFrame#SectionSummaryRow[hovered="true"] {{
-    background: {bg_surface_alt};
-    border-color: {border_subtle};
-}}
-QFrame#SectionSummaryRow[active="true"] {{
-    background: rgba(74, 111, 212, 0.14);
-    border-color: rgba(74, 111, 212, 0.45);
-}}
 QFrame#SectionSummaryRow[fixed="true"] {{
     background: rgba(255, 255, 255, 0.02);
 }}
 QFrame#SectionSummaryRow[fixed="true"] QLabel#SectionSummaryTitle {{
     color: {text_muted};
+}}
+QFrame#SectionSummaryRow:hover,
+QFrame#SectionSummaryRow[hovered="true"] {{
+    background: {bg_elevated};
+    border-color: {border_subtle};
+}}
+QFrame#SectionSummaryRow[active="true"] {{
+    background: rgba(74, 111, 212, 0.18);
+    border-color: rgba(74, 111, 212, 0.55);
 }}
 QLabel#SectionSummaryGrip {{
     background: transparent;
@@ -549,6 +550,9 @@ QToolButton#SectionSummaryActionDanger {{
 QToolButton#SectionSummaryActionDanger:hover {{
     background: {danger_bg};
 }}
+QWidget#WorkspaceProjectTabsRegion {{
+    background: transparent;
+}}
 QTabBar#WorkspaceProjectTabs {{
     background: transparent;
     border: none;
@@ -556,7 +560,7 @@ QTabBar#WorkspaceProjectTabs {{
 QTabBar#WorkspaceProjectTabs::tab {{
     background: transparent;
     color: {text_muted};
-    padding: 6px 12px;
+    padding: 6px 20px 6px 12px;
     border: none;
     border-bottom: 2px solid transparent;
     font-size: {size_caption}px;
@@ -571,6 +575,16 @@ QTabBar#WorkspaceProjectTabs::tab:selected {{
 QTabBar#WorkspaceProjectTabs::tab:hover {{
     color: {text_secondary};
     background: {bg_surface_alt};
+}}
+QToolButton#WorkspaceProjectTabClose {{
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    border-radius: 9px;
+}}
+QToolButton#WorkspaceProjectTabClose:hover {{
+    background: {danger_bg};
 }}
 QLabel#WorkspaceMetaLabel {{
     font-size: {size_caption}px;

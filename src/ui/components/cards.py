@@ -19,6 +19,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.ui.components.buttons import IconButton
+from src.ui.components.icons import icon_close
+
 from src.ui.features.home.models.dashboard import RecentFileSummary, TemplateSummary
 from src.ui.styles import (
     PALETTE,
@@ -175,6 +178,7 @@ class TemplateCard(ActionCard):
     """Card de template que emite ``selected(template_id)`` ao ser clicado."""
 
     selected = pyqtSignal(str)
+    delete_requested = pyqtSignal(str)
 
     def __init__(self, summary: TemplateSummary, parent: Optional[QWidget] = None) -> None:
         p = PALETTE
@@ -186,6 +190,7 @@ class TemplateCard(ActionCard):
             parent=parent,
         )
         self._template_id = summary.template_id
+        self._deletable = summary.deletable
         self.clicked.connect(lambda: self.selected.emit(self._template_id))
 
         if summary.is_default:
@@ -195,6 +200,34 @@ class TemplateCard(ActionCard):
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             badge.setStyleSheet(default_template_badge_style())
             layout.addWidget(badge)
+
+        if self._deletable:
+            self._delete_btn = IconButton(icon_close(), "Excluir template")
+            self._delete_btn.setParent(self)
+            self._delete_btn.setFixedSize(24, 24)
+            self._delete_btn.clicked.connect(
+                lambda: self.delete_requested.emit(self._template_id)
+            )
+            self._reposition_delete_btn()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if hasattr(self, "_delete_btn"):
+            self._reposition_delete_btn()
+
+    def _reposition_delete_btn(self) -> None:
+        margin = SPACING.xs
+        btn = self._delete_btn
+        btn.move(self.width() - btn.width() - margin, margin)
+        btn.raise_()
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if hasattr(self, "_delete_btn") and self._delete_btn.geometry().contains(
+            event.position().toPoint()
+        ):
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
 
 class RecentFileRow(QFrame):

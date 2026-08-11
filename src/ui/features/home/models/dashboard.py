@@ -41,6 +41,7 @@ class TemplateSummary:
     template_id: str
     name: str
     is_default: bool = False
+    deletable: bool = False
 
 
 @dataclass(frozen=True)

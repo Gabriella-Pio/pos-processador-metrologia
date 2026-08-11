@@ -14,7 +14,8 @@ from PyQt6.QtWidgets import (
 )
 
 from src.ui.components.cards import ActionCard, TemplateCard
-from src.ui.components.icons import icon_empty_results
+from src.ui.components.buttons import IconButton
+from src.ui.components.icons import icon_close, icon_empty_results
 from src.ui.features.home.models.dashboard import TemplateSummary, empty_results_messages, filter_templates
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, apply_elevation, caption_style
 from src.ui.features.home.components.grid_utils import grid_columns_for_width
@@ -34,6 +35,7 @@ class _TemplateListRow(QFrame):
     """Linha compacta de template para a vista lista."""
 
     selected = pyqtSignal(str)
+    delete_requested = pyqtSignal(str)
 
     def __init__(self, summary: TemplateSummary, parent=None) -> None:
         super().__init__(parent)
@@ -82,6 +84,14 @@ class _TemplateListRow(QFrame):
                 QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
             )
             layout.addWidget(badge)
+
+        if summary.deletable:
+            delete_btn = IconButton(icon_close(), "Excluir template")
+            delete_btn.setFixedSize(28, 28)
+            delete_btn.clicked.connect(
+                lambda: self.delete_requested.emit(self._template_id)
+            )
+            layout.addWidget(delete_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
 
     def mousePressEvent(self, event) -> None:
         self.selected.emit(self._template_id)
@@ -147,6 +157,7 @@ class _TemplateCreateRow(QFrame):
 
 class TemplatesPanel(QWidget):
     template_selected = pyqtSignal(str)
+    template_delete_requested = pyqtSignal(str)
     create_requested = pyqtSignal()
 
     def __init__(self, parent=None) -> None:
@@ -271,6 +282,7 @@ class TemplatesPanel(QWidget):
         for summary in templates:
             row = _TemplateListRow(summary)
             row.selected.connect(self.template_selected.emit)
+            row.delete_requested.connect(self.template_delete_requested.emit)
             self._list_layout.addWidget(row)
 
         if not is_filtering:
@@ -311,6 +323,8 @@ class TemplatesPanel(QWidget):
             card = TemplateCard(summary)
             apply_elevation(card, blur=20, y_offset=3, alpha=90)
             card.selected.connect(self.template_selected.emit)
+            if summary.deletable:
+                card.delete_requested.connect(self.template_delete_requested.emit)
             self._grid.addWidget(card, index // cols, index % cols)
 
         if not is_filtering:

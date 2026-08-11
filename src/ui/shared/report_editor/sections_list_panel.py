@@ -65,10 +65,13 @@ class _DropLineOverlay(QWidget):
 class SectionSummaryList(QListWidget):
     """Lista com reordenação linear — indicador de linha, sem highlight de 'caixa'."""
 
+    _ROW_TYPES = (SectionSummaryRow, TemplateSectionRow)
+
     def __init__(self, panel: "SectionsListPanel", parent=None) -> None:
         super().__init__(parent)
         self._panel = panel
         self._drag_source_row = -1
+        self._hovered_row: SectionSummaryRow | TemplateSectionRow | None = None
         self._last_drop_viewport_y: int | None = None
         self._drop_line = _DropLineOverlay(self.viewport())
         self.setDropIndicatorShown(False)
@@ -76,6 +79,7 @@ class SectionSummaryList(QListWidget):
         self.viewport().setMouseTracking(True)
         self.viewport().setAutoFillBackground(False)
         self.viewport().installEventFilter(self)
+        self.setProperty("dragging", False)
 
     def _set_dragging(self, dragging: bool) -> None:
         self.setProperty("dragging", dragging)
@@ -84,17 +88,48 @@ class SectionSummaryList(QListWidget):
         if dragging:
             self._clear_row_hovers()
 
+    def _set_row_hovered(self, row: SectionSummaryRow | TemplateSectionRow | None, hovered: bool) -> None:
+        state = "true" if hovered else "false"
+        if str(row.property("hovered")) == state:
+            return
+        row.setProperty("hovered", state)
+        row.style().unpolish(row)
+        row.style().polish(row)
+
     def _clear_row_hovers(self) -> None:
+        self._hovered_row = None
         for index in range(self.count()):
             item = self.item(index)
             if item is None:
                 continue
             widget = self.itemWidget(item)
-            if widget is None or not hasattr(widget, "setProperty"):
-                continue
-            widget.setProperty("hovered", "false")
-            widget.style().unpolish(widget)
-            widget.style().polish(widget)
+            if isinstance(widget, self._ROW_TYPES):
+                self._set_row_hovered(widget, False)
+
+    def _row_at_viewport_pos(self, viewport_pos: QPoint) -> SectionSummaryRow | TemplateSectionRow | None:
+        item = self.itemAt(self.viewport().mapTo(self, viewport_pos))
+        if item is None:
+            return None
+        widget = self.itemWidget(item)
+        if isinstance(widget, self._ROW_TYPES):
+            return widget
+        return None
+
+    def _update_hover_at(self, viewport_pos: QPoint) -> None:
+        if bool(self.property("dragging")):
+            return
+        row = self._row_at_viewport_pos(viewport_pos)
+        if row is self._hovered_row:
+            return
+        if self._hovered_row is not None:
+            self._set_row_hovered(self._hovered_row, False)
+        self._hovered_row = row
+        if row is not None:
+            self._set_row_hovered(row, True)
+
+    def clear(self) -> None:
+        self._hovered_row = None
+        super().clear()
 
     def _end_drag_visuals(self) -> None:
         self._set_dragging(False)
@@ -103,7 +138,11 @@ class SectionSummaryList(QListWidget):
     def eventFilter(self, obj, event) -> bool:  # noqa: N802
         if obj is self.viewport():
             event_type = event.type()
-            if event_type == QEvent.Type.DragMove:
+            if event_type == QEvent.Type.MouseMove:
+                self._update_hover_at(event.position().toPoint())
+            elif event_type == QEvent.Type.Leave:
+                self._clear_row_hovers()
+            elif event_type == QEvent.Type.DragMove:
                 self._update_drop_line(int(event.position().y()))
             elif event_type in (QEvent.Type.DragLeave, QEvent.Type.Drop):
                 self._clear_drop_line()
@@ -155,7 +194,10 @@ class SectionSummaryList(QListWidget):
     def startDrag(self, supportedActions) -> None:  # noqa: N802
         self._drag_source_row = self.currentRow()
         self._set_dragging(True)
-        super().startDrag(supportedActions)
+        try:
+            super().startDrag(supportedActions)
+        finally:
+            self._end_drag_visuals()
 
     def dragMoveEvent(self, event) -> None:  # noqa: N802
         vp = self._viewport_pos(event)

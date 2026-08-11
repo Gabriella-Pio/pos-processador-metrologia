@@ -174,3 +174,9 @@ class DocumentSessionService:
             )
         session.display_name = default_display_name(session)
         return session
+
+    def remove_document_from_session(self, session: ProjectSession, index: int) -> tuple[bool, str]:
+        """Remove um slot do projeto — o PDF original no disco não é apagado."""
+        from src.ui.features.workspace.commands.project_commands import ProjectCommands
+
+        return ProjectCommands.remove_document_slot(session, index)

@@ -16,13 +16,14 @@ from PyQt6.QtWidgets import (
     QToolButton,
     QVBoxLayout,
     QWidget,
+    QSizePolicy,
 )
 
 from src.core.application.project_serializer import resolved_display_name
 from src.core.domain.ports import ReportDocument
 from src.core.domain.project_session import ProjectDocumentSlot
 from src.ui.components.inputs import LayoutTemplateSelector
-from src.ui.components.icons import icon_edit, icon_plus
+from src.ui.components.icons import icon_close, icon_edit, icon_plus
 from src.ui.components.feedback import (
     FeedbackLevel,
     InlineBanner,
@@ -51,7 +52,10 @@ from src.ui.shared.report_editor.preview_panel import PreviewPanel
 
 def _document_tab_label(slot: ProjectDocumentSlot) -> str:
     """Rótulo da aba — usa o nome do arquivo de entrada, não o componente avaliado."""
-    stem = slot.source_pdf_path.stem[:20] or "PDF"
+    if slot.source_pdf_path.name:
+        stem = slot.source_pdf_path.stem[:20]
+    else:
+        stem = (slot.evaluated_component or "Relatório")[:20]
     kind = getattr(slot, "source_kind", "") or (
         slot.document.source_kind if slot.document else ""
     )
@@ -94,7 +98,13 @@ class WorkspaceView(QWidget):
 
         self._project_tabs = QTabBar()
         self._project_tabs.setObjectName("WorkspaceProjectTabs")
-        self._project_tabs.setExpanding(False)
+        self._project_tabs.setExpanding(True)
+        self._project_tabs.setDocumentMode(True)
+        self._project_tabs.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        self._project_tabs.setMinimumHeight(30)
         self._project_tabs.currentChanged.connect(self._on_project_tab_changed)
 
         self._add_pdf_btn = QPushButton("Adicionar PDF")
@@ -335,20 +345,48 @@ class WorkspaceView(QWidget):
         self._export_individual_action.setVisible(multi)
         self._export_merged_action.setVisible(multi)
 
+    def _rebuild_project_tabs(self, session) -> None:
+        self._project_tabs.blockSignals(True)
+        while self._project_tabs.count():
+            self._project_tabs.removeTab(0)
+        multi = len(session.documents) > 1
+        for index, slot in enumerate(session.documents):
+            label = _document_tab_label(slot)
+            self._project_tabs.addTab(label)
+            tip = _document_tab_tooltip(slot)
+            if multi:
+                tip += "\n\nClique em × para remover do projeto (o arquivo no disco não é apagado)."
+                close_btn = QToolButton(self._project_tabs)
+                close_btn.setObjectName("WorkspaceProjectTabClose")
+                close_btn.setIcon(icon_close())
+                close_btn.setAutoRaise(True)
+                close_btn.setFixedSize(18, 18)
+                close_btn.setIconSize(close_btn.iconSize())
+                close_btn.setToolTip("Remover do projeto")
+                close_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+                close_btn.clicked.connect(
+                    lambda _checked=False, idx=index: self._on_project_tab_close_requested(idx)
+                )
+                self._project_tabs.setTabButton(
+                    index,
+                    QTabBar.ButtonPosition.RightSide,
+                    close_btn,
+                )
+            self._project_tabs.setTabToolTip(index, tip)
+        if session.documents:
+            self._project_tabs.setCurrentIndex(
+                min(max(session.active_index, 0), len(session.documents) - 1)
+            )
+        self._project_tabs.setVisible(bool(session.documents))
+        self._project_tabs.blockSignals(False)
+        self._project_tabs.updateGeometry()
+
     def _on_project_loaded(self, session) -> None:
         self._project_title_block = True
         self._project_title_edit.setText(resolved_display_name(session))
         self._project_title_block = False
         self._sync_project_title_width()
-        self._project_tabs.blockSignals(True)
-        while self._project_tabs.count():
-            self._project_tabs.removeTab(0)
-        for index, slot in enumerate(session.documents):
-            label = _document_tab_label(slot)
-            self._project_tabs.addTab(label)
-            self._project_tabs.setTabToolTip(index, _document_tab_tooltip(slot))
-        self._project_tabs.setCurrentIndex(session.active_index)
-        self._project_tabs.blockSignals(False)
+        self._rebuild_project_tabs(session)
         self._update_export_options_visibility()
         self._refresh_versions()
 
@@ -359,6 +397,7 @@ class WorkspaceView(QWidget):
             self._project_title_block = False
             while self._project_tabs.count():
                 self._project_tabs.removeTab(0)
+            self._project_tabs.setVisible(False)
         self._update_export_options_visibility()
 
     def _sync_project_title_width(self) -> None:
@@ -638,6 +677,23 @@ class WorkspaceView(QWidget):
         paths, _ = QFileDialog.getOpenFileNames(self, "Adicionar PDFs ao projeto", "", "PDF (*.pdf)")
         if paths:
             self._vm.append_pdfs_to_project([Path(p) for p in paths], default_component)
+
+    def _on_project_tab_close_requested(self, index: int) -> None:
+        self._confirm_remove_document(index)
+
+    def _confirm_remove_document(self, index: int) -> None:
+        session = self._app_state.project_session
+        if session is None or not (0 <= index < len(session.documents)):
+            return
+        slot = session.documents[index]
+        label = slot.source_pdf_path.name or slot.evaluated_component or "Relatório"
+        if not confirm_action(
+            self,
+            "Remover relatório do projeto?",
+            f"“{label}” será removido deste projeto.\n\nO arquivo PDF no disco não será apagado.",
+        ):
+            return
+        self._vm.remove_document_from_project(index)
 
     def _on_register_version(self) -> None:
         document = self._app_state.active_document

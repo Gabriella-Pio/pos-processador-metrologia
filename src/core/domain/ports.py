@@ -195,6 +195,10 @@ class TemplateRepository(ABC):
     def update_template_name(self, template_id: str, name: str) -> None:
         """Atualiza o nome exibido de um template."""
 
+    def delete_template(self, template_id: str) -> bool:
+        """Remove template customizado. Retorna False se built-in ou inexistente."""
+        return False
+
     def get_content_defaults(self, template_id: str) -> dict:
         """Defaults de conteúdo por seção — override em implementações JSON."""
         return {}

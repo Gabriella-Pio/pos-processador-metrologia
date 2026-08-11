@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QSizePolicy, QVBoxLayout, QWidget
 
 from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.inputs import LayoutTemplateSelector
@@ -42,9 +42,18 @@ def build_workspace_project_tabs_strip(
         separator.setFixedWidth(1)
         layout.addWidget(separator, alignment=Qt.AlignmentFlag.AlignVCenter)
 
-    layout.addWidget(project_tabs, alignment=Qt.AlignmentFlag.AlignVCenter)
-    layout.addWidget(add_pdf_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
-    layout.addStretch(1)
+    tabs_region = QWidget()
+    tabs_region.setObjectName("WorkspaceProjectTabsRegion")
+    tabs_region.setSizePolicy(
+        QSizePolicy.Policy.Expanding,
+        QSizePolicy.Policy.Fixed,
+    )
+    tabs_layout = QHBoxLayout(tabs_region)
+    tabs_layout.setContentsMargins(0, 0, 0, 0)
+    tabs_layout.setSpacing(SPACING.sm)
+    tabs_layout.addWidget(project_tabs, 1)
+    tabs_layout.addWidget(add_pdf_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+    layout.addWidget(tabs_region, 1)
 
     preview_status_label = QLabel("")
     preview_status_label.setObjectName("WorkspacePreviewStatus")

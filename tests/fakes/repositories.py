@@ -75,3 +75,12 @@ class InMemoryTemplateRepository:
 
     def update_template_name(self, template_id: str, name: str) -> None:
         pass
+
+    def delete_template(self, template_id: str) -> bool:
+        from src.core.infrastructure.template_repository import is_builtin_template_id
+
+        if is_builtin_template_id(template_id):
+            return False
+        before = len(self._templates)
+        self._templates = [t for t in self._templates if t.get("id") != template_id]
+        return len(self._templates) < before

@@ -83,3 +83,32 @@ def test_resolve_recent_file_falls_back_to_export_when_no_source(tmp_path: Path)
     resolution = ProjectCommands.resolve_recent_file(FakeRecentRepo(), "1")
     assert resolution.ok
     assert resolution.pdf_path == export
+
+
+def test_remove_document_slot_requires_multiple_documents() -> None:
+    session = ProjectSession(
+        client_project="Cliente",
+        documents=[
+            ProjectDocumentSlot(source_pdf_path=Path("/data/a.pdf"), evaluated_component="A"),
+        ],
+    )
+    ok, message = ProjectCommands.remove_document_slot(session, 0)
+    assert not ok
+    assert "pelo menos" in message.lower()
+
+
+def test_remove_document_slot_updates_active_index() -> None:
+    session = ProjectSession(
+        client_project="Cliente",
+        active_index=2,
+        documents=[
+            ProjectDocumentSlot(source_pdf_path=Path("/data/a.pdf"), evaluated_component="A"),
+            ProjectDocumentSlot(source_pdf_path=Path("/data/b.pdf"), evaluated_component="B"),
+            ProjectDocumentSlot(source_pdf_path=Path("/data/c.pdf"), evaluated_component="C"),
+        ],
+    )
+    ok, _ = ProjectCommands.remove_document_slot(session, 1)
+    assert ok
+    assert len(session.documents) == 2
+    assert session.active_index == 1
+    assert [slot.evaluated_component for slot in session.documents] == ["A", "C"]

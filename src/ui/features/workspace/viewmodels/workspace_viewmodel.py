@@ -324,6 +324,24 @@ class WorkspaceViewModel(QObject):
         self._persist_project()
         self.project_loaded.emit(session)
 
+    def remove_document_from_project(self, index: int) -> bool:
+        session = self._app_state.project_session
+        if session is None:
+            return False
+        ok, message = self._doc_service.remove_document_from_session(session, index)
+        if not ok:
+            if message:
+                self.error_occurred.emit("Não foi possível remover", message, "")
+            return False
+        if self._session_timer.isActive():
+            self._session_timer.stop()
+            persist_session(self)
+        ProjectCommands.ensure_project_attachment_paths(session)
+        self._persist_project()
+        self.project_loaded.emit(session)
+        self.switch_document(session.active_index)
+        return True
+
     def switch_document(self, index: int) -> None:
         session = self._app_state.project_session
         if session is None:

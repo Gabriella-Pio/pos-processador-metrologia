@@ -9,6 +9,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from src.core.application.project_service import ProjectService
 from src.core.domain.ports import RecentFilesRepository, TemplateRepository
+from src.core.infrastructure.template_repository import is_builtin_template_id
 from src.ui.features.home.models.dashboard import (
     ProjectSummary,
     RecentFileSummary,
@@ -99,10 +100,38 @@ class HomeViewModel(QObject):
                 template_id=item["id"],
                 name=item["name"],
                 is_default=item.get("is_default", False),
+                deletable=not is_builtin_template_id(item["id"]),
             )
             for item in raw_templates
         ]
         self.templates_loaded.emit(summaries)
+
+    def delete_template(self, template_id: str) -> bool:
+        if is_builtin_template_id(template_id):
+            self.error_occurred.emit(
+                "Template protegido",
+                "Os templates padrão do sistema não podem ser excluídos.",
+                "",
+            )
+            return False
+        try:
+            if not self._template_repo.delete_template(template_id):
+                self.error_occurred.emit(
+                    "Template não encontrado",
+                    "Este template já foi removido ou não existe.",
+                    "",
+                )
+                return False
+        except Exception:  # noqa: BLE001
+            logger.exception("Falha ao excluir template")
+            self.error_occurred.emit(
+                "Não foi possível excluir o template",
+                "Verifique se o arquivo de configuração não está bloqueado.",
+                traceback.format_exc(),
+            )
+            return False
+        self._load_templates()
+        return True
 
     def _load_recent_files(self) -> None:
         try:

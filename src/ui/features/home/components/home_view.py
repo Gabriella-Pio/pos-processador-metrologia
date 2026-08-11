@@ -87,7 +87,7 @@ class _StickyTabScrollHost(QWidget):
             self._tab_bar.set_stuck(stuck)
 
 
-from src.ui.components.feedback import show_friendly_error
+from src.ui.components.feedback import confirm_action, show_friendly_error
 from src.ui.features.home.components.hero import HeroCommandBar
 from src.ui.components.tab_bar import TabBar
 from src.ui.features.home.models.dashboard import (
@@ -160,6 +160,7 @@ class HomeView(QWidget):
 
         self._templates_panel = TemplatesPanel()
         self._templates_panel.template_selected.connect(self._on_template_selected)
+        self._templates_panel.template_delete_requested.connect(self._on_template_delete_requested)
         self._templates_panel.create_requested.connect(self._on_create_template)
 
         self._stack = _HomeStack()
@@ -186,6 +187,19 @@ class HomeView(QWidget):
 
     def _on_template_selected(self, template_id: str) -> None:
         self.template_editor_requested.emit(template_id)
+
+    def _on_template_delete_requested(self, template_id: str) -> None:
+        name = next(
+            (t.name for t in self._templates if t.template_id == template_id),
+            template_id,
+        )
+        if not confirm_action(
+            self,
+            "Excluir template?",
+            f"“{name}” será removido permanentemente.\n\nProjetos que usam este template não serão apagados.",
+        ):
+            return
+        self._vm.delete_template(template_id)
 
     def _on_create_template(self) -> None:
         self.template_editor_requested.emit("new")

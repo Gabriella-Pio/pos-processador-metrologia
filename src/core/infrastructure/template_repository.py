@@ -9,6 +9,12 @@ from pathlib import Path
 
 from src.core.domain.ports import TemplateRepository
 
+_BUILTIN_TEMPLATE_IDS = frozenset({"default", "tomografia"})
+
+
+def is_builtin_template_id(template_id: str) -> bool:
+    return template_id in _BUILTIN_TEMPLATE_IDS
+
 _TEMPLATE_PADRAO = {
     "id": "default",
     "name": "Template Padrão SENAI/ZEISS",
@@ -93,6 +99,20 @@ class JSONTemplateRepository(TemplateRepository):
                 template["name"] = name
                 break
         self._salvar_estado(estado)
+
+    def delete_template(self, template_id: str) -> bool:
+        if is_builtin_template_id(template_id):
+            return False
+        estado = self._carregar_estado()
+        templates = estado.get("templates", [])
+        remaining = [t for t in templates if t.get("id") != template_id]
+        if len(remaining) == len(templates):
+            return False
+        estado["templates"] = remaining
+        estado.get("configs", {}).pop(template_id, None)
+        estado.get("content_defaults", {}).pop(template_id, None)
+        self._salvar_estado(estado)
+        return True
 
     def _ensure_template_metadata(
         self, estado: dict, template_id: str, name: str | None = None

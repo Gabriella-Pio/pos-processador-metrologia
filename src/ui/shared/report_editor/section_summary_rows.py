@@ -41,6 +41,11 @@ def _summary_list_parent(widget: QWidget):
     return None
 
 
+def _transparent_panel(widget: QWidget) -> None:
+    widget.setAutoFillBackground(False)
+    widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+
+
 class _SummaryRowChromeMixin:
     """Hover/ativo via propriedades — :hover em QSS falha em itemWidget de QListWidget."""
 
@@ -108,6 +113,7 @@ class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
         body = QWidget()
         body.setMinimumWidth(0)
         body.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        _transparent_panel(body)
         body_layout = QHBoxLayout(body)
         body_layout.setContentsMargins(SPACING.sm, SPACING.xs, SPACING.xs, SPACING.xs)
         body_layout.setSpacing(SPACING.sm)
@@ -143,6 +149,7 @@ class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
         text_col = QWidget()
         text_col.setMinimumWidth(0)
         text_col.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        _transparent_panel(text_col)
         text_layout = QVBoxLayout(text_col)
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(2)
@@ -279,6 +286,7 @@ class SectionSummaryRow(_SummaryRowChromeMixin, QFrame):
         body = QWidget()
         body.setMinimumWidth(0)
         body.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        _transparent_panel(body)
         body_layout = QHBoxLayout(body)
         body_layout.setContentsMargins(SPACING.sm, SPACING.xs, SPACING.xs, SPACING.xs)
         body_layout.setSpacing(SPACING.sm)
@@ -309,6 +317,7 @@ class SectionSummaryRow(_SummaryRowChromeMixin, QFrame):
         text_col = QWidget()
         text_col.setMinimumWidth(0)
         text_col.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        _transparent_panel(text_col)
         text_layout = QVBoxLayout(text_col)
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(2)
@@ -379,6 +388,7 @@ class SectionSummaryRow(_SummaryRowChromeMixin, QFrame):
         self._actions_host.setObjectName("SectionSummaryActions")
         self._actions_host.setFixedWidth(_ACTIONS_WIDTH)
         self._actions_host.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        _transparent_panel(self._actions_host)
         actions_layout = QHBoxLayout(self._actions_host)
         actions_layout.setContentsMargins(0, 0, 0, 0)
         actions_layout.setSpacing(2)
