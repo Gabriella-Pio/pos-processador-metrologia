@@ -1,6 +1,8 @@
 """Diálogo de ajuda (atalhos) e painel de acessibilidade."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
@@ -18,7 +20,18 @@ from PyQt6.QtWidgets import (
 
 from src.ui.accessibility import FONT_SCALE_PRESETS, AppearanceManager, AppearanceSettings
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, heading_style
+from src.ui.components.feedback import confirm_action, confirm_dangerous_action, show_info
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, heading_style, caption_style
+from src.core.application.storage_cleanup import (
+    DEFAULT_DB_PATH,
+    audit_storage,
+    clear_bosello_rendered_cache,
+    clear_orphan_section_photos,
+    clear_preview_temp,
+    delete_stale_projects,
+    format_storage_size,
+    list_stale_projects,
+)
 
 ShortcutRow = tuple[str, str, str]
 
@@ -155,8 +168,15 @@ def _scroll_page(content: QWidget) -> QScrollArea:
 class HelpAccessibilityDialog(QDialog):
     """Centraliza atalhos do sistema e opções de acessibilidade."""
 
-    def __init__(self, parent=None, *, initial_tab: int = 0) -> None:
+    def __init__(
+        self,
+        parent=None,
+        *,
+        initial_tab: int = 0,
+        db_path: str | Path = DEFAULT_DB_PATH,
+    ) -> None:
         super().__init__(parent)
+        self._db_path = Path(db_path)
         self._manager = AppearanceManager.instance()
         self._draft = self._manager.settings
         self.setWindowTitle("Ajuda e Acessibilidade")
@@ -192,6 +212,7 @@ class HelpAccessibilityDialog(QDialog):
         self._tabs.setDocumentMode(True)
         self._tabs.addTab(_scroll_page(self._build_shortcuts_tab()), "Atalhos")
         self._tabs.addTab(_scroll_page(self._build_accessibility_tab()), "Acessibilidade")
+        self._tabs.addTab(_scroll_page(self._build_storage_tab()), "Armazenamento")
         layout.addWidget(self._tabs, stretch=1)
 
         divider = QFrame()
@@ -393,6 +414,218 @@ class HelpAccessibilityDialog(QDialog):
         self._font_combo.currentIndexChanged.connect(lambda _idx: self._apply_draft())
 
         return page
+
+    def _build_storage_tab(self) -> QWidget:
+        p = PALETTE
+        page = QWidget()
+        page.setStyleSheet("background: transparent;")
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(SPACING.lg, SPACING.lg, SPACING.lg, SPACING.lg)
+        outer.setSpacing(SPACING.lg)
+
+        intro = QLabel(
+            "Libere espaço em disco removendo caches temporários e dados órfãos. "
+            "PDFs ZEISS originais e exports salvos não são apagados."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet(caption_style())
+        outer.addWidget(intro)
+
+        self._storage_summary_host = QVBoxLayout()
+        self._storage_summary_host.setSpacing(SPACING.sm)
+        outer.addLayout(self._storage_summary_host)
+
+        refresh_btn = SecondaryButton("Atualizar estimativas")
+        refresh_btn.clicked.connect(self._refresh_storage_audit)
+        outer.addWidget(refresh_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        outer.addWidget(self._group_title("Limpeza"))
+        outer.addWidget(self._storage_action_row(
+            "Cache de preview",
+            "Remove imagens temporárias de preview e exportação.",
+            "Limpar cache de preview",
+            self._on_clear_preview_temp,
+        ))
+        outer.addWidget(self._storage_action_row(
+            "Capturas Bosello",
+            "Apaga renderizações ao lado dos PDFs. Reimporte o Bosello para reconstruir.",
+            "Limpar Bosello",
+            self._on_clear_bosello_cache,
+            dangerous=True,
+        ))
+        outer.addWidget(self._storage_action_row(
+            "Fotos órfãs",
+            "Remove cópias em .pos-metrologia/section-photos sem referência nas sessões.",
+            "Limpar fotos órfãs",
+            self._on_clear_orphan_photos,
+            dangerous=True,
+        ))
+
+        outer.addWidget(self._settings_section(
+            "Projetos em andamento",
+            "Exclui registros antigos da Home — não apaga PDFs nem exports no disco.",
+        ))
+        stale_row = QHBoxLayout()
+        stale_row.setSpacing(SPACING.sm)
+        self._stale_months_combo = QComboBox()
+        self._stale_months_combo.setStyleSheet(_combo_stylesheet())
+        for months in (3, 6, 12):
+            self._stale_months_combo.addItem(f"Mais de {months} meses", months)
+        self._stale_months_combo.setCurrentIndex(1)
+        self._stale_months_combo.currentIndexChanged.connect(
+            lambda _idx: self._refresh_storage_audit()
+        )
+        stale_row.addWidget(self._stale_months_combo)
+        self._stale_projects_label = QLabel()
+        self._stale_projects_label.setStyleSheet(caption_style())
+        stale_row.addWidget(self._stale_projects_label, stretch=1)
+        outer.addLayout(stale_row)
+
+        delete_projects_btn = SecondaryButton("Excluir projetos antigos…")
+        delete_projects_btn.clicked.connect(self._on_delete_stale_projects)
+        outer.addWidget(delete_projects_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+        outer.addStretch(1)
+
+        self._refresh_storage_audit()
+        return page
+
+    def _storage_action_row(
+        self,
+        title: str,
+        description: str,
+        button_label: str,
+        handler,
+        *,
+        dangerous: bool = False,
+    ) -> QFrame:
+        p = PALETTE
+        frame = QFrame()
+        frame.setStyleSheet(
+            f"QFrame {{ background: {p.bg_surface}; border: 1px solid {p.border}; "
+            f"border-radius: {SPACING.radius_md}px; }}"
+        )
+        layout = QHBoxLayout(frame)
+        layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.sm)
+        layout.setSpacing(SPACING.md)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+        title_label = QLabel(title)
+        title_label.setStyleSheet(
+            f"color: {p.text_primary}; font-weight: {TYPOGRAPHY.weight_semibold}; "
+            f"background: transparent; border: none;"
+        )
+        desc_label = QLabel(description)
+        desc_label.setWordWrap(True)
+        desc_label.setStyleSheet(caption_style())
+        text_col.addWidget(title_label)
+        text_col.addWidget(desc_label)
+        layout.addLayout(text_col, stretch=1)
+
+        btn = SecondaryButton(button_label)
+        if dangerous:
+            btn.setProperty("danger", True)
+        btn.clicked.connect(handler)
+        layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignTop)
+        return frame
+
+    def _clear_storage_summary(self) -> None:
+        while self._storage_summary_host.count():
+            item = self._storage_summary_host.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _refresh_storage_audit(self) -> None:
+        self._clear_storage_summary()
+        for category in audit_storage(self._db_path):
+            row = QLabel(
+                f"{category.label}: {category.file_count} arquivo(s) · "
+                f"{format_storage_size(category.total_bytes)}"
+            )
+            row.setWordWrap(True)
+            row.setStyleSheet(caption_style())
+            self._storage_summary_host.addWidget(row)
+            detail = QLabel(category.description)
+            detail.setWordWrap(True)
+            detail.setStyleSheet(
+                f"color: {PALETTE.text_muted}; font-size: 12px; "
+                f"background: transparent; border: none; margin-bottom: 4px;"
+            )
+            self._storage_summary_host.addWidget(detail)
+
+        months = int(self._stale_months_combo.currentData() or 6)
+        stale = list_stale_projects(self._db_path, months=months)
+        if stale:
+            self._stale_projects_label.setText(
+                f"{len(stale)} projeto(s) elegível(is) para exclusão."
+            )
+        else:
+            self._stale_projects_label.setText(
+                f"Nenhum projeto com mais de {months} meses sem atualização."
+            )
+
+    def _on_clear_preview_temp(self) -> None:
+        categories = {item.key: item for item in audit_storage(self._db_path)}
+        size_label = format_storage_size(categories["preview_temp"].total_bytes)
+        if not confirm_action(
+            self,
+            "Limpar cache de preview?",
+            f"Serão removidos aproximadamente {size_label} de arquivos temporários.",
+        ):
+            return
+        freed = clear_preview_temp()
+        show_info(self, "Cache limpo", f"Liberação estimada: {format_storage_size(freed)}.")
+        self._refresh_storage_audit()
+
+    def _on_clear_bosello_cache(self) -> None:
+        categories = {item.key: item for item in audit_storage(self._db_path)}
+        size_label = format_storage_size(categories["bosello_cache"].total_bytes)
+        if not confirm_dangerous_action(
+            self,
+            "Limpar capturas Bosello?",
+            f"Isso remove {size_label} de renderizações locais.\n\n"
+            "Para recuperar, reimporte o PDF Bosello no projeto.",
+        ):
+            return
+        freed = clear_bosello_rendered_cache(self._db_path)
+        show_info(self, "Bosello limpo", f"Liberação estimada: {format_storage_size(freed)}.")
+        self._refresh_storage_audit()
+
+    def _on_clear_orphan_photos(self) -> None:
+        if not confirm_dangerous_action(
+            self,
+            "Limpar fotos órfãs?",
+            "Remove cópias em section-photos que não estão referenciadas nas sessões salvas.",
+        ):
+            return
+        freed = clear_orphan_section_photos(self._db_path)
+        show_info(self, "Fotos órfãs removidas", f"Liberação estimada: {format_storage_size(freed)}.")
+        self._refresh_storage_audit()
+
+    def _on_delete_stale_projects(self) -> None:
+        months = int(self._stale_months_combo.currentData() or 6)
+        stale = list_stale_projects(self._db_path, months=months)
+        if not stale:
+            show_info(
+                self,
+                "Nada para excluir",
+                f"Não há projetos em andamento com mais de {months} meses sem atualização.",
+            )
+            return
+        preview = "\n".join(f"• {row.display_name}" for row in stale[:8])
+        if len(stale) > 8:
+            preview += f"\n• … e mais {len(stale) - 8}"
+        if not confirm_dangerous_action(
+            self,
+            "Excluir projetos antigos?",
+            f"{len(stale)} projeto(s) serão removidos da Home:\n\n{preview}\n\n"
+            "Exports e PDFs no disco não serão apagados.",
+        ):
+            return
+        removed = delete_stale_projects(self._db_path, months=months)
+        show_info(self, "Projetos excluídos", f"{removed} registro(s) removido(s) do histórico.")
+        self._refresh_storage_audit()
 
     def _settings_section(self, title: str, description: str) -> QWidget:
         p = PALETTE
