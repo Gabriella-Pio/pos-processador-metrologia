@@ -32,6 +32,10 @@ class ProjectSession:
     active_index: int = 0
     project_id: str | None = None
     display_name: str = ""
+    # Seções desativadas no PDF unificado (estatístico/híbrido), independentes das peças.
+    unified_deleted_section_ids: list[str] = field(default_factory=list)
+    # Overrides de layout/conteúdo do PDF unificado (gráficos, media_kinds, etc.).
+    unified_section_overrides: dict[str, dict] = field(default_factory=dict)
 
     @property
     def active_slot(self) -> ProjectDocumentSlot | None:

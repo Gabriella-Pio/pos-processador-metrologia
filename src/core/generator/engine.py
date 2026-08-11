@@ -1,4 +1,5 @@
 from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas as pdfcanvas
 from reportlab.platypus import SimpleDocTemplate
 from .styles import ReportStyles
 from .constants import ReportTheme, TEMPLATE_PADRAO_OFICIAL
@@ -17,6 +18,59 @@ from .sections.tomo_extra_sections import (
     ResultadosInspecaoSection,
     ObservacoesLimitacoesSection,
 )
+from .sections.statistical_sections import (
+    EstatDetalheAlturasSection,
+    EstatDetalheAngulosSection,
+    EstatDetalheCilindricidadesSection,
+    EstatDetalheCoaxialidadesSection,
+    EstatDetalheDiametrosSection,
+    EstatDetalheDimensoesSection,
+    EstatDetalheOutrosSection,
+    EstatDetalheParalelismosSection,
+    EstatDetalhePerpendicularidadesSection,
+    EstatGraficosComplementarSection,
+    EstatGraficosSection,
+    EstatResumoAlturasSection,
+    EstatResumoAngulosSection,
+    EstatResumoCilindricidadesSection,
+    EstatResumoCoaxialidadesSection,
+    EstatResumoDiametrosSection,
+    EstatResumoDimensoesSection,
+    EstatResumoOutrosSection,
+    EstatResumoParalelismosSection,
+    EstatResumoPerpendicularidadesSection,
+)
+
+
+class _NumberedCanvas(pdfcanvas.Canvas):
+    """Canvas que resolve ``Página X de Y`` após conhecer o total de páginas."""
+
+    def __init__(self, *args, **kwargs):
+        pdfcanvas.Canvas.__init__(self, *args, **kwargs)
+        self._saved_page_states: list[dict] = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        page_count = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self._draw_page_number(page_count)
+            pdfcanvas.Canvas.showPage(self)
+        pdfcanvas.Canvas.save(self)
+
+    def _draw_page_number(self, page_count: int) -> None:
+        self.saveState()
+        self.setFont("Helvetica", 8)
+        self.setFillColor(ReportTheme.COR_SECUNDARIA)
+        self.drawRightString(
+            letter[0] - 36,
+            18,
+            f"Página {self._pageNumber} de {page_count}",
+        )
+        self.restoreState()
 
 class ReportGenerator:
     # Chaves devem existir em ``section_catalog.SECTION_CATALOG`` (ver test_section_catalog).
@@ -29,6 +83,26 @@ class ReportGenerator:
         "controle_tecnico": ControleTecnicoSection,
         "resultados": ResultadosSection,
         "grafica": GraficaSection,
+        "estat_resumo_diametros": EstatResumoDiametrosSection,
+        "estat_resumo_alturas": EstatResumoAlturasSection,
+        "estat_resumo_dimensoes": EstatResumoDimensoesSection,
+        "estat_resumo_cilindricidades": EstatResumoCilindricidadesSection,
+        "estat_resumo_paralelismos": EstatResumoParalelismosSection,
+        "estat_resumo_perpendicularidades": EstatResumoPerpendicularidadesSection,
+        "estat_resumo_coaxialidades": EstatResumoCoaxialidadesSection,
+        "estat_resumo_angulos": EstatResumoAngulosSection,
+        "estat_resumo_outros": EstatResumoOutrosSection,
+        "estat_graficos": EstatGraficosSection,
+        "estat_graficos_comp": EstatGraficosComplementarSection,
+        "estat_detalhe_diametros": EstatDetalheDiametrosSection,
+        "estat_detalhe_alturas": EstatDetalheAlturasSection,
+        "estat_detalhe_dimensoes": EstatDetalheDimensoesSection,
+        "estat_detalhe_cilindricidades": EstatDetalheCilindricidadesSection,
+        "estat_detalhe_paralelismos": EstatDetalheParalelismosSection,
+        "estat_detalhe_perpendicularidades": EstatDetalhePerpendicularidadesSection,
+        "estat_detalhe_coaxialidades": EstatDetalheCoaxialidadesSection,
+        "estat_detalhe_angulos": EstatDetalheAngulosSection,
+        "estat_detalhe_outros": EstatDetalheOutrosSection,
         "tomografia": TomografiaSection,
         "resultados_inspecao": ResultadosInspecaoSection,
         "interpretacao": InterpretacaoSection,
@@ -105,6 +179,7 @@ class ReportGenerator:
             "foto_edits": opcoes_extras.get("foto_edits") or {},
             "photo_anchors": opcoes_extras.get("_photo_anchors_out") or [],
             "anexo_pdfs": list(opcoes_extras.get("anexo_pdfs") or []),
+            "section_media_settings": opcoes_extras.get("section_media_settings") or {},
         }
 
         for bloco in template_config:
@@ -126,7 +201,12 @@ class ReportGenerator:
                 append_section_photos_if_any(story, styles, tipo, contexto_extra)
                 append_section_footer_note(story, styles, tipo, contexto_extra)
 
-        doc.build(story, onFirstPage=cls._adicionar_rodape, onLaterPages=cls._adicionar_rodape)
+        doc.build(
+            story,
+            onFirstPage=cls._adicionar_rodape,
+            onLaterPages=cls._adicionar_rodape,
+            canvasmaker=_NumberedCanvas,
+        )
 
         anexos_enabled = any(b.get("tipo") == "anexos" for b in template_config)
         if anexos_enabled:
@@ -136,11 +216,11 @@ class ReportGenerator:
 
     @staticmethod
     def _adicionar_rodape(canvas, doc):
+        # Número da página (X de Y) é desenhado em ``_NumberedCanvas`` após o total.
         canvas.saveState()
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(ReportTheme.COR_SECUNDARIA)
         canvas.drawString(36, 18, "CEM SENAI | ZEISS Goiânia - GO • Uso restrito ao cliente")
-        canvas.drawRightString(letter[0] - 36, 18, f"Página {doc.page}")
         canvas.restoreState()
 
 

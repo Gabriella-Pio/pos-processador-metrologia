@@ -89,6 +89,7 @@ class RealReportExporterAdapter:
                 "foto_captions": ctx.foto_captions,
                 "foto_edits": ctx.foto_edits,
                 "anexo_pdfs": ctx.anexo_pdfs,
+                "section_media_settings": ctx.section_media_settings,
                 "_photo_anchors_out": photo_anchors,
             },
         )

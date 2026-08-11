@@ -162,6 +162,9 @@ def render_kv_table(
 
 def append_section_footer_note(story, styles, section_id: str, contexto_extra: dict) -> None:
     """Nota de rodapé editável — comum a todas as seções."""
+    # Estatístico: interpretação já sai completa no intro (evita itálico duplicado).
+    if section_id == "interpretacao" and contexto_extra.get("report_kind") == "estatistico":
+        return
     prose = contexto_extra.get("section_prose", {}).get(section_id, {}) or {}
     if section_id == "introducao":
         fallback = str(
@@ -176,6 +179,9 @@ def append_section_footer_note(story, styles, section_id: str, contexto_extra: d
     if not str(note or "").strip() and section_id == "introducao":
         note = get_section_prose(contexto_extra, section_id, "intro", fallback)
     if not str(note or "").strip():
+        return
+    intro = str(prose.get("intro") or "").strip()
+    if intro and str(note).strip() == intro:
         return
     estilo = ParagraphStyle(
         f"SectionNota_{section_id}",

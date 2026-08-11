@@ -18,7 +18,13 @@ class ConclusaoSection(BaseSection):
                 heading, styles["secao"], "conclusao", contexto_extra.get("section_anchor_map")
             )
         )
-        total_fora = sum(1 for i in dados_parseados.itens_medicao if i.status == "Fora")
+        items = getattr(dados_parseados, "itens_medicao", []) or []
+        if getattr(dados_parseados, "series", None) is not None:
+            total_fora = sum(getattr(s, "fora_count", 0) for s in dados_parseados.series)
+        else:
+            total_fora = sum(
+                1 for i in items if str(getattr(i, "status", "")).lower() == "fora"
+            )
 
         texto_customizado = get_section_prose(contexto_extra, "conclusao", "texto", "")
         if not texto_customizado:

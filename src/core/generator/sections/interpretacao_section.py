@@ -28,17 +28,35 @@ class InterpretacaoSection(BaseSection):
         )
         has_edited_bullets = bool(bullet_keys)
 
-        if report_kind in {"tomografia", "insp_ect"} or has_edited_bullets:
+        if report_kind == "estatistico":
+            # Texto completo já veio no intro; não repetir em nota/rodapé.
+            story.append(Spacer(1, 10))
+            return
+
+        if report_kind in {"tomografia", "insp_ect", "mixed"} or has_edited_bullets:
             keys = bullet_keys or [f"bullet_{i}" for i in range(1, 5)]
             for key in keys:
                 bullet = get_section_prose(contexto_extra, "interpretacao", key, "")
                 if bullet:
                     story.append(Paragraph(f"•  {format_prose_paragraph(bullet)}", styles["bullet"]))
+            if report_kind == "mixed":
+                nota = get_section_prose(contexto_extra, "interpretacao", "nota", "")
+                if nota:
+                    story.append(Spacer(1, 4))
+                    story.append(Paragraph(f"•  {format_prose_paragraph(nota)}", styles["bullet"]))
+                # Fallback: bullets dimensionais do CALYPSO quando não há bullets editados.
+                if not has_edited_bullets:
+                    alert_color = ReportTheme.COR_ALERTA.hexval()
+                    for item in getattr(dados_parseados, "itens_medicao", []) or []:
+                        story.append(Paragraph(
+                            format_item_bullet_html(item, alert_color=alert_color),
+                            styles["bullet"],
+                        ))
             story.append(Spacer(1, 10))
             return
 
         alert_color = ReportTheme.COR_ALERTA.hexval()
-        for item in dados_parseados.itens_medicao:
+        for item in getattr(dados_parseados, "itens_medicao", []) or []:
             story.append(Paragraph(
                 format_item_bullet_html(item, alert_color=alert_color),
                 styles["bullet"],

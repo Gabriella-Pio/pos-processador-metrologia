@@ -94,6 +94,8 @@ def serialize_project_snapshot(session: ProjectSession) -> str:
             "template_id": session.template_id,
             "report_mode": session.report_mode,
             "active_index": session.active_index,
+            "unified_deleted_section_ids": list(session.unified_deleted_section_ids),
+            "unified_section_overrides": dict(session.unified_section_overrides),
             "slots": [
                 {
                     "source_pdf_path": str(slot.source_pdf_path),
@@ -152,6 +154,12 @@ def deserialize_project_snapshot(
         active_index=int(session_raw.get("active_index") or 0),
         project_id=session_raw.get("project_id"),
         display_name=str(session_raw.get("display_name") or ""),
+        unified_deleted_section_ids=list(
+            session_raw.get("unified_deleted_section_ids") or []
+        ),
+        unified_section_overrides=dict(
+            session_raw.get("unified_section_overrides") or {}
+        ),
     )
 
     workspaces: dict[str, dict[str, Any]] = {}

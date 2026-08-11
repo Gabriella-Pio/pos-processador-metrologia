@@ -12,6 +12,7 @@ from src.core.domain.image_workspace import (
     serialize_annotation,
     serialize_crop,
 )
+from src.core.domain.field_definitions import effective_media_kinds
 from src.core.domain.placeholder_utils import build_placeholder_context
 from src.core.domain.ports import ReportDocument, VersionEntry
 from src.core.domain.report_field_registry import PROSE_TEMPLATES, merge_section_prose
@@ -33,15 +34,38 @@ class ExportContext:
     foto_captions: dict[str, str]
     foto_edits: dict[str, dict]
     anexo_pdfs: list[str]
+    section_media_settings: dict[str, dict]
+
+
+def build_section_media_settings(document: ReportDocument) -> dict[str, dict]:
+    """media_kinds e gráficos desativados por seção."""
+    settings: dict[str, dict] = {}
+    section_ids = set(document.section_overrides.keys())
+    from src.core.domain.chart_figure_defs import CHART_FIGURES_BY_SECTION
+
+    section_ids |= set(CHART_FIGURES_BY_SECTION.keys())
+    for section_id in section_ids:
+        overrides = document.section_overrides.get(section_id, {})
+        settings[section_id] = {
+            "media_kinds": effective_media_kinds(section_id, overrides),
+            "disabled_chart_ids": list(overrides.get("disabled_chart_ids") or []),
+        }
+    return settings
 
 
 def build_export_context(document: ReportDocument) -> ExportContext:
-    effective_dto = build_effective_dto(document.raw_parsed_data, document.parsed_overrides)
     report_kind = resolve_report_kind(document)
+    if report_kind == "estatistico":
+        effective_dto = document.raw_parsed_data
+    else:
+        effective_dto = build_effective_dto(document.raw_parsed_data, document.parsed_overrides)
+    placeholder_context = _build_placeholder_context_for_kind(
+        document, effective_dto, report_kind
+    )
     return ExportContext(
         effective_dto=effective_dto,
         section_prose=build_section_prose(document, effective_dto, report_kind),
-        placeholder_context=build_placeholder_context(effective_dto, document),
+        placeholder_context=placeholder_context,
         table_rows=build_table_rows(document, report_kind),
         fotos_secoes=build_fotos_secoes(document),
         versao_relatorio=resolve_versao_atual(document),
@@ -51,10 +75,41 @@ def build_export_context(document: ReportDocument) -> ExportContext:
         foto_captions=build_foto_captions(document),
         foto_edits=build_foto_edits(document),
         anexo_pdfs=build_anexo_pdfs(document),
+        section_media_settings=build_section_media_settings(document),
     )
 
 
+def _build_placeholder_context_for_kind(
+    document: ReportDocument,
+    effective_dto: Any,
+    report_kind: str,
+) -> dict:
+    if report_kind == "estatistico":
+        n_pecas = len(getattr(effective_dto, "piece_labels", []) or [])
+        return {
+            "componente": document.evaluated_component,
+            "cliente": document.client_project,
+            "n_pecas": str(n_pecas),
+            "numero_medicoes": str(getattr(effective_dto, "numero_medicoes_cabecalho", 0) or 0),
+            "numero_medicoes_cabecalho": str(
+                getattr(effective_dto, "numero_medicoes_cabecalho", 0) or 0
+            ),
+            "maquina_mmc": str(getattr(effective_dto, "maquina_mmc", "") or ""),
+            "operador": str(getattr(effective_dto, "operador", "") or ""),
+            "total_fora": str(
+                sum(s.fora_count for s in getattr(effective_dto, "series", []) or [])
+            ),
+        }
+    return build_placeholder_context(effective_dto, document)
+
+
 def resolve_report_kind(document: ReportDocument) -> str:
+    from src.core.domain.section_schema import is_mixed_template, is_statistical_template
+
+    if is_statistical_template(document.template_id):
+        return "estatistico"
+    if is_mixed_template(document.template_id):
+        return "mixed"
     if is_tomography_template(document.template_id) or document.source_kind == "insp_ect":
         return "tomografia"
     return "mmc"
@@ -191,9 +246,19 @@ def build_table_rows(document: ReportDocument, report_kind: str) -> dict[str, li
 
     result: dict[str, list] = {}
 
+    from src.core.domain.table_row_merge import merge_with_defaults
+    from src.core.domain.table_row_specs import default_table_rows
+
     stored_ident = document.section_overrides.get("identificacao", {}).get("table_rows")
     if report_kind == "tomografia" and not stored_ident:
         result["identificacao"] = default_tomo_identificacao_rows()
+    elif report_kind == "estatistico" and stored_ident:
+        # Só as linhas do export unificado — não anexar defaults MMC vazios.
+        result["identificacao"] = merge_with_defaults(
+            default_table_rows("identificacao"),
+            stored_ident,
+            append_missing=False,
+        )
     else:
         result["identificacao"] = merge_table_rows("identificacao", stored_ident)
 
@@ -204,10 +269,52 @@ def build_table_rows(document: ReportDocument, report_kind: str) -> dict[str, li
     result["controle_tecnico"] = ctrl_rows
 
     intro_overrides = document.section_overrides.get("introducao", {})
-    result["introducao"] = resolve_introducao_table_rows(
-        intro_overrides,
-        report_kind=report_kind,
-    )
+    if report_kind == "estatistico":
+        from src.core.application.statistical_aggregator import (
+            build_estatistico_introducao_metric_rows,
+        )
+
+        batch = document.raw_parsed_data
+        if batch is not None and getattr(batch, "series", None) is not None:
+            defaults = build_estatistico_introducao_metric_rows(batch)
+            stored = intro_overrides.get("table_rows")
+            if stored:
+                # Preferir ordem/valores recalculados; rótulos customizados do usuário
+                # são preservados quando o id coincide.
+                by_stored = {str(r.get("id") or ""): r for r in stored if r.get("id")}
+                merged: list[dict[str, str]] = []
+                for row in defaults:
+                    custom = by_stored.get(row["id"])
+                    if custom and str(custom.get("label") or "").strip():
+                        item = dict(row)
+                        item["label"] = str(custom["label"])
+                        merged.append(item)
+                    else:
+                        merged.append(dict(row))
+                result["introducao"] = merged
+            else:
+                result["introducao"] = defaults
+        else:
+            result["introducao"] = resolve_introducao_table_rows(
+                intro_overrides,
+                report_kind=report_kind,
+            )
+    elif report_kind == "mixed" and intro_overrides.get("table_rows"):
+        # Cards montados no unificado (métodos CMM / O-inspect / Bosello).
+        result["introducao"] = [
+            {
+                "id": str(row.get("id") or ""),
+                "label": str(row.get("label") or ""),
+                "value": str(row.get("value") or ""),
+            }
+            for row in intro_overrides["table_rows"]
+            if str(row.get("id") or "") not in {"objetivo", "escopo", "referencia"}
+        ]
+    else:
+        result["introducao"] = resolve_introducao_table_rows(
+            intro_overrides,
+            report_kind=report_kind,
+        )
     for custom in document.custom_sections:
         section_id = custom.get("id", "")
         if not section_id:

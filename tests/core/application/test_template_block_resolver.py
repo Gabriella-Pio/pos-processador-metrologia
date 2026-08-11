@@ -53,10 +53,25 @@ def test_resolve_uses_template_layout_override() -> None:
     )
     blocos = resolve_template_blocks(doc)
     tipos = [b["tipo"] for b in blocos]
-    assert "introducao" in tipos
-    assert "conclusao" in tipos
+    assert tipos == ["introducao", "conclusao"]
+
+
+def test_estatistico_layout_does_not_leak_mmc_sections() -> None:
+    from src.core.application.statistical_aggregator import build_estatistico_sections_config
+
+    # Layout dinâmico típico (diâmetro + cilindricidade).
+    layout = build_estatistico_sections_config(["diametro", "cilindricidade"])
+    doc = _doc(template_layout_override=layout)
+    tipos = [b["tipo"] for b in resolve_template_blocks(doc)]
+    assert "estat_resumo_diametros" in tipos
+    assert "estat_resumo_cilindricidades" in tipos
+    assert "estat_graficos" in tipos
+    assert "estat_graficos_comp" in tipos
+    assert "historico_versoes" in tipos
+    assert "anexos" in tipos
+    assert "controle_tecnico" not in tipos
     assert "resultados" not in tipos
-    assert tipos.index("introducao") < tipos.index("conclusao")
+    assert "grafica" not in tipos
 
 
 def test_resolve_saved_custom_template(tmp_path) -> None:
