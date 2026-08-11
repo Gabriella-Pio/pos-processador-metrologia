@@ -125,12 +125,18 @@ _SECTION_MEDIA: dict[str, tuple[SectionMediaDef, ...]] = {
         SectionMediaDef("photos", "Fotografias"),
         SectionMediaDef("graphics", "Gráficos"),
     ),
+    "estat_graficos": (SectionMediaDef("graphics", "Gráficos automáticos"),),
+    "estat_graficos_comp": (SectionMediaDef("graphics", "Gráficos automáticos"),),
     "tomografia": (SectionMediaDef("photos", "Fotografias"),),
     "registro_componente": (SectionMediaDef("photos", "Fotografias"),),
     "resultados": (SectionMediaDef("tables", "Tabela de resultados"),),
     "identificacao": (SectionMediaDef("tables", "Tabela de identificação"),),
     "controle_tecnico": (SectionMediaDef("tables", "Tabela de controle técnico"),),
 }
+
+CHART_SECTION_IDS: frozenset[str] = frozenset(
+    {"estat_graficos", "estat_graficos_comp", "grafica"}
+)
 
 GLOBAL_FIELDS: tuple[GlobalFieldDef, ...] = (
     GlobalFieldDef("client_project", "Cliente / Projeto", "session", used_in_sections=("identificacao",)),
