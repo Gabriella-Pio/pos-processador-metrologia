@@ -205,6 +205,7 @@ class SectionEditView(QFrame):
 
         self._tabs = QTabWidget()
         self._tabs.setObjectName("SectionEditorTabs")
+        self._tabs.currentChanged.connect(self._on_editor_tab_changed)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -498,6 +499,12 @@ class SectionEditView(QFrame):
         index = self._tabs.indexOf(widget)
         if index >= 0:
             self._tabs.setCurrentIndex(index)
+
+    def _on_editor_tab_changed(self, index: int) -> None:
+        if index < 0:
+            return
+        if self._tabs.widget(index) is self._photos_page:
+            self._image_panel.schedule_list_layout_sync()
 
     def focus_section_title(self) -> None:
         """Foca o campo editável do título na aba Conteúdo."""

@@ -4,8 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QResizeEvent
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QPixmap
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFontMetrics, QPixmap, QResizeEvent
 from PyQt6.QtWidgets import (
     QAbstractScrollArea,
     QFrame,
@@ -32,16 +31,22 @@ class _ImageListRow(QFrame):
     remove_requested = pyqtSignal(object)
     _ROW_HEIGHT = 56
     _ROW_HEIGHT_COMPACT = 44
-    _MIN_ROW_WIDTH = 260
-    _MIN_ROW_WIDTH_COMPACT = 168
     _THUMB = 40
     _THUMB_COMPACT = 32
 
-    def __init__(self, image: ReportImage, parent=None, *, compact: bool = False) -> None:
+    def __init__(
+        self,
+        image: ReportImage,
+        parent=None,
+        *,
+        compact: bool = False,
+        show_status_line: bool = True,
+    ) -> None:
         super().__init__(parent)
         self.image = image
         self._selected = False
         self._compact = compact
+        self._show_status_line = show_status_line and not compact
         row_h = self._ROW_HEIGHT_COMPACT if compact else self._ROW_HEIGHT
         thumb = self._THUMB_COMPACT if compact else self._THUMB
         self.setMinimumHeight(row_h)
@@ -71,27 +76,29 @@ class _ImageListRow(QFrame):
         meta = QVBoxLayout()
         meta.setContentsMargins(0, 0, 0, 0)
         meta.setSpacing(2)
-        name = QLabel(image.image_path.name)
-        name.setToolTip(str(image.image_path))
-        name.setWordWrap(False)
-        name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        name.setStyleSheet(f"color: {PALETTE.text_primary}; background: transparent;")
+        self._full_name = image.image_path.name
+        self._name = QLabel(self._full_name)
+        self._name.setToolTip(str(image.image_path))
+        self._name.setWordWrap(False)
+        self._name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._name.setStyleSheet(f"color: {PALETTE.text_primary}; background: transparent;")
         self._status = QLabel("")
         self._status.setStyleSheet(
             f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
         )
-        meta.addWidget(name)
-        if not compact:
+        meta.addWidget(self._name)
+        if self._show_status_line:
             meta.addWidget(self._status)
 
-        remove_btn = IconButton(icon_close(), "Remover foto")
-        remove_btn.setFixedSize(28, 28)
-        remove_btn.setMinimumSize(28, 28)
-        remove_btn.setIconSize(QSize(14, 14))
-        remove_btn.clicked.connect(lambda: self.remove_requested.emit(self.image))
+        self._remove_btn = IconButton(icon_close(), "Remover foto")
+        self._remove_btn.setFixedSize(28, 28)
+        self._remove_btn.setMinimumSize(28, 28)
+        self._remove_btn.setIconSize(QSize(14, 14))
+        self._remove_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._remove_btn.clicked.connect(lambda: self.remove_requested.emit(self.image))
         layout.addWidget(self._thumb)
         layout.addLayout(meta, stretch=1)
-        layout.addWidget(remove_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self._remove_btn, 0, Qt.AlignmentFlag.AlignVCenter)
         self.set_selected(False)
 
     def set_selected(self, selected: bool) -> None:
@@ -105,12 +112,27 @@ class _ImageListRow(QFrame):
             f" border-radius: 8px;"
             f"}}"
         )
-        self._status.setText("Selecionada — editar legenda abaixo" if selected else "Clique para selecionar")
-        if not self._compact:
+        self._status.setText(
+            "Selecionada — duplo clique ou botão abaixo para editar"
+            if selected
+            else "Clique para selecionar"
+        )
+        if self._show_status_line:
             self._status.setStyleSheet(
                 f"color: {PALETTE.senai_blue_light if selected else PALETTE.text_muted}; "
                 f"font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
             )
+
+    def _update_name_elide(self) -> None:
+        available = self._name.width()
+        if available <= 0:
+            return
+        metrics = QFontMetrics(self._name.font())
+        self._name.setText(metrics.elidedText(self._full_name, Qt.TextElideMode.ElideRight, available))
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._update_name_elide()
 
     def sizeHint(self) -> QSize:  # noqa: N802
         height = self._ROW_HEIGHT_COMPACT if self._compact else self._ROW_HEIGHT
@@ -142,6 +164,9 @@ class ImageManagerPanel(QFrame):
         self._caption_debounce.setSingleShot(True)
         self._caption_debounce.setInterval(450)
         self._caption_debounce.timeout.connect(self._flush_caption)
+        self._layout_sync_timer = QTimer(self)
+        self._layout_sync_timer.setSingleShot(True)
+        self._layout_sync_timer.timeout.connect(self._sync_list_item_widths)
 
         self._list = QListWidget()
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -251,9 +276,6 @@ class ImageManagerPanel(QFrame):
     def _row_height(self) -> int:
         return _ImageListRow._ROW_HEIGHT_COMPACT if self._compact else _ImageListRow._ROW_HEIGHT
 
-    def _min_row_width(self) -> int:
-        return _ImageListRow._MIN_ROW_WIDTH_COMPACT if self._compact else _ImageListRow._MIN_ROW_WIDTH
-
     def selected_image(self) -> ReportImage | None:
         return self._selected_image
 
@@ -321,7 +343,11 @@ class ImageManagerPanel(QFrame):
         for index, image in enumerate(images):
             item = QListWidgetItem()
             item.setData(Qt.ItemDataRole.UserRole, image)
-            row = _ImageListRow(image, compact=self._compact)
+            row = _ImageListRow(
+                image,
+                compact=self._compact,
+                show_status_line=self._show_caption,
+            )
             row.remove_requested.connect(self.image_remove_requested.emit)
             self._row_widgets.append(row)
             self._list.addItem(item)
@@ -342,6 +368,11 @@ class ImageManagerPanel(QFrame):
         else:
             self._select_image(None, emit=True)
         self._sync_list_height()
+        self.schedule_list_layout_sync()
+
+    def schedule_list_layout_sync(self) -> None:
+        """Recalcula largura das linhas após o layout da aba estar pronto."""
+        self._layout_sync_timer.start(0)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
@@ -349,10 +380,13 @@ class ImageManagerPanel(QFrame):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        self._sync_list_item_widths()
+        self.schedule_list_layout_sync()
+
+    def _list_viewport_width(self) -> int:
+        return max(1, self._list.viewport().width())
 
     def _sync_list_item_widths(self) -> None:
-        width = max(self._min_row_width(), self._list.viewport().width())
+        width = self._list_viewport_width()
         row_h = self._row_height()
         for index in range(self._list.count()):
             item = self._list.item(index)
@@ -360,7 +394,8 @@ class ImageManagerPanel(QFrame):
                 item.setSizeHint(QSize(width, row_h))
             row = self._row_widgets[index] if index < len(self._row_widgets) else None
             if row is not None:
-                row.setMinimumWidth(width)
+                row.setFixedWidth(width)
+                row._update_name_elide()
 
     def _sync_list_height(self) -> None:
         count = self._list.count()
