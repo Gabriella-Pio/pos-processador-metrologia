@@ -85,16 +85,17 @@ def test_apply_section_order_respects_document_order() -> None:
         {"tipo": "historico_versoes", "config": {}},
         {"tipo": "anexos", "config": {}},
     ]
-    doc = _doc(section_order=["identificacao", "introducao", "conclusao"])
+    doc = _doc(section_order=["identificacao", "introducao", "conclusao", "historico_versoes"])
     ordered = apply_section_order(blocos, doc)
     tipos = [b["tipo"] for b in ordered]
     assert tipos.index("cabecalho") == 0
-    assert tipos.index("identificacao") < tipos.index("introducao") < tipos.index("conclusao")
-    assert tipos.index("historico_versoes") < tipos.index("anexos")
+    assert tipos.index("introducao") == 1
+    assert tipos.index("identificacao") < tipos.index("conclusao")
+    assert tipos.index("conclusao") < tipos.index("historico_versoes")
     assert tipos[-1] == "anexos"
 
 
-def test_inject_custom_sections_before_historico() -> None:
+def test_inject_custom_sections_before_anexos() -> None:
     blocos = [
         {"tipo": "introducao", "config": {}},
         {"tipo": "historico_versoes", "config": {}},
@@ -103,7 +104,8 @@ def test_inject_custom_sections_before_historico() -> None:
     doc = _doc(custom_sections=[{"id": "custom_obs", "title": "Obs"}])
     result = inject_custom_sections(blocos, doc)
     tipos = [b["tipo"] for b in result]
-    assert tipos.index("custom_obs") < tipos.index("historico_versoes")
+    assert tipos.index("historico_versoes") < tipos.index("custom_obs")
+    assert tipos.index("custom_obs") < tipos.index("anexos")
     assert tipos[-1] == "anexos"
 
 
@@ -126,6 +128,15 @@ def test_resolve_active_template_blocks_skips_deleted_standard_sections() -> Non
     assert "grafica" not in tipos
     assert "introducao" in tipos
     assert "anexos" in tipos
+
+
+def test_resolve_active_template_blocks_keeps_protected_sections() -> None:
+    doc = _doc(deleted_section_ids=["introducao", "cabecalho", "historico_versoes", "anexos"])
+    tipos = [b["tipo"] for b in resolve_active_template_blocks(doc)]
+    assert "introducao" in tipos
+    assert "cabecalho" in tipos
+    assert "historico_versoes" not in tipos
+    assert "anexos" not in tipos
 
 
 def test_resolve_template_blocks_keeps_deleted_for_summary() -> None:

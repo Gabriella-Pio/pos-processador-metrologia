@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.core.domain.section_schema import FIXED_SECTION_IDS, SECTION_DEFINITIONS
+from src.core.domain.section_schema import PROTECTED_SECTION_IDS, SECTION_DEFINITIONS
 from src.ui.components.icons import icon_edit, icon_grip, icon_lock, icon_plus, icon_trash
 from src.ui.shared.report_editor.section_order_rules import is_sidebar_section_draggable
 from src.ui.styles import SPACING
@@ -90,9 +90,9 @@ class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
         self.setMinimumWidth(0)
         self.section_id = section["id"]
         self._full_title = section.get("display_title") or section.get("title", section["id"])
-        self._protected = bool(section.get("protected")) or self.section_id in FIXED_SECTION_IDS
+        self._protected = bool(section.get("protected")) or self.section_id in PROTECTED_SECTION_IDS
         self._is_custom = bool(section.get("custom")) or (
-            self.section_id.startswith("custom_") and self.section_id not in FIXED_SECTION_IDS
+            self.section_id.startswith("custom_") and self.section_id not in PROTECTED_SECTION_IDS
         )
         enabled = section.get("enabled", True)
 
@@ -264,7 +264,7 @@ class SectionSummaryRow(_SummaryRowChromeMixin, QFrame):
         self._full_title = section.get("display_title") or section.get("title", section["id"])
         self._has_modified_dot = bool(section.get("has_overrides"))
         self._show_enable_toggle = show_enable_toggle
-        self._protected = bool(section.get("protected")) or self.section_id in FIXED_SECTION_IDS
+        self._protected = bool(section.get("protected")) or self.section_id in PROTECTED_SECTION_IDS
         enabled = section.get("enabled", True)
 
         root = QHBoxLayout(self)

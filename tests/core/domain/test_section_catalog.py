@@ -105,3 +105,17 @@ def test_tomography_blocks_snapshot() -> None:
 def test_catalog_has_unique_ids() -> None:
     ids = [meta.id for meta in SECTION_CATALOG]
     assert len(ids) == len(set(ids))
+
+
+def test_fixed_and_protected_section_ids() -> None:
+    from src.core.domain.section_catalog import fixed_section_ids, protected_section_ids
+
+    assert protected_section_ids() == frozenset({"cabecalho", "introducao"})
+    assert fixed_section_ids() == frozenset({"cabecalho", "introducao", "anexos"})
+
+    intro = catalog_by_id()["introducao"]
+    historico = catalog_by_id()["historico_versoes"]
+    anexos = catalog_by_id()["anexos"]
+    assert intro.fixed_position == "start"
+    assert historico.fixed_position == "none"
+    assert anexos.fixed_position == "end"

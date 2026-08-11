@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.core.domain.section_catalog import fixed_position_start_ids
 from src.core.domain.section_schema import (
-    FIXED_SECTION_IDS,
+    PROTECTED_SECTION_IDS,
     TEMPLATE_TOMOGRAFIA_OFICIAL,
     is_tomography_template,
     sections_config_to_blocks,
@@ -60,22 +61,28 @@ def resolve_active_template_blocks(
 
 def apply_deleted_sections(blocos: list[dict], document: ReportDocument) -> list[dict]:
     """Remove seções desativadas no workspace (``deleted_section_ids``)."""
-    deleted = set(document.deleted_section_ids) - FIXED_SECTION_IDS
+    deleted = set(document.deleted_section_ids) - PROTECTED_SECTION_IDS
     if not deleted:
         return blocos
     return [b for b in blocos if b["tipo"] not in deleted]
 
 
 def apply_section_order(blocos: list[dict], document: ReportDocument) -> list[dict]:
-    """cabecalho no início; histórico antes dos anexos; anexos sempre por último."""
-    start = [b for b in blocos if b["tipo"] == "cabecalho"]
-    historico = [b for b in blocos if b["tipo"] == "historico_versoes"]
+    """Cabeçalho + introdução no início; corpo reordenável; anexos por último."""
+    start_order = fixed_position_start_ids()
+    by_type = {b["tipo"]: b for b in blocos}
+    start = [by_type[sid] for sid in start_order if sid in by_type]
     anexos = [b for b in blocos if b["tipo"] == "anexos"]
-    middle = [b for b in blocos if b["tipo"] not in FIXED_SECTION_IDS]
+    fixed_tail = {"anexos"}
+    fixed_start = set(start_order)
+    middle = [
+        b for b in blocos
+        if b["tipo"] not in fixed_start and b["tipo"] not in fixed_tail
+    ]
     if document.section_order:
         order_index = {sid: idx for idx, sid in enumerate(document.section_order)}
         middle.sort(key=lambda b: order_index.get(b["tipo"], 10_000))
-    ordered = start + middle + historico + anexos
+    ordered = start + middle + anexos
     return inject_custom_sections(ordered, document)
 
 
@@ -93,8 +100,7 @@ def inject_custom_sections(blocos: list[dict], document: ReportDocument) -> list
     result: list[dict] = []
     inserted = False
     for bloco in blocos:
-        # Custom antes do histórico (e dos anexos, que ficam por último).
-        if bloco["tipo"] in {"historico_versoes", "anexos"} and not inserted:
+        if bloco["tipo"] == "anexos" and not inserted:
             result.extend(custom_blocks)
             inserted = True
         result.append(bloco)

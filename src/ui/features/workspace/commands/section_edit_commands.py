@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from src.core.application.document_editing import sync_measured_by
 from src.core.domain.ports import ReportDocument, TechnicalControlInfo
-from src.core.domain.section_schema import FIXED_SECTION_IDS
+from src.core.domain.section_schema import PROTECTED_SECTION_IDS
 
 
 class SectionEditCommands:
@@ -81,7 +81,7 @@ class SectionEditCommands:
 
     @staticmethod
     def set_section_enabled(document: ReportDocument, section_id: str, enabled: bool) -> None:
-        if section_id in FIXED_SECTION_IDS:
+        if section_id in PROTECTED_SECTION_IDS:
             return
         if enabled:
             if section_id in document.deleted_section_ids:
@@ -94,7 +94,7 @@ class SectionEditCommands:
         if not document.deleted_section_ids:
             return
         document.deleted_section_ids = [
-            sid for sid in document.deleted_section_ids if sid not in FIXED_SECTION_IDS
+            sid for sid in document.deleted_section_ids if sid not in PROTECTED_SECTION_IDS
         ]
 
     @staticmethod

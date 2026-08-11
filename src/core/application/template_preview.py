@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.core.domain.ports import ReportDocument, TechnicalControlInfo, VersionEntry
-from src.core.domain.section_schema import FIXED_SECTION_IDS, is_custom_section_id, merge_saved_template_config
+from src.core.domain.section_schema import PROTECTED_SECTION_IDS, is_custom_section_id, merge_saved_template_config
 from src.core.parser.parser import RelatorioCalypsoDto
 from src.core.parser.table_extractor import MedicaoItemDto
 
@@ -79,12 +79,12 @@ def build_template_preview_document(
     enabled_ids = [
         sid
         for sid, _label, enabled in _ordered_sections(sections_config)
-        if enabled and sid not in FIXED_SECTION_IDS
+        if enabled and sid not in PROTECTED_SECTION_IDS
     ]
     disabled_ids = [
         sid
         for sid, _label, enabled in _ordered_sections(sections_config)
-        if not enabled and sid not in FIXED_SECTION_IDS
+        if not enabled and sid not in PROTECTED_SECTION_IDS
     ]
 
     control = TechnicalControlInfo(
@@ -175,7 +175,7 @@ def build_template_sections_summary(
                 "title": label,
                 "display_title": cfg.get("title", label) if is_custom_section_id(section_id) else label,
                 "enabled": enabled,
-                "protected": section_id in FIXED_SECTION_IDS,
+                "protected": section_id in PROTECTED_SECTION_IDS,
                 "custom": is_custom_section_id(section_id),
                 "fields": defaults,
                 "table_rows": table_rows,

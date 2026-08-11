@@ -64,6 +64,7 @@ SECTION_CATALOG: tuple[SectionMeta, ...] = (
         "introducao",
         "Introdução",
         pdf_heading="RELATÓRIO TÉCNICO — ANÁLISE DIMENSIONAL",
+        fixed_position="start",
     ),
     _meta(
         "identificacao",
@@ -140,7 +141,6 @@ SECTION_CATALOG: tuple[SectionMeta, ...] = (
         "historico_versoes",
         "Histórico de versões",
         pdf_heading="HISTÓRICO DE VERSÕES",
-        fixed_position="end",
         numbered=True,
     ),
     _meta(
@@ -226,8 +226,21 @@ def section_titles() -> dict[str, str]:
 
 
 def fixed_section_ids() -> frozenset[str]:
+    """Seções com posição fixa no PDF/sumário (início ou fim) — não arrastáveis."""
     return frozenset(
         meta.id for meta in SECTION_CATALOG if meta.fixed_position != "none"
+    )
+
+
+def protected_section_ids() -> frozenset[str]:
+    """Seções obrigatórias — não podem ser desativadas no workspace nem no template."""
+    return frozenset({"cabecalho", "introducao"})
+
+
+def fixed_position_start_ids() -> tuple[str, ...]:
+    """Ordem canônica das seções fixas no início do relatório."""
+    return tuple(
+        meta.id for meta in SECTION_CATALOG if meta.fixed_position == "start"
     )
 
 

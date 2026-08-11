@@ -13,6 +13,7 @@ from src.core.domain.section_catalog import (
     TEMPLATE_PROFILE_TOMOGRAFIA,
     default_enabled_blocks,
     fixed_section_ids,
+    protected_section_ids,
     section_titles,
     tomography_blocks,
 )
@@ -47,8 +48,11 @@ SECTION_DEFINITIONS: tuple[SectionDefinition, ...] = tuple(
 
 SECTION_TITLES: dict[str, str] = section_titles()
 
-# Seções com posição fixa no PDF (cabeçalho no início; histórico e anexos no fim).
+# Seções com posição fixa no PDF/sumário (não arrastáveis): cabecalho, introducao, anexos.
 FIXED_SECTION_IDS: frozenset[str] = fixed_section_ids()
+
+# Seções obrigatórias (não desativáveis): cabecalho + relatório técnico (introducao).
+PROTECTED_SECTION_IDS: frozenset[str] = protected_section_ids()
 
 TEMPLATE_PADRAO_OFICIAL: list[dict] = default_enabled_blocks()
 

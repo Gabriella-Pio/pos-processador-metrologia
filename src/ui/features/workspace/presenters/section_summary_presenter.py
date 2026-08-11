@@ -13,7 +13,7 @@ from src.core.domain.report_field_registry import (
     section_has_overrides,
 )
 from src.core.domain.section_numbering import strip_number_prefix
-from src.core.domain.section_schema import FIXED_SECTION_IDS
+from src.core.domain.section_schema import PROTECTED_SECTION_IDS
 from src.core.domain.table_row_registry import (
     SECTION_HEADING_DEFAULTS,
     TABLE_SECTIONS,
@@ -45,7 +45,7 @@ class SectionSummaryPresenter:
 
         for section in secoes:
             section_id = section["id"]
-            is_disabled = section_id in deleted and section_id not in FIXED_SECTION_IDS
+            is_disabled = section_id in deleted and section_id not in PROTECTED_SECTION_IDS
             overrides = document.section_overrides.get(section_id, {})
             prose = default_prose_values(section_id, ctx)
             field_overrides = {
@@ -147,7 +147,7 @@ class SectionSummaryPresenter:
                 ],
                 override_keys=override_keys,
                 enabled=not is_disabled,
-                protected=section_id in FIXED_SECTION_IDS,
+                protected=section_id in PROTECTED_SECTION_IDS,
             ))
 
         seen_ids = {item.id for item in merged}
@@ -155,7 +155,7 @@ class SectionSummaryPresenter:
             section_id = custom["id"]
             if section_id in seen_ids:
                 continue
-            is_disabled = section_id in deleted and section_id not in FIXED_SECTION_IDS
+            is_disabled = section_id in deleted and section_id not in PROTECTED_SECTION_IDS
             overrides = document.section_overrides.get(section_id, {})
             title = overrides.get("title", custom.get("title", "Seção personalizada"))
             img_count = sum(1 for img in document.images if img.section_id == section_id)

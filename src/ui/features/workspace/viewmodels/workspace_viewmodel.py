@@ -500,9 +500,9 @@ class WorkspaceViewModel(QObject):
         document = self._active_document()
         if document is None:
             return
-        from src.core.domain.section_schema import FIXED_SECTION_IDS
+        from src.core.domain.section_schema import PROTECTED_SECTION_IDS
 
-        if section_id in FIXED_SECTION_IDS:
+        if section_id in PROTECTED_SECTION_IDS:
             return
         SectionEditCommands.set_section_enabled(document, section_id, enabled)
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
