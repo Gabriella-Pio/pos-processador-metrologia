@@ -49,19 +49,39 @@ def get_itens_medicao_as_dicts(dto: Any) -> list[dict[str, str]]:
 
 def build_prose_context(dto: Any, document: Any) -> dict[str, str]:
     """Contexto para templates de prosa com placeholders."""
+    componente_default = "Não identificado"
+    if document is not None:
+        componente_default = getattr(document, "evaluated_component", "") or componente_default
     ctx = {
-        "componente": get_dto_scalar(dto, "componente", "Não identificado"),
+        "componente": get_dto_scalar(dto, "componente", componente_default) or componente_default,
         "operador": get_dto_scalar(dto, "operador", "Não informado"),
         "maquina_mmc": get_dto_scalar(dto, "maquina_mmc", "Não identificada"),
-        "numero_medicoes": str(len(getattr(dto, "itens_medicao", []) or [])),
+        "numero_medicoes": str(
+            getattr(dto, "numero_medicoes_cabecalho", None)
+            or len(getattr(dto, "itens_medicao", []) or [])
+        ),
         "numero_medicoes_cabecalho": get_dto_scalar(dto, "numero_medicoes_cabecalho", "0"),
+        "n_pecas": str(len(getattr(dto, "piece_labels", []) or []) or 1),
+        "total_fora": str(
+            sum(getattr(s, "fora_count", 0) for s in getattr(dto, "series", []) or [])
+            if getattr(dto, "series", None) is not None
+            else sum(
+                1
+                for item in (getattr(dto, "itens_medicao", []) or [])
+                if str(getattr(item, "status", "")).lower() == "fora"
+            )
+        ),
     }
     if document is not None:
         ctx["client_project"] = getattr(document, "client_project", "")
         ctx["evaluated_component"] = getattr(document, "evaluated_component", "")
         template_id = getattr(document, "template_id", "")
         source_kind = getattr(document, "source_kind", "")
-        if template_id in {"tomografia", "tomo"} or source_kind == "insp_ect":
+        if template_id in {"estatistico", "statistical"}:
+            ctx["report_kind"] = "estatistico"
+        elif template_id in {"mixed", "hibrido"}:
+            ctx["report_kind"] = "mixed"
+        elif template_id in {"tomografia", "tomo"} or source_kind == "insp_ect":
             ctx["report_kind"] = "tomografia"
         else:
             ctx["report_kind"] = "mmc"

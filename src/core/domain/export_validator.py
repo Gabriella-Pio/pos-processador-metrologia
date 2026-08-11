@@ -20,6 +20,34 @@ def validate_for_export(document: ReportDocument) -> list[ExportIssue]:
     if not document.evaluated_component.strip():
         issues.append(ExportIssue("error", "Componente avaliado não informado."))
 
+    from src.core.domain.section_schema import is_statistical_template
+
+    if is_statistical_template(document.template_id):
+        batch = document.raw_parsed_data
+        series = getattr(batch, "series", None) or []
+        labels = getattr(batch, "piece_labels", None) or []
+        if len(labels) < 2:
+            issues.append(ExportIssue("error", "Relatório estatístico exige pelo menos duas peças."))
+        if not series:
+            issues.append(
+                ExportIssue("error", "Nenhuma característica comum encontrada no lote.")
+            )
+        return issues
+
+    from src.core.domain.section_schema import is_mixed_template
+
+    if is_mixed_template(document.template_id):
+        if not any(img.section_id == "tomografia" for img in document.images):
+            issues.append(
+                ExportIssue(
+                    "error",
+                    "Relatório híbrido sem capturas Bosello na seção Tomografia.",
+                )
+            )
+        if document.raw_parsed_data is None:
+            issues.append(ExportIssue("error", "Dados dimensionais CALYPSO ausentes."))
+        return issues
+
     effective = build_effective_dto(document.raw_parsed_data, document.parsed_overrides)
     if not getattr(effective, "operador", "").strip():
         issues.append(ExportIssue("warning", "Operador não informado."))
