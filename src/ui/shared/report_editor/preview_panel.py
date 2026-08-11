@@ -1,9 +1,9 @@
 """Preview PDF rasterizado — compartilhado entre workspace e editor de templates."""
 from __future__ import annotations
 
-from PyQt6.QtCore import QPoint, QEasingCurve, QPropertyAnimation, Qt, QTimer, pyqtSignal, QRect
+from PyQt6.QtCore import QPoint, QEasingCurve, QEvent, QPropertyAnimation, Qt, QTimer, pyqtSignal, QRect
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QLabel, QProgressBar, QScrollArea, QVBoxLayout, QWidget
 
 from src.ui.shared.report_editor.preview_constants import PREVIEW_ZOOM
 from src.ui.shared.report_editor.preview_highlight_overlay import PreviewPageLabel
@@ -37,6 +37,7 @@ class PreviewPanel(QFrame):
 
         self._status_label = QLabel("")
         self._status_label.setObjectName("WorkspacePreviewStatus")
+        self._status_label.hide()
 
         self._scroll = QScrollArea()
         self._scroll.setObjectName("WorkspacePreviewScroll")
@@ -48,10 +49,23 @@ class PreviewPanel(QFrame):
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setWidget(self._pages_host)
 
+        self._busy_overlay = QWidget(self._scroll.viewport())
+        self._busy_overlay.setObjectName("PreviewBusyOverlay")
+        self._busy_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        busy_layout = QVBoxLayout(self._busy_overlay)
+        busy_layout.setContentsMargins(0, 0, 0, 0)
+        self._busy_bar = QProgressBar()
+        self._busy_bar.setObjectName("PreviewBusyIndicator")
+        self._busy_bar.setRange(0, 0)
+        self._busy_bar.setTextVisible(False)
+        self._busy_bar.setFixedSize(72, 3)
+        busy_layout.addWidget(self._busy_bar, alignment=Qt.AlignmentFlag.AlignRight)
+        self._busy_overlay.hide()
+        self._scroll.viewport().installEventFilter(self)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SPACING.lg, SPACING.md, SPACING.lg, SPACING.lg)
         layout.setSpacing(SPACING.sm)
-        layout.addWidget(self._status_label, alignment=Qt.AlignmentFlag.AlignVCenter)
         layout.addWidget(self._scroll, stretch=1)
 
     def scroll_area(self) -> QScrollArea:
@@ -68,6 +82,28 @@ class PreviewPanel(QFrame):
 
     def set_status_text(self, text: str) -> None:
         self._status_label.setText(text)
+        self._status_label.setVisible(bool(text.strip()))
+
+    def set_busy(self, busy: bool) -> None:
+        self._busy_overlay.setVisible(busy)
+        if busy:
+            self._reposition_busy_overlay()
+
+    def _reposition_busy_overlay(self) -> None:
+        viewport = self._scroll.viewport()
+        margin = SPACING.sm
+        self._busy_overlay.adjustSize()
+        self._busy_overlay.move(
+            max(margin, viewport.width() - self._busy_overlay.width() - margin),
+            max(margin, viewport.height() - self._busy_overlay.height() - margin),
+        )
+        self._busy_overlay.raise_()
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        if watched is self._scroll.viewport() and event.type() == QEvent.Type.Resize:
+            if self._busy_overlay.isVisible():
+                self._reposition_busy_overlay()
+        return super().eventFilter(watched, event)
 
     def set_anchor_map(self, anchor_map: dict[str, dict]) -> None:
         self._anchor_map = dict(anchor_map)

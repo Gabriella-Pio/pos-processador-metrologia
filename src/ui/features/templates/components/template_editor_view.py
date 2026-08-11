@@ -165,11 +165,7 @@ class TemplateEditorView(QWidget):
         self._vm.sections_summary_ready.connect(self._on_sections_summary)
         self._vm.global_fields_ready.connect(self._sidebar.render_global_fields)
         self._vm.preview_ready.connect(self._preview_panel.render_pages)
-        self._vm.preview_generating.connect(
-            lambda generating: self._preview_panel.set_status_text(
-                "Atualizando preview…" if generating else ""
-            )
-        )
+        self._vm.preview_generating.connect(self._preview_panel.set_busy)
         self._vm.preview_metadata_ready.connect(
             lambda metadata: self._preview_panel.update_anchor_map(metadata.get("sections", metadata))
         )

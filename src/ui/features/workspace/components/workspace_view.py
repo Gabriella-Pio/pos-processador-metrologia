@@ -423,11 +423,9 @@ class WorkspaceView(QWidget):
         self._section_editor.render_global_fields(values, overridden)
 
     def _on_preview_generating(self, generating: bool) -> None:
-        if generating:
-            self._preview_status_label.setText("Atualizando preview…")
-        else:
+        self._preview_panel.set_busy(generating)
+        if not generating:
             self._on_version_status_changed(self._vm.version_status_text())
-        self._preview_panel.set_status_text("Atualizando preview…" if generating else "")
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
         self._edit_stack.setCurrentIndex(1 if visible else 0)
@@ -559,7 +557,7 @@ class WorkspaceView(QWidget):
         self._section_editor.render_versions(entries)
 
     def _on_version_status_changed(self, text: str) -> None:
-        if text and not self._preview_status_label.text().startswith("Atualizando"):
+        if text:
             self._preview_status_label.setText(text)
 
     def _on_preview_version(self, version_number: int) -> None:

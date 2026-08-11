@@ -8,11 +8,12 @@ from collections.abc import Callable
 from PyQt6.QtCore import QObject, QRunnable, QThreadPool, QTimer, pyqtSignal, pyqtSlot
 
 from src.core.domain.ports import ReportDocument
-from src.ui.features.workspace.services.preview_service import PreviewService
 
 logger = logging.getLogger(__name__)
 
 PREVIEW_DEBOUNCE_MS = 600
+PREVIEW_INDICATOR_DELAY_MS = 300
+PREVIEW_IMAGE_DEBOUNCE_MS = 1200
 
 
 def build_preview_metadata(exporter) -> dict:
@@ -31,7 +32,7 @@ class PreviewWorker(QRunnable):
         self,
         generation: int,
         document: ReportDocument,
-        preview_service: PreviewService,
+        preview_service,
     ) -> None:
         super().__init__()
         self._generation = generation
@@ -60,35 +61,50 @@ class DebouncedPreviewRunner(QObject):
 
     def __init__(
         self,
-        preview_service: PreviewService,
+        preview_service,
         *,
         debounce_ms: int = PREVIEW_DEBOUNCE_MS,
+        indicator_delay_ms: int = PREVIEW_INDICATOR_DELAY_MS,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._preview_service = preview_service
+        self._default_debounce_ms = debounce_ms
+        self._indicator_delay_ms = indicator_delay_ms
         self._generation = 0
+        self._generating = False
         self._document_getter: Callable[[], ReportDocument | None] | None = None
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.setInterval(debounce_ms)
         self._timer.timeout.connect(self._run)
+        self._indicator_timer = QTimer(self)
+        self._indicator_timer.setSingleShot(True)
+        self._indicator_timer.timeout.connect(self._maybe_show_generating_indicator)
 
     def set_document_getter(self, getter: Callable[[], ReportDocument | None]) -> None:
         self._document_getter = getter
 
-    def schedule(self) -> None:
-        self.generating.emit(True)
+    def schedule(self, *, debounce_ms: int | None = None) -> None:
+        interval = self._default_debounce_ms if debounce_ms is None else debounce_ms
+        self._timer.setInterval(interval)
         self._timer.start()
+        if not self._generating:
+            self._indicator_timer.start(self._indicator_delay_ms)
+
+    def _maybe_show_generating_indicator(self) -> None:
+        if self._timer.isActive():
+            self._set_generating(True)
 
     def _run(self) -> None:
+        self._indicator_timer.stop()
         if self._document_getter is None:
-            self.generating.emit(False)
+            self._set_generating(False)
             return
         document = self._document_getter()
         if document is None:
-            self.generating.emit(False)
+            self._set_generating(False)
             return
+        self._set_generating(True)
         self._generation += 1
         generation = self._generation
         worker = PreviewWorker(generation, document, self._preview_service)
@@ -96,14 +112,25 @@ class DebouncedPreviewRunner(QObject):
         worker.signals.failed.connect(self._on_failed)
         QThreadPool.globalInstance().start(worker)
 
+    def _set_generating(self, active: bool) -> None:
+        if self._generating == active:
+            return
+        self._generating = active
+        self.generating.emit(active)
+
+    def _clear_generating_if_idle(self) -> None:
+        if self._timer.isActive():
+            return
+        self._set_generating(False)
+
     def _on_finished(self, generation: int, pages: list[bytes], anchor_map: dict) -> None:
         if generation != self._generation:
             return
-        self.generating.emit(False)
+        self._clear_generating_if_idle()
         self.finished.emit(pages, anchor_map)
 
     def _on_failed(self, generation: int, details: str) -> None:
         if generation != self._generation:
             return
-        self.generating.emit(False)
+        self._clear_generating_if_idle()
         self.failed.emit(details)

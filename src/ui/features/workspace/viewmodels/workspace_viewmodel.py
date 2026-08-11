@@ -61,7 +61,11 @@ from src.ui.features.workspace.services.preview_service import PreviewService
 from src.ui.features.workspace.services.template_workspace_service import TemplateWorkspaceService
 from src.ui.features.workspace.undo_stack import DocumentUndoStack
 from src.ui.controllers.app_state import AppState
-from src.ui.shared.report_editor.preview_worker import DebouncedPreviewRunner, build_preview_metadata
+from src.ui.shared.report_editor.preview_worker import (
+    DebouncedPreviewRunner,
+    PREVIEW_IMAGE_DEBOUNCE_MS,
+    build_preview_metadata,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -546,8 +550,9 @@ class WorkspaceViewModel(QObject):
 
     # ------------------------------------------------------------------ preview
 
-    def schedule_preview(self) -> None:
-        self._preview_runner.schedule()
+    def schedule_preview(self, *, image_edit: bool = False) -> None:
+        debounce_ms = PREVIEW_IMAGE_DEBOUNCE_MS if image_edit else None
+        self._preview_runner.schedule(debounce_ms=debounce_ms)
 
     def generate_preview(self) -> None:
         self.schedule_preview()
@@ -624,7 +629,8 @@ class WorkspaceViewModel(QObject):
 
     def _notify_image_edits_changed(self) -> None:
         self._app_state.notify_images_changed()
-        self._commit_document_change(preview=True, summary=True, data_dirty_flag=True)
+        self._commit_document_change(preview=False, summary=True, data_dirty_flag=True)
+        self.schedule_preview(image_edit=True)
 
     def register_new_version(self, responsible_name: str, description: str) -> None:
         document = self._active_document()

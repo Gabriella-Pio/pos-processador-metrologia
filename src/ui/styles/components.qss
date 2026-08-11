@@ -598,6 +598,18 @@ QLabel#WorkspacePreviewStatus {{
     color: {text_muted};
     background: transparent;
 }}
+QWidget#PreviewBusyOverlay {{
+    background: transparent;
+}}
+QProgressBar#PreviewBusyIndicator {{
+    border: none;
+    border-radius: 2px;
+    background: {bg_surface_alt};
+}}
+QProgressBar#PreviewBusyIndicator::chunk {{
+    background: {senai_orange};
+    border-radius: 2px;
+}}
 QLabel#WorkspaceDocTitle {{
     font-size: {size_h3}px;
     font-weight: {weight_semibold};
