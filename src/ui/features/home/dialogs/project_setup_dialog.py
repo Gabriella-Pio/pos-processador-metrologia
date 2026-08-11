@@ -4,8 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
-    QComboBox,
-    QDialog,
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
@@ -13,13 +11,14 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.domain.ports import ReportParser, TemplateRepository
+from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
-from src.ui.components.inputs import LabeledLineEdit
+from src.ui.components.inputs import LabeledLineEdit, ThemedComboBox
 from src.ui.features.home.dialogs.import_dialog import DropZone
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, heading_style
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, caption_style
 
 
-class ProjectSetupDialog(QDialog):
+class ProjectSetupDialog(AppDialog):
     """Modal único: Projeto + Arquivos + Template."""
 
     def __init__(
@@ -30,12 +29,11 @@ class ProjectSetupDialog(QDialog):
         *,
         overlay: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
+        super().__init__(parent, window_title="Novo Projeto de Medição", minimum_width=640)
+        self.setMinimumHeight(480)
         self._parser = parser
         self._template_repo = template_repo
         self._overlay = overlay
-        self.setWindowTitle("Novo Projeto de Medição")
-        self.setMinimumSize(640, 480)
 
         self._client_field = LabeledLineEdit("Cliente / Projeto", required=True)
         self._component_field = LabeledLineEdit("Componente avaliado", required=True)
@@ -47,8 +45,8 @@ class ProjectSetupDialog(QDialog):
         self._drop_zone.setMinimumHeight(120)
         self._files_error = QLabel("")
         self._files_error.hide()
-        self._template_combo = QComboBox()
-        self._mode_combo = QComboBox()
+        self._template_combo = ThemedComboBox()
+        self._mode_combo = ThemedComboBox()
         self._mode_combo.addItem("Detectar automaticamente", "auto")
         self._mode_combo.addItem("Somente MMC (CALYPSO)", "mmc_only")
         self._mode_combo.addItem("Somente Tomografia (INSP ECT)", "tomo_only")
@@ -64,22 +62,12 @@ class ProjectSetupDialog(QDialog):
 
     def _build_ui(self) -> None:
         p = PALETTE
-        self.setStyleSheet(f"QDialog {{ background-color: {p.bg_surface}; }}")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.xl, SPACING.xl, SPACING.xl, SPACING.lg)
-        layout.setSpacing(SPACING.md)
-
-        title = QLabel("Novo projeto de medição")
-        title.setStyleSheet(heading_style(2))
-
-        subtitle = QLabel(
+        layout = self.create_root_layout()
+        self.add_dialog_header(
+            layout,
+            "Novo projeto de medição",
             "Informe o projeto, selecione os PDFs brutos gerados pelos equipamentos ZEISS "
-            "e escolha o template. Arraste arquivos ou use o botão abaixo."
-        )
-        subtitle.setWordWrap(True)
-        subtitle.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
+            "e escolha o template. Arraste arquivos ou use o botão abaixo.",
         )
 
         form_row = QHBoxLayout()
@@ -123,8 +111,6 @@ class ProjectSetupDialog(QDialog):
         footer.addWidget(cancel_btn)
         footer.addWidget(self._confirm_btn)
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
         layout.addLayout(form_row)
         layout.addWidget(self._drop_zone)
         layout.addLayout(browse_row)
@@ -135,6 +121,7 @@ class ProjectSetupDialog(QDialog):
         layout.addWidget(tmpl_hint)
         layout.addWidget(self._template_combo)
         layout.addStretch()
+        self.add_dialog_divider(layout)
         layout.addLayout(footer)
 
     def _wire_signals(self) -> None:
@@ -151,6 +138,9 @@ class ProjectSetupDialog(QDialog):
         if self._drop_zone.count() > 0:
             self._files_error.hide()
 
+    def set_overlay_visible(self, visible: bool) -> None:
+        self._set_overlay_visible(visible)
+
     def _set_overlay_visible(self, visible: bool) -> None:
         if self._overlay is None:
             return
@@ -165,7 +155,7 @@ class ProjectSetupDialog(QDialog):
 
         self._set_overlay_visible(False)
         paths, _ = QFileDialog.getOpenFileNames(self, "Selecionar PDFs", "", "PDF (*.pdf)")
-        self._set_overlay_visible(True)
+        self.set_overlay_visible(True)
         duplicates: list[str] = []
         for path in paths:
             if not self._drop_zone.add_path_string(path):

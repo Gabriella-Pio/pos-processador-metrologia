@@ -10,16 +10,20 @@ from __future__ import annotations
 from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QTimer, Qt
 from PyQt6.QtWidgets import QGraphicsOpacityEffect, QHBoxLayout, QLabel, QWidget
 
+from src.ui.components.buttons import IconButton
+from src.ui.components.icons import icon_close
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
+
 _LEVELS = {
-    "success": ("✓", "#22c55e", "rgba(34,197,94,0.15)", "rgba(34,197,94,0.35)"),
-    "error": ("✗", "#f0431e", "rgba(240,67,30,0.15)", "rgba(240,67,30,0.35)"),
-    "info": ("ℹ", "#4a6fd4", "rgba(74,111,212,0.15)", "rgba(74,111,212,0.35)"),
-    "warning": ("⚠", "#f59e0b", "rgba(245,158,11,0.15)", "rgba(245,158,11,0.35)"),
+    "success": ("✓", PALETTE.success, PALETTE.success_bg),
+    "error": ("✕", PALETTE.danger, PALETTE.danger_bg),
+    "info": ("ℹ", PALETTE.info, PALETTE.info_bg),
+    "warning": ("⚠", PALETTE.warning, PALETTE.warning_bg),
 }
 
 
 class Toast(QWidget):
-    """Widget flutuante de notificação — contido e com quebra de linha no pai."""
+    """Widget flutuante de notificação — mesmo visual elevado dos modais."""
 
     def __init__(
         self,
@@ -33,25 +37,28 @@ class Toast(QWidget):
     ) -> None:
         super().__init__(parent)
         self._position = position
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        icon, color, bg, border = _LEVELS.get(level, _LEVELS["info"])
+        self._duration = duration
+        self.setObjectName("AppToast")
+        icon, color, bg = _LEVELS.get(level, _LEVELS["info"])
 
         self.setStyleSheet(f"""
-            QWidget {{
-                background: {bg};
-                border: 1px solid {border};
-                border-radius: 10px;
+            QWidget#AppToast {{
+                background: {PALETTE.bg_elevated};
+                border: 1px solid {PALETTE.border_strong};
+                border-radius: {SPACING.radius_md}px;
             }}
         """)
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(12, 10, 12, 10)
-        lay.setSpacing(8)
+        lay.setContentsMargins(SPACING.md, SPACING.sm, SPACING.sm, SPACING.sm)
+        lay.setSpacing(SPACING.sm)
 
         icon_lbl = QLabel(icon)
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
+        icon_lbl.setFixedSize(28, 28)
         icon_lbl.setStyleSheet(
-            f"color:{color}; font-size:14px; background:transparent; border:none;"
+            f"color:{color}; background:{bg}; border-radius:14px; "
+            f"font-size:14px; font-weight:{TYPOGRAPHY.weight_bold}; border:none;"
         )
 
         msg_lbl = QLabel(message)
@@ -60,29 +67,25 @@ class Toast(QWidget):
         bounded_width = max_width or self._default_max_width(parent)
         msg_lbl.setMaximumWidth(bounded_width)
         msg_lbl.setStyleSheet(
-            "color:#E6EDF3; font-size:12px; line-height: 1.35; "
-            "background:transparent; border:none;"
+            f"color:{PALETTE.text_primary}; font-size:{TYPOGRAPHY.size_caption}px; "
+            f"background:transparent; border:none;"
         )
+
+        close_btn = IconButton(icon_close(), "Fechar")
+        close_btn.setFixedSize(28, 28)
+        close_btn.clicked.connect(self.dismiss)
 
         lay.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignTop)
         lay.addWidget(msg_lbl, stretch=1)
+        lay.addWidget(close_btn, 0, Qt.AlignmentFlag.AlignTop)
 
         self.adjustSize()
         self._reposition()
         self.show()
         self.raise_()
 
-        effect = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(effect)
-
-        self._anim = QPropertyAnimation(effect, b"opacity")
-        self._anim.setDuration(700)
-        self._anim.setStartValue(1.0)
-        self._anim.setEndValue(0.0)
-        self._anim.setEasingCurve(QEasingCurve.Type.InCubic)
-        self._anim.finished.connect(self.deleteLater)
-
-        QTimer.singleShot(duration, self._anim.start)
+        if duration > 0:
+            QTimer.singleShot(duration, self.fade_out)
 
     @staticmethod
     def _default_max_width(parent: QWidget) -> int:
@@ -108,6 +111,23 @@ class Toast(QWidget):
     def resizeEvent(self, event) -> None:  # noqa: N802
         self._reposition()
         super().resizeEvent(event)
+
+    def fade_out(self) -> None:
+        if self.graphicsEffect() is not None:
+            return
+        effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(effect)
+        anim = QPropertyAnimation(effect, b"opacity", self)
+        anim.setDuration(700)
+        anim.setStartValue(1.0)
+        anim.setEndValue(0.0)
+        anim.setEasingCurve(QEasingCurve.Type.InCubic)
+        anim.finished.connect(self.deleteLater)
+        anim.start()
+        self._anim = anim
+
+    def dismiss(self) -> None:
+        self.fade_out()
 
 
 def show_toast(

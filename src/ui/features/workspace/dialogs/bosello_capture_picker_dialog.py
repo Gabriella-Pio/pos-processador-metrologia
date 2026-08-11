@@ -6,7 +6,6 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
-    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -16,6 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.styles import PALETTE, SPACING, caption_style, heading_style
 
@@ -104,7 +104,7 @@ class _CaptureTile(QFrame):
         )
 
 
-class BoselloCapturePickerDialog(QDialog):
+class BoselloCapturePickerDialog(AppDialog):
     """Escolhe capturas Bosello para adicionar à seção em edição."""
 
     def __init__(
@@ -115,22 +115,23 @@ class BoselloCapturePickerDialog(QDialog):
         paths_in_section: set[str],
         parent=None,
     ) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Capturas do relatório Bosello")
-        self.setMinimumSize(520, 420)
-        self.setStyleSheet(f"QDialog {{ background-color: {PALETTE.bg_surface}; }}")
+        super().__init__(
+            parent,
+            window_title="Capturas do relatório Bosello",
+            minimum_width=520,
+        )
+        self.setMinimumHeight(420)
 
         self._tiles: list[_CaptureTile] = []
         self._selected: set[str] = set()
 
-        title = QLabel("Adicionar capturas à seção")
-        title.setStyleSheet(heading_style(3))
-        hint = QLabel(
+        layout = self.create_root_layout()
+        self.add_dialog_header(
+            layout,
+            "Adicionar capturas à seção",
             "Estas imagens foram extraídas do PDF da máquina. "
-            "Remover uma foto da seção não apaga a captura — você pode adicioná-la de novo aqui."
+            "Remover uma foto da seção não apaga a captura — você pode adicioná-la de novo aqui.",
         )
-        hint.setWordWrap(True)
-        hint.setStyleSheet(caption_style())
 
         grid_host = QWidget()
         self._grid = QGridLayout(grid_host)
@@ -166,13 +167,9 @@ class BoselloCapturePickerDialog(QDialog):
         footer.addWidget(cancel)
         footer.addWidget(confirm)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.xl, SPACING.xl, SPACING.xl, SPACING.lg)
-        layout.setSpacing(SPACING.md)
-        layout.addWidget(title)
-        layout.addWidget(hint)
         layout.addWidget(scroll, stretch=1)
         layout.addWidget(self._summary)
+        self.add_dialog_divider(layout)
         layout.addLayout(footer)
 
         _ = section_id

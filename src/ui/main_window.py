@@ -22,8 +22,8 @@ from src.core.domain.ports import (
 from src.ui.accessibility import AppearanceManager
 from src.ui.components.feedback import confirm_action, show_friendly_error
 from src.ui.components.header import AppHeader
-from src.ui.components.modal_overlay import ModalOverlay
-from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog
+from src.ui.components.modal_presentation import present_modal_dialog
+from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog, HelpDialogMode
 from src.ui.features.home.dialogs.project_setup_dialog import ProjectSetupDialog
 from src.ui.styles import base_stylesheet
 from src.ui.controllers.app_state import AppState
@@ -106,6 +106,7 @@ class MainWindow(QMainWindow):
         self._header.forward_requested.connect(self._nav_controller.forward)
         self._header.home_requested.connect(self._go_home)
         self._header.help_requested.connect(self._open_help)
+        self._header.preferences_requested.connect(self._open_preferences)
         self._nav_controller.changed.connect(self._on_navigation_changed)
 
         self._home_view.new_document_requested.connect(self._open_project_setup)
@@ -145,12 +146,17 @@ class MainWindow(QMainWindow):
         focus_search.setContext(Qt.ShortcutContext.ApplicationShortcut)
         focus_search.activated.connect(self._home_view.focus_search)
 
-        clear_search = QShortcut(QKeySequence("Escape"), self)
-        clear_search.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        clear_search = QShortcut(QKeySequence("Escape"), self._home_view)
+        clear_search.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         clear_search.activated.connect(self._home_view.clear_search_and_filters)
 
     def _open_help(self) -> None:
-        HelpAccessibilityDialog(self).exec()
+        dialog = HelpAccessibilityDialog(self, mode=HelpDialogMode.HELP)
+        present_modal_dialog(self, dialog)
+
+    def _open_preferences(self) -> None:
+        dialog = HelpAccessibilityDialog(self, mode=HelpDialogMode.PREFERENCES)
+        present_modal_dialog(self, dialog)
 
     def _refresh_appearance(self) -> None:
         self.setStyleSheet(base_stylesheet())
@@ -237,37 +243,26 @@ class MainWindow(QMainWindow):
             return
 
         dialog = ProjectSetupDialog(self._parser, self._template_repo, parent=self)
-        host = self.centralWidget() or self
-        overlay = ModalOverlay(host, dialog)
-        dialog.set_overlay(overlay)
-
-        def on_finished(result: int) -> None:
-            overlay.deleteLater()
-            self._project_setup_dialog = None
-            if result != QDialog.DialogCode.Accepted:
-                return
-            data = dialog.get_result()
-            entries = data["pdf_entries"]
-            report_mode = data.get("report_mode", "auto")
-            if not entries and report_mode != "tomo_only":
-                return
-            self._workspace_vm.load_project(
-                data["client_project"],
-                entries,
-                template_id=data["template_id"],
-                report_mode=report_mode,
-                default_component=data.get("default_component", ""),
-            )
-            self._nav_controller.navigate_to(1)
-
         self._project_setup_dialog = dialog
-        overlay.show()
-        overlay.raise_()
-        dialog.finished.connect(on_finished)
-        dialog.setWindowModality(Qt.WindowModality.NonModal)
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
+        try:
+            result = present_modal_dialog(self, dialog)
+        finally:
+            self._project_setup_dialog = None
+        if result != QDialog.DialogCode.Accepted:
+            return
+        data = dialog.get_result()
+        entries = data["pdf_entries"]
+        report_mode = data.get("report_mode", "auto")
+        if not entries and report_mode != "tomo_only":
+            return
+        self._workspace_vm.load_project(
+            data["client_project"],
+            entries,
+            template_id=data["template_id"],
+            report_mode=report_mode,
+            default_component=data.get("default_component", ""),
+        )
+        self._nav_controller.navigate_to(1)
 
     def _open_template_editor(self, template_id: str) -> None:
         if self._stack.currentIndex() == 2 and self._template_editor_vm.is_dirty():

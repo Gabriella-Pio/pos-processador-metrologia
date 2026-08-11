@@ -70,6 +70,7 @@ class _VersionEntryWidget(QWidget):
 
     def _build_actions_menu(self) -> QMenu:
         menu = QMenu(self)
+        menu.setObjectName("AppPopupMenu")
         preview_action = QAction("Visualizar", self)
         restore_action = QAction("Restaurar e editar", self)
         export_action = QAction("Exportar esta versão", self)

@@ -31,6 +31,7 @@ from src.ui.components.feedback import (
     show_friendly_error,
     show_info,
 )
+from src.ui.components.modal_presentation import present_modal_dialog
 from src.ui.features.workspace.dialogs.save_template_dialog import SaveTemplateDialog
 from src.ui.features.workspace.dialogs.version_register_dialog import VersionRegisterDialog
 from src.ui.controllers.app_state import AppState
@@ -329,7 +330,7 @@ class WorkspaceView(QWidget):
             document.template_id,
             self,
         )
-        if dialog.exec() != dialog.DialogCode.Accepted:
+        if present_modal_dialog(self, dialog) != dialog.DialogCode.Accepted:
             return
         template_id = self._vm.save_current_as_template(
             dialog.template_name,
@@ -576,7 +577,7 @@ class WorkspaceView(QWidget):
             paths_in_section=section_image_paths(document, section_id),
             parent=self,
         )
-        if dialog.exec() != dialog.DialogCode.Accepted:
+        if present_modal_dialog(self, dialog) != dialog.DialogCode.Accepted:
             return
         selected = dialog.selected_paths()
         if not selected:
@@ -703,7 +704,7 @@ class WorkspaceView(QWidget):
         if document.control_info is not None:
             default_responsible = document.control_info.measured_by or ""
         dialog = VersionRegisterDialog(default_responsible, self)
-        if dialog.exec() != dialog.DialogCode.Accepted:
+        if present_modal_dialog(self, dialog) != dialog.DialogCode.Accepted:
             return
         responsible, description = dialog.get_values()
         self._vm.register_new_version(responsible, description)

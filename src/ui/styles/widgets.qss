@@ -209,12 +209,14 @@ QWidget#AppHeader {{
 }}
 
 /* @fragment header_help_btn */
-QPushButton#AppHeaderHelpBtn {{
+QPushButton#AppHeaderHelpBtn,
+QPushButton#AppHeaderSettingsBtn {{
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: {radius_md}px;
 }}
-QPushButton#AppHeaderHelpBtn:hover {{
+QPushButton#AppHeaderHelpBtn:hover,
+QPushButton#AppHeaderSettingsBtn:hover {{
     background: rgba(240, 67, 30, 0.22);
     border-color: rgba(240, 67, 30, 0.45);
 }}

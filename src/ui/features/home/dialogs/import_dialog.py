@@ -7,7 +7,6 @@ from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QKeyEvent, QResizeEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -19,10 +18,11 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from src.ui.components.buttons import IconButton, PrimaryButton, SecondaryButton
+from src.ui.components.app_dialog import AppDialog
+from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.components.icons import icon_close, icon_file_pdf
 from src.ui.components.inputs import LabeledLineEdit
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, heading_style
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
 
 
 class _PdfListRow(QFrame):
@@ -242,49 +242,34 @@ class DropZone(QListWidget):
         return [Path(self.item(i).data(Qt.ItemDataRole.UserRole)) for i in range(self.count())]
 
 
-class ImportDialog(QDialog):
+class ImportDialog(AppDialog):
     """Fluxo de importação em lote ('Novo PDF / Processar Lote')."""
 
     def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        p = PALETTE
-        self.setWindowTitle("Importar Relatórios PDF")
-        self.setMinimumSize(540, 520)
-        self.setStyleSheet(f"""
-            QDialog {{
-                background-color: {p.bg_surface};
-            }}
-        """)
+        super().__init__(parent, window_title="Importar Relatórios PDF", minimum_width=540)
+        self.setMinimumHeight(560)
+        self._surface.setMinimumHeight(520)
 
         self._client_field = LabeledLineEdit("Cliente / Projeto", required=True)
         self._component_field = LabeledLineEdit("Componente Avaliado", required=True)
         self._counter_label = QLabel("Nenhum arquivo selecionado")
         self._counter_label.setStyleSheet(
-            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
+            f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
         )
         self._warning_label = QLabel("")
         self._warning_label.setWordWrap(True)
         self._warning_label.setStyleSheet(
-            f"color: {p.warning}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
+            f"color: {PALETTE.warning}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
         )
         self._drop_zone = DropZone(self._counter_label, self._warning_label)
         self._build_ui()
 
     def _build_ui(self) -> None:
-        p = PALETTE
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.xl, SPACING.xl, SPACING.xl, SPACING.lg)
-        layout.setSpacing(SPACING.md)
-
-        title = QLabel("Importar relatórios PDF")
-        title.setStyleSheet(heading_style(2))
-
-        subtitle = QLabel(
-            "Arraste um ou mais PDFs brutos gerados pelos equipamentos ZEISS, ou clique em 'Selecionar'."
-        )
-        subtitle.setWordWrap(True)
-        subtitle.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
+        layout = self.create_root_layout()
+        self.add_dialog_header(
+            layout,
+            "Importar relatórios PDF",
+            "Arraste um ou mais PDFs brutos gerados pelos equipamentos ZEISS, ou clique em 'Selecionar'.",
         )
 
         browse_row = QHBoxLayout()
@@ -298,20 +283,13 @@ class ImportDialog(QDialog):
         browse_row.addWidget(self._counter_label)
         browse_row.addStretch()
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
         layout.addWidget(self._drop_zone, stretch=1)
         layout.addLayout(browse_row)
         layout.addWidget(self._warning_label)
-
-        sep = QLabel()
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background-color: {p.border};")
-        layout.addWidget(sep)
-
         layout.addWidget(self._client_field)
         layout.addWidget(self._component_field)
-        layout.addSpacing(SPACING.sm)
+
+        self.add_dialog_divider(layout)
         layout.addLayout(self._build_footer())
 
     def _build_footer(self) -> QHBoxLayout:

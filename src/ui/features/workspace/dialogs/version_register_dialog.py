@@ -1,29 +1,37 @@
 """Diálogo para registrar nova versão do relatório."""
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QVBoxLayout
+from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout
 
+from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.components.inputs import LabeledLineEdit
-from src.ui.styles import PALETTE, SPACING, heading_style
+from src.ui.styles import SPACING
 
 
-class VersionRegisterDialog(QDialog):
+class VersionRegisterDialog(AppDialog):
     def __init__(self, responsible_default: str = "", parent=None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Nova versão")
-        self.setMinimumWidth(440)
-        self.setStyleSheet(f"QDialog {{ background-color: {PALETTE.bg_surface}; }}")
+        super().__init__(parent, window_title="Nova versão", minimum_width=480)
 
-        title = QLabel("Registrar nova versão")
-        title.setStyleSheet(heading_style(3))
+        layout = self.create_root_layout()
+        self.add_dialog_header(
+            layout,
+            "Registrar nova versão",
+            "Informe o responsável e descreva as alterações desta revisão.",
+        )
 
         self._responsible_field = LabeledLineEdit("Responsável", required=True)
         self._responsible_field.set_text(responsible_default)
         self._message_field = LabeledLineEdit("Descreva as alterações", required=True)
-        self._message_field.field.setPlaceholderText("Ex.: Ajuste na conclusão e novas fotos da seção resultados")
+        self._message_field.field.setPlaceholderText(
+            "Ex.: Ajuste na conclusão e novas fotos da seção resultados"
+        )
+        layout.addWidget(self._responsible_field)
+        layout.addWidget(self._message_field)
 
+        self.add_dialog_divider(layout)
         footer = QHBoxLayout()
+        footer.setSpacing(SPACING.sm)
         cancel = SecondaryButton("Cancelar")
         cancel.clicked.connect(self.reject)
         confirm = PrimaryButton("Registrar")
@@ -31,13 +39,6 @@ class VersionRegisterDialog(QDialog):
         footer.addStretch(1)
         footer.addWidget(cancel)
         footer.addWidget(confirm)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.xl, SPACING.xl, SPACING.xl, SPACING.lg)
-        layout.setSpacing(SPACING.md)
-        layout.addWidget(title)
-        layout.addWidget(self._responsible_field)
-        layout.addWidget(self._message_field)
         layout.addLayout(footer)
 
     def _on_confirm(self) -> None:

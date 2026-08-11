@@ -1,6 +1,14 @@
 """Textos de ajuda contextual para o editor de seções."""
 from __future__ import annotations
 
+import html
+import re
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
+
 _GENERAL = """\
 **Edição de seção**
 • O preview à direita atualiza automaticamente após cada alteração.
@@ -67,3 +75,96 @@ def build_help_text(section_id: str, *, has_table: bool = False, has_media: bool
     if has_media or section_id in ("introducao", "grafica", "tomografia"):
         parts.append(_MEDIA.strip())
     return "\n\n".join(parts)
+
+
+def _inline_rich(text: str) -> str:
+    """Converte **negrito** e `{chaves}` para rich text do QLabel."""
+    escaped = html.escape(text, quote=False)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
+    escaped = re.sub(
+        r"\{([^}]+)\}",
+        rf'<span style="color:{PALETTE.senai_orange}; font-family:monospace;">'
+        r"{\1}</span>",
+        escaped,
+    )
+    return escaped
+
+
+def _section_title_label(title: str) -> QLabel:
+    label = QLabel(title)
+    label.setStyleSheet(
+        f"color: {PALETTE.text_primary}; font-size: {TYPOGRAPHY.size_body}px; "
+        f"font-weight: {TYPOGRAPHY.weight_semibold}; background: transparent; border: none;"
+    )
+    return label
+
+
+def _bullet_label(text: str) -> QLabel:
+    label = QLabel(f"• {_inline_rich(text)}")
+    label.setWordWrap(True)
+    label.setTextFormat(Qt.TextFormat.RichText)
+    label.setStyleSheet(
+        f"color: {PALETTE.text_secondary}; font-size: {TYPOGRAPHY.size_body}px; "
+        f"background: transparent; border: none; padding-left: 2px;"
+    )
+    return label
+
+
+def _hint_label(text: str) -> QLabel:
+    label = QLabel(_inline_rich(text))
+    label.setWordWrap(True)
+    label.setTextFormat(Qt.TextFormat.RichText)
+    label.setStyleSheet(
+        f"color: {PALETTE.text_secondary}; font-size: {TYPOGRAPHY.size_body}px; "
+        f"background: transparent; border: none; line-height: 1.45;"
+    )
+    return label
+
+
+def _section_card(title: str, bullets: list[str], prose: list[str]) -> QFrame:
+    frame = QFrame()
+    frame.setObjectName("AppDialogInfoSection")
+    layout = QVBoxLayout(frame)
+    layout.setContentsMargins(SPACING.md, SPACING.md, SPACING.md, SPACING.md)
+    layout.setSpacing(SPACING.sm)
+    layout.addWidget(_section_title_label(title))
+    for bullet in bullets:
+        layout.addWidget(_bullet_label(bullet))
+    for paragraph in prose:
+        layout.addWidget(_hint_label(paragraph))
+    return frame
+
+
+def build_help_content_widget(text: str, parent: QWidget | None = None) -> QWidget:
+    """Monta o corpo da ajuda com seções e bullets (sem QTextEdit)."""
+    page = QWidget(parent)
+    page.setObjectName("AppDialogInfoContent")
+    outer = QVBoxLayout(page)
+    outer.setContentsMargins(0, 0, 0, 0)
+    outer.setSpacing(SPACING.md)
+
+    for raw_block in text.strip().split("\n\n"):
+        block = raw_block.strip()
+        if not block:
+            continue
+
+        lines = [line.strip() for line in block.split("\n") if line.strip()]
+        if not lines:
+            continue
+
+        first = lines[0]
+        if first.startswith("**") and first.endswith("**"):
+            title = first.strip("*").strip()
+            bullets: list[str] = []
+            prose: list[str] = []
+            for line in lines[1:]:
+                if line.startswith("•"):
+                    bullets.append(line.lstrip("•").strip())
+                else:
+                    prose.append(line)
+            outer.addWidget(_section_card(title, bullets, prose))
+        else:
+            outer.addWidget(_hint_label(" ".join(lines)))
+
+    outer.addStretch(1)
+    return page

@@ -1,13 +1,12 @@
 """Diálogo de ajuda (atalhos) e painel de acessibilidade."""
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
-    QComboBox,
-    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -19,8 +18,10 @@ from PyQt6.QtWidgets import (
 )
 
 from src.ui.accessibility import FONT_SCALE_PRESETS, AppearanceManager, AppearanceSettings
+from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.components.feedback import confirm_action, confirm_dangerous_action, show_info
+from src.ui.components.inputs import ThemedComboBox
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, heading_style, caption_style
 from src.core.application.storage_cleanup import (
     DEFAULT_DB_PATH,
@@ -32,6 +33,12 @@ from src.core.application.storage_cleanup import (
     format_storage_size,
     list_stale_projects,
 )
+
+
+class HelpDialogMode(Enum):
+    HELP = "help"
+    PREFERENCES = "preferences"
+
 
 ShortcutRow = tuple[str, str, str]
 
@@ -70,92 +77,6 @@ HELP_TIPS: tuple[str, ...] = (
 )
 
 
-def _dialog_stylesheet() -> str:
-    p = PALETTE
-    s = SPACING
-    return f"""
-        QDialog {{
-            background-color: {p.bg_surface};
-        }}
-        QTabWidget::pane {{
-            border: 1px solid {p.border};
-            border-radius: {s.radius_md}px;
-            background: {p.bg_surface_alt};
-            top: -1px;
-        }}
-        QTabBar::tab {{
-            background: transparent;
-            color: {p.text_muted};
-            border: none;
-            border-bottom: 2px solid transparent;
-            padding: 10px 18px;
-            font-size: {TYPOGRAPHY.size_body}px;
-            font-weight: {TYPOGRAPHY.weight_medium};
-            margin-right: 4px;
-        }}
-        QTabBar::tab:selected {{
-            color: {p.senai_orange};
-            border-bottom: 2px solid {p.senai_orange};
-            font-weight: {TYPOGRAPHY.weight_semibold};
-        }}
-        QTabBar::tab:hover {{
-            color: {p.text_primary};
-        }}
-        QScrollArea {{
-            background: transparent;
-            border: none;
-        }}
-        QRadioButton {{
-            color: {p.text_primary};
-            spacing: 10px;
-            font-size: {TYPOGRAPHY.size_body}px;
-            padding: 4px 0;
-        }}
-        QRadioButton::indicator {{
-            width: 16px;
-            height: 16px;
-        }}
-    """
-
-
-def _combo_stylesheet() -> str:
-    p = PALETTE
-    s = SPACING
-    return f"""
-        QComboBox {{
-            background: {p.bg_surface};
-            color: {p.text_primary};
-            border: 1px solid {p.border_strong};
-            border-radius: {s.radius_sm}px;
-            padding: 10px 36px 10px 12px;
-            font-size: {TYPOGRAPHY.size_body}px;
-            min-height: 24px;
-        }}
-        QComboBox:hover {{
-            border-color: {p.senai_blue_light};
-            background: {p.bg_elevated};
-        }}
-        QComboBox::drop-down {{
-            border: none;
-            width: 28px;
-        }}
-        QComboBox::down-arrow {{
-            image: none;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 6px solid {p.text_muted};
-            margin-right: 10px;
-        }}
-        QComboBox QAbstractItemView {{
-            background: {p.bg_elevated};
-            color: {p.text_primary};
-            border: 1px solid {p.border_strong};
-            selection-background-color: rgba(240, 67, 30, 0.25);
-            outline: none;
-        }}
-    """
-
-
 def _scroll_page(content: QWidget) -> QScrollArea:
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
@@ -165,67 +86,73 @@ def _scroll_page(content: QWidget) -> QScrollArea:
     return scroll
 
 
-class HelpAccessibilityDialog(QDialog):
-    """Centraliza atalhos do sistema e opções de acessibilidade."""
+class HelpAccessibilityDialog(AppDialog):
+    """Atalhos (modo Ajuda) ou Acessibilidade + Armazenamento (modo Preferências)."""
 
     def __init__(
         self,
         parent=None,
         *,
+        mode: HelpDialogMode = HelpDialogMode.HELP,
         initial_tab: int = 0,
         db_path: str | Path = DEFAULT_DB_PATH,
     ) -> None:
-        super().__init__(parent)
+        if mode is HelpDialogMode.HELP:
+            super().__init__(parent, window_title="Ajuda", minimum_width=580)
+            self.setMinimumSize(580, 460)
+            self.resize(640, 520)
+        else:
+            super().__init__(parent, window_title="Preferências", minimum_width=580)
+            self.setMinimumSize(580, 480)
+            self.resize(640, 560)
+        self._mode = mode
         self._db_path = Path(db_path)
         self._manager = AppearanceManager.instance()
         self._draft = self._manager.settings
-        self.setWindowTitle("Ajuda e Acessibilidade")
-        self.setMinimumSize(580, 480)
-        self.resize(640, 560)
         self._build_ui()
-        self._tabs.setCurrentIndex(initial_tab)
+        if hasattr(self, "_tabs"):
+            self._tabs.setCurrentIndex(initial_tab)
         self._sync_controls_from_settings()
 
     def _build_ui(self) -> None:
-        p = PALETTE
-        self.setStyleSheet(_dialog_stylesheet())
+        layout = self.create_root_layout()
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.xl, SPACING.xl, SPACING.xl, SPACING.xl)
-        layout.setSpacing(SPACING.md)
+        if self._mode is HelpDialogMode.HELP:
+            self.add_dialog_header(
+                layout,
+                "Ajuda",
+                "Atalhos de teclado e dicas de uso do laboratório.",
+            )
+        else:
+            self.add_dialog_header(
+                layout,
+                "Preferências",
+                "Ajustes visuais, acessibilidade e limpeza de armazenamento local.",
+            )
 
-        title = QLabel("Ajuda e Acessibilidade")
-        title.setStyleSheet(heading_style(1))
-        layout.addWidget(title)
+        if self._mode is HelpDialogMode.HELP:
+            layout.addWidget(_scroll_page(self._build_shortcuts_tab()), stretch=1)
+        else:
+            self._tabs = QTabWidget()
+            self._tabs.setDocumentMode(True)
+            self._tabs.addTab(
+                _scroll_page(self._build_accessibility_tab()),
+                "Acessibilidade",
+            )
+            self._tabs.addTab(
+                _scroll_page(self._build_storage_tab()),
+                "Armazenamento",
+            )
+            layout.addWidget(self._tabs, stretch=1)
 
-        subtitle = QLabel(
-            "Atalhos de teclado, dicas de uso e ajustes visuais para melhor leitura."
-        )
-        subtitle.setWordWrap(True)
-        subtitle.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_body}px; "
-            f"background: transparent; border: none;"
-        )
-        layout.addWidget(subtitle)
-
-        self._tabs = QTabWidget()
-        self._tabs.setDocumentMode(True)
-        self._tabs.addTab(_scroll_page(self._build_shortcuts_tab()), "Atalhos")
-        self._tabs.addTab(_scroll_page(self._build_accessibility_tab()), "Acessibilidade")
-        self._tabs.addTab(_scroll_page(self._build_storage_tab()), "Armazenamento")
-        layout.addWidget(self._tabs, stretch=1)
-
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.HLine)
-        divider.setFixedHeight(1)
-        divider.setStyleSheet(f"background: {p.border}; border: none;")
-        layout.addWidget(divider)
+        self.add_dialog_divider(layout)
 
         footer = QHBoxLayout()
         footer.setSpacing(SPACING.sm)
-        reset_btn = SecondaryButton("Restaurar padrão")
-        reset_btn.clicked.connect(self._reset_defaults)
-        footer.addWidget(reset_btn)
+        if self._mode is HelpDialogMode.PREFERENCES:
+            reset_btn = SecondaryButton("Restaurar padrão")
+            reset_btn.clicked.connect(self._reset_defaults)
+            footer.addWidget(reset_btn)
         footer.addStretch(1)
         close_btn = PrimaryButton("Fechar")
         close_btn.setMinimumWidth(120)
@@ -370,9 +297,8 @@ class HelpAccessibilityDialog(QDialog):
             "Tamanho da fonte",
             "Ajuste o zoom global da interface.",
         ))
-        self._font_combo = QComboBox()
+        self._font_combo = ThemedComboBox()
         self._font_combo.setMinimumHeight(44)
-        self._font_combo.setStyleSheet(_combo_stylesheet())
         for label, scale in FONT_SCALE_PRESETS:
             self._font_combo.addItem(label, scale)
         outer.addWidget(self._font_combo)
@@ -467,8 +393,7 @@ class HelpAccessibilityDialog(QDialog):
         ))
         stale_row = QHBoxLayout()
         stale_row.setSpacing(SPACING.sm)
-        self._stale_months_combo = QComboBox()
-        self._stale_months_combo.setStyleSheet(_combo_stylesheet())
+        self._stale_months_combo = ThemedComboBox()
         for months in (3, 6, 12):
             self._stale_months_combo.addItem(f"Mais de {months} meses", months)
         self._stale_months_combo.setCurrentIndex(1)
@@ -649,6 +574,8 @@ class HelpAccessibilityDialog(QDialog):
         return box
 
     def _sync_controls_from_settings(self) -> None:
+        if self._mode is HelpDialogMode.HELP:
+            return
         settings = self._draft
         self._theme_group.blockSignals(True)
         self._contrast_group.blockSignals(True)
@@ -699,5 +626,4 @@ class HelpAccessibilityDialog(QDialog):
 
     def _refresh_widget_styles(self) -> None:
         """Atualiza estilos do próprio diálogo após mudança de tema."""
-        self.setStyleSheet(_dialog_stylesheet())
-        self._font_combo.setStyleSheet(_combo_stylesheet())
+        self._refresh_preview_styles()

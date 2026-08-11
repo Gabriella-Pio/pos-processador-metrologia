@@ -370,14 +370,11 @@ class LayoutTemplateSelector(QWidget):
         self._dirty_dot.setToolTip("Layout alterado — salve pelo menu ⋯")
         self._dirty_dot.hide()
 
-        self._combo = QComboBox()
-        self._combo.setObjectName("FilterCombo")
+        self._combo = ThemedComboBox()
         self._combo.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self._combo.setMinimumWidth(200)
         self._combo.setMaximumWidth(280)
         self._combo.setToolTip("Layout aplicado ao relatório")
-        popup = self._combo.view()
-        popup.setObjectName("FilterComboPopup")
 
         row.addWidget(self._label)
         row.addWidget(self._dirty_dot)
@@ -391,3 +388,44 @@ class LayoutTemplateSelector(QWidget):
         self._dirty_dot.setVisible(dirty)
         tip = "Layout alterado — use ⋯ → Salvar layout…" if dirty else "Layout aplicado ao relatório"
         self._combo.setToolTip(tip)
+
+
+_POPUP_MAX_ROWS = 8
+_POPUP_ITEM_HEIGHT = 36
+
+
+def configure_themed_combo(combo: QComboBox) -> None:
+    """Aplica o mesmo visual dos filtros refinados e do menu ⋯."""
+    combo.setObjectName("FilterCombo")
+    view = combo.view()
+    view.setObjectName("FilterComboPopup")
+    combo.setMaxVisibleItems(_POPUP_MAX_ROWS)
+    view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    view.setUniformItemSizes(True)
+    view.setMouseTracking(True)
+
+
+class ThemedComboBox(QComboBox):
+    """Combo com popup limitado, scroll e hover igual ao menu ⋯."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        configure_themed_combo(self)
+
+    def showPopup(self) -> None:
+        view = self.view()
+        view.setMinimumWidth(self.width())
+        super().showPopup()
+        popup = view.window()
+        if popup is None or popup is self:
+            return
+        popup.setObjectName("FilterComboPopupWindow")
+        popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        rows = min(max(self.count(), 1), self.maxVisibleItems())
+        row_height = (
+            max(view.sizeHintForRow(0), _POPUP_ITEM_HEIGHT)
+            if self.count() > 0
+            else _POPUP_ITEM_HEIGHT
+        )
+        popup.setMaximumHeight(rows * row_height + 14)

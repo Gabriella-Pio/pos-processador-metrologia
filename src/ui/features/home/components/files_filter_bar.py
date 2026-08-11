@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.ui.components.inputs import ThemedComboBox, configure_themed_combo
 from src.ui.features.home.models.dashboard import (
     PERIOD_7D,
     PERIOD_30D,
@@ -28,82 +29,11 @@ from src.ui.features.home.models.dashboard import (
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
 
 
-def _combo_style() -> str:
-    p = PALETTE
-    s = SPACING
-    return f"""
-        QComboBox#FilterCombo {{
-            background: {p.bg_surface};
-            color: {p.text_primary};
-            border: 1px solid {p.border};
-            border-radius: {s.radius_sm}px;
-            padding: 6px 28px 6px 10px;
-            font-size: 13px;
-            min-height: 20px;
-        }}
-        QComboBox#FilterCombo:hover {{
-            border-color: {p.border_strong};
-            background: {p.bg_surface_alt};
-        }}
-        QComboBox#FilterCombo:focus {{
-            border: 1.5px solid {p.senai_blue_light};
-        }}
-        QComboBox#FilterCombo::drop-down {{
-            border: none;
-            width: 22px;
-        }}
-        QComboBox#FilterCombo::down-arrow {{
-            image: none;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 5px solid {p.text_muted};
-            margin-right: 8px;
-        }}
-    """
-
-
-def _combo_popup_style() -> str:
-    p = PALETTE
-    s = SPACING
-    return f"""
-        QListView#FilterComboPopup {{
-            background: {p.bg_elevated};
-            color: {p.text_primary};
-            border: 1px solid {p.border_strong};
-            border-radius: {s.radius_sm}px;
-            padding: 4px;
-            outline: none;
-        }}
-        QListView#FilterComboPopup::item {{
-            padding: 8px 12px;
-            border-radius: 4px;
-            min-height: 24px;
-        }}
-        QListView#FilterComboPopup::item:hover {{
-            background: {p.bg_surface_alt};
-        }}
-        QListView#FilterComboPopup::item:selected {{
-            background: rgba(240, 67, 30, 0.22);
-            color: {p.text_primary};
-        }}
-    """
-
-
-class _FilterCombo(QComboBox):
+class _FilterCombo(ThemedComboBox):
     def __init__(self, label: str, parent=None) -> None:
         super().__init__(parent)
-        self.setObjectName("FilterCombo")
-        self.setStyleSheet(_combo_style())
         self.setMinimumWidth(148)
         self._field_label = label
-        popup = self.view()
-        popup.setObjectName("FilterComboPopup")
-        popup.setStyleSheet(_combo_popup_style())
-
-    def showPopup(self) -> None:
-        popup = self.view()
-        popup.setStyleSheet(_combo_popup_style())
-        super().showPopup()
 
     def field_label(self) -> str:
         return self._field_label
@@ -309,14 +239,12 @@ class FilesFilterBar(QWidget):
 
     def refresh_appearance(self) -> None:
         p = PALETTE
-        popup_style = _combo_popup_style()
         self._section_title.setStyleSheet(
             f"color: {p.text_muted}; font-size: 11px; font-weight: {TYPOGRAPHY.weight_semibold}; "
             f"letter-spacing: 0.8px; background: transparent; border: none;"
         )
         for combo in (self._period, self._project, self._component, self._sort):
-            combo.setStyleSheet(_combo_style())
-            combo.view().setStyleSheet(popup_style)
+            configure_themed_combo(combo)
         self._clear_btn.setStyleSheet(f"""
             QPushButton {{
                 color: {p.text_muted};

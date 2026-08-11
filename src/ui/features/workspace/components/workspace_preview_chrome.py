@@ -73,6 +73,7 @@ def build_workspace_project_tabs_strip(
     layout.addWidget(export_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
 
     preview_menu = QMenu(row)
+    preview_menu.setObjectName("AppPopupMenu")
     save_layout_action = preview_menu.addAction("Salvar layout…")
     save_layout_action.triggered.connect(on_save_layout)
     change_layout_action = preview_menu.addAction("Alterar layout…")

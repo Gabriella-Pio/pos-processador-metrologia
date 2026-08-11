@@ -5,7 +5,6 @@ from pathlib import Path
 
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -27,12 +26,14 @@ from src.core.domain.table_row_registry import (
 )
 from src.core.domain.section_schema import is_custom_section_id
 from src.ui.components.buttons import IconButton, SecondaryButton
+from src.ui.components.modal_presentation import present_modal_dialog
 from src.ui.components.icons import icon_close, icon_help
 from src.ui.components.panels import ImageManagerPanel
 from src.ui.components.panels.image_annotation_dialog import ImageAnnotationDialog
 from src.ui.components.placeholder_field import PlaceholderTextEdit
 from src.ui.shared.report_editor.sidebar_chrome import editor_panel_header
 from src.ui.styles import SPACING, caption_style, sidebar_panel_style
+from src.ui.shared.report_editor.section_help_dialog import SectionHelpDialog
 from src.ui.shared.report_editor.draggable_table_rows_editor import DraggableTableRowsEditor
 from src.ui.shared.report_editor.section_form_builder import SectionFormBuilder
 from src.ui.shared.report_editor.section_tabs_builder import SectionTabPages, SectionTabsBuilder
@@ -466,21 +467,8 @@ class SectionEditView(QFrame):
             has_table=any(b.kind == "tables" for b in blocks),
             has_media=any(b.kind in ("photos", "graphics") for b in blocks),
         )
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Ajuda — edição de seção")
-        dlg.setMinimumWidth(420)
-        body = QTextEdit()
-        body.setReadOnly(True)
-        body.setMarkdown(text)
-        layout = QVBoxLayout(dlg)
-        layout.addWidget(body)
-        close = SecondaryButton("Fechar")
-        close.clicked.connect(dlg.accept)
-        row = QHBoxLayout()
-        row.addStretch(1)
-        row.addWidget(close)
-        layout.addLayout(row)
-        dlg.exec()
+        dialog = SectionHelpDialog(text, self)
+        present_modal_dialog(self, dialog)
 
     def current_section_id(self) -> str | None:
         return self._section_id

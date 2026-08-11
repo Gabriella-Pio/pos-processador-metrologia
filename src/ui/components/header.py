@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.ui.components.icons import icon_help
+from src.ui.components.icons import icon_cog, icon_help
 from src.ui.styles import (
     PALETTE,
     SPACING,
@@ -135,6 +135,7 @@ class AppHeader(QWidget):
     forward_requested = pyqtSignal()
     home_requested = pyqtSignal()
     help_requested = pyqtSignal()
+    preferences_requested = pyqtSignal()
 
     def __init__(
         self,
@@ -150,6 +151,7 @@ class AppHeader(QWidget):
 
         self._badge_label = QLabel()
         self._help_btn: QPushButton | None = None
+        self._settings_btn: QPushButton | None = None
         self._back_link: Optional[_TextNavLink] = None
         self._forward_link: Optional[_TextNavLink] = None
         self._nav_divider: Optional[QFrame] = None
@@ -223,13 +225,24 @@ class AppHeader(QWidget):
         layout.addLayout(text_container)
         layout.addStretch(1)
 
+        self._settings_btn = QPushButton()
+        self._settings_btn.setObjectName("AppHeaderSettingsBtn")
+        self._settings_btn.setIcon(icon_cog())
+        self._settings_btn.setIconSize(QSize(18, 18))
+        self._settings_btn.setFixedSize(38, 38)
+        self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._settings_btn.setToolTip("Preferências (acessibilidade e armazenamento)")
+        self._settings_btn.clicked.connect(self.preferences_requested.emit)
+        self._apply_settings_button_style()
+        layout.addWidget(self._settings_btn)
+
         self._help_btn = QPushButton()
         self._help_btn.setObjectName("AppHeaderHelpBtn")
         self._help_btn.setIcon(icon_help())
         self._help_btn.setIconSize(QSize(18, 18))
         self._help_btn.setFixedSize(38, 38)
         self._help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._help_btn.setToolTip("Ajuda e acessibilidade (F1)")
+        self._help_btn.setToolTip("Ajuda (F1)")
         self._help_btn.clicked.connect(self.help_requested.emit)
         self._apply_help_button_style()
         layout.addWidget(self._help_btn)
@@ -323,6 +336,11 @@ class AppHeader(QWidget):
         if self._nav_divider:
             self._nav_divider.setVisible(show_nav)
 
+    def _apply_settings_button_style(self) -> None:
+        if self._settings_btn is None:
+            return
+        self._settings_btn.setStyleSheet(header_help_button_style())
+
     def _apply_help_button_style(self) -> None:
         if self._help_btn is None:
             return
@@ -335,6 +353,7 @@ class AppHeader(QWidget):
     def refresh_appearance(self) -> None:
         """Reaplica estilos após mudança de tema/contraste/fonte."""
         self.setStyleSheet(header_gradient_style())
+        self._apply_settings_button_style()
         self._apply_help_button_style()
         self._apply_badge_style()
         for btn in self._trailing_logo_buttons:

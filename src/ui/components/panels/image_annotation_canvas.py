@@ -195,6 +195,7 @@ class ImageAnnotationCanvas(QWidget):
 
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
+        painter.setClipRect(self.rect())
         painter.fillRect(self.rect(), QColor(PALETTE.bg_surface_alt))
 
         if self._pixmap.isNull():

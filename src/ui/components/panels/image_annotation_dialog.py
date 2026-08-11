@@ -4,7 +4,6 @@ from __future__ import annotations
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import (
-    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -16,26 +15,25 @@ from PyQt6.QtWidgets import (
 )
 
 from src.core.domain.ports import ReportImage
+from src.ui.components.app_dialog import AppDialog, present_app_dialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.components.panels.annotation_toolbar import AnnotationToolbar
 from src.ui.components.panels.image_annotation_canvas import ImageAnnotationCanvas
 from src.ui.components.panels.marker_legend_panel import MarkerLegendPanel
 from src.ui.components.panels.photo_pdf_preview import PhotoPdfPreviewPanel
 from src.ui.components.placeholder_field import PlaceholderTextEdit
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, caption_style
+from src.ui.styles import SPACING, caption_style
 
 
-class ImageAnnotationDialog(QDialog):
+class ImageAnnotationDialog(AppDialog):
     edits_changed = pyqtSignal(object)
     caption_changed = pyqtSignal(object, str)
     photo_navigated = pyqtSignal(object)
 
     def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self.setObjectName("ImageAnnotationDialog")
-        self.setWindowTitle("Editar fotografia")
-        self.setMinimumSize(920, 760)
-        self.resize(1020, 820)
+        super().__init__(parent, window_title="Editar fotografia", minimum_width=960)
+        self.setMinimumSize(1040, 920)
+        self.resize(1060, 940)
         self.setModal(True)
         self._image: ReportImage | None = None
         self._gallery: list[ReportImage] = []
@@ -46,14 +44,9 @@ class ImageAnnotationDialog(QDialog):
         self._caption_debounce.setInterval(450)
         self._caption_debounce.timeout.connect(self._flush_caption)
 
-        self._title = QLabel()
-        self._title.setObjectName("GlobalFieldLabel")
-        self._hint = QLabel(
-            "Atalhos: Selecionar · S/C/T/N ferramentas · ← → trocar foto · Del apagar · "
-            "Ctrl+C/V copiar/colar · Ctrl+Z desfazer"
-        )
-        self._hint.setWordWrap(True)
-        self._hint.setObjectName("SidebarHint")
+        self._photo_label = QLabel()
+        self._photo_label.setObjectName("SidebarHint")
+        self._photo_label.setStyleSheet(caption_style())
 
         self._caption_label = QLabel("Legenda da foto (no PDF)")
         self._caption_label.setObjectName("GlobalFieldLabel")
@@ -61,7 +54,7 @@ class ImageAnnotationDialog(QDialog):
         self._caption_edit.text_changed.connect(self._on_caption_changed)
 
         self._canvas = ImageAnnotationCanvas()
-        self._canvas.setMinimumHeight(340)
+        self._canvas.setMinimumHeight(360)
         self._canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._canvas.edits_changed.connect(self._on_canvas_edits_changed)
 
@@ -87,18 +80,27 @@ class ImageAnnotationDialog(QDialog):
         legend_scroll.setWidgetResizable(True)
         legend_scroll.setFrameShape(QFrame.Shape.NoFrame)
         legend_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        legend_scroll.setMaximumHeight(120)
+        legend_scroll.setMaximumHeight(112)
         legend_scroll.setWidget(self._legend_panel)
 
         bottom_row = QFrame()
         bottom_row.setObjectName("ImageAnnotationBottomRow")
-        bottom_row.setMinimumHeight(110)
         bottom_row.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         bottom_layout = QHBoxLayout(bottom_row)
-        bottom_layout.setContentsMargins(0, SPACING.xs, 0, 0)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(SPACING.sm)
         bottom_layout.addWidget(legend_scroll, stretch=1)
         bottom_layout.addWidget(self._pdf_preview, stretch=0)
+
+        editor_host = QWidget()
+        editor_host.setObjectName("ImageAnnotationEditorHost")
+        editor_host.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        editor_layout = QVBoxLayout(editor_host)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.setSpacing(SPACING.sm)
+        editor_layout.addWidget(self._toolbar)
+        editor_layout.addWidget(self._canvas, stretch=1)
+        editor_layout.addWidget(bottom_row)
 
         self._prev_btn = SecondaryButton("← Anterior")
         self._prev_btn.clicked.connect(self._show_previous)
@@ -107,41 +109,34 @@ class ImageAnnotationDialog(QDialog):
         self._position_label = QLabel()
         self._position_label.setObjectName("SidebarHint")
 
-        done_btn = PrimaryButton("Concluído")
-        done_btn.clicked.connect(self.accept)
+        layout = self.create_root_layout()
+        self.add_dialog_header(
+            layout,
+            "Editar fotografia",
+            "Atalhos: Selecionar · S/C/T/N ferramentas · ← → trocar foto · Del apagar · "
+            "Ctrl+C/V copiar/colar · Ctrl+Z desfazer",
+        )
+        layout.addWidget(self._photo_label)
+        layout.addWidget(self._caption_label)
+        layout.addWidget(self._caption_edit)
+        layout.addWidget(editor_host, stretch=1)
+
+        self.add_dialog_divider(layout)
         footer = QHBoxLayout()
         footer.addWidget(self._prev_btn)
         footer.addWidget(self._next_btn)
         footer.addWidget(self._position_label)
         footer.addStretch(1)
+        done_btn = PrimaryButton("Concluído")
+        done_btn.clicked.connect(self.accept)
         footer.addWidget(done_btn)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.md, SPACING.md, SPACING.md, SPACING.md)
-        layout.setSpacing(SPACING.sm)
-        layout.addWidget(self._title)
-        layout.addWidget(self._hint)
-        layout.addWidget(self._caption_label)
-        layout.addWidget(self._caption_edit)
-        layout.addWidget(self._toolbar)
-        layout.addWidget(self._canvas, stretch=1)
-        layout.addWidget(bottom_row)
         layout.addLayout(footer)
 
-        self.setStyleSheet(
-            f"QDialog#ImageAnnotationDialog {{ background-color: {PALETTE.bg_surface}; }}"
-            f"QFrame#ImageAnnotationBottomRow {{ background-color: {PALETTE.bg_surface}; }}"
-            f"QScrollArea#MarkerLegendScroll {{ background-color: {PALETTE.bg_surface}; }}"
-        )
         self.refresh_appearance()
 
     def refresh_appearance(self) -> None:
-        self._hint.setStyleSheet(caption_style())
+        self._photo_label.setStyleSheet(caption_style())
         self._position_label.setStyleSheet(caption_style())
-        self._title.setStyleSheet(
-            f"color: {PALETTE.text_primary}; font-size: {TYPOGRAPHY.size_body}px; "
-            f"font-weight: {TYPOGRAPHY.weight_semibold}; background: transparent;"
-        )
         self._prev_btn.refresh_appearance()
         self._next_btn.refresh_appearance()
         self._toolbar.refresh_appearance()
@@ -160,7 +155,7 @@ class ImageAnnotationDialog(QDialog):
         start = image if image is not None else self._gallery[0]
         self._gallery_index = self._index_of(start)
         self._show_current()
-        self.exec()
+        present_app_dialog(self.parentWidget(), self)
 
     def _index_of(self, image: ReportImage) -> int:
         target = str(image.image_path)
@@ -174,7 +169,7 @@ class ImageAnnotationDialog(QDialog):
             return
         self._flush_caption()
         self._image = self._gallery[self._gallery_index]
-        self._title.setText(f"Editar fotografia — {self._image.image_path.name}")
+        self._photo_label.setText(self._image.image_path.name)
         self._loading_caption = True
         self._caption_edit.set_text(self._image.caption or "", force=True)
         self._loading_caption = False

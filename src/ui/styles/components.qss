@@ -94,16 +94,16 @@ QWidget#HomeTabBarShell[stuck="true"] {{
     border-bottom: 1px solid {border};
 }}
 QComboBox#FilterCombo {{
-    background-color: {bg_surface};
-    border: 1px solid {border};
+    background-color: {bg_elevated};
+    border: 1px solid {border_strong};
     border-radius: {radius_sm}px;
-    padding: 6px 28px 6px 10px;
+    padding: 8px 28px 8px 12px;
     color: {text_primary};
-    min-height: 20px;
+    min-height: 22px;
 }}
 QComboBox#FilterCombo:hover {{
     border-color: {border_strong};
-    background-color: {bg_surface_alt};
+    background-color: rgba(240, 67, 30, 0.10);
 }}
 QComboBox#FilterCombo:focus {{
     border: 1.5px solid {senai_blue_light};
@@ -111,6 +111,13 @@ QComboBox#FilterCombo:focus {{
 QComboBox#FilterCombo::drop-down {{
     border: none;
     width: 22px;
+}}
+QComboBox#FilterCombo::down-arrow {{
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid {text_muted};
+    margin-right: 8px;
 }}
 QListView#FilterComboPopup {{
     background-color: {bg_elevated};
@@ -121,16 +128,54 @@ QListView#FilterComboPopup {{
     outline: none;
 }}
 QListView#FilterComboPopup::item {{
-    padding: 8px 12px;
+    padding: 8px 20px;
     border-radius: 4px;
     min-height: 24px;
 }}
 QListView#FilterComboPopup::item:hover {{
-    background-color: {bg_surface_alt};
+    background-color: rgba(240, 67, 30, 0.22);
 }}
 QListView#FilterComboPopup::item:selected {{
     background-color: rgba(240, 67, 30, 0.22);
     color: {text_primary};
+}}
+QFrame#FilterComboPopupWindow,
+QWidget#FilterComboPopupWindow {{
+    background: transparent;
+    border: none;
+}}
+QListView#FilterComboPopup QScrollBar:vertical {{
+    background: transparent;
+    width: 6px;
+    margin: 2px;
+}}
+QListView#FilterComboPopup QScrollBar::handle:vertical {{
+    background: {border_strong};
+    border-radius: 3px;
+    min-height: 24px;
+}}
+QListView#FilterComboPopup QScrollBar::add-line:vertical,
+QListView#FilterComboPopup QScrollBar::sub-line:vertical {{
+    height: 0;
+}}
+QMenu#AppPopupMenu {{
+    background-color: {bg_elevated};
+    color: {text_primary};
+    border: 1px solid {border_strong};
+    border-radius: {radius_sm}px;
+    padding: 4px;
+}}
+QMenu#AppPopupMenu::item {{
+    padding: 8px 20px;
+    border-radius: 4px;
+}}
+QMenu#AppPopupMenu::item:selected {{
+    background-color: rgba(240, 67, 30, 0.22);
+}}
+QMenu#AppPopupMenu::separator {{
+    height: 1px;
+    background: {border_subtle};
+    margin: 4px 8px;
 }}
 QTabBar#HomeTabBar {{
     background: transparent;
@@ -673,8 +718,8 @@ QLabel#SidebarHint {{
 }}
 
 QDialog {{
-    background-color: {bg_surface};
-    border: 1px solid {border};
+    background: transparent;
+    border: none;
 }}
 
 /* ── Tooltip ── */
@@ -720,8 +765,145 @@ QComboBox:focus {{
 QComboBox QAbstractItemView {{
     background-color: {bg_elevated};
     border: 1px solid {border_strong};
+    border-radius: {radius_sm}px;
     color: {text_primary};
-    selection-background-color: rgba(74, 111, 212, 60);
+    padding: 4px;
+    selection-background-color: rgba(240, 67, 30, 0.22);
+    outline: none;
+}}
+QComboBox QAbstractItemView::item {{
+    padding: 8px 20px;
+    border-radius: 4px;
+    min-height: 24px;
+}}
+QComboBox QAbstractItemView::item:hover {{
+    background-color: rgba(240, 67, 30, 0.22);
+}}
+
+/* ── Diálogos modais (AppDialog) ── */
+QDialog#AppDialog {{
+    background: transparent;
+    border: none;
+}}
+QFrame#AppDialogSurface {{
+    background-color: {bg_elevated};
+    border: 1px solid {border_strong};
+    border-radius: {radius_md}px;
+}}
+QDialog#AppDialog QFrame#AppDialogDivider {{
+    background: {border};
+    border: none;
+}}
+QDialog#AppDialog QFrame#AppDialogInfoPanel {{
+    background-color: {bg_surface_alt};
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
+}}
+QDialog#AppDialog QScrollArea#AppDialogInfoScroll {{
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QWidget#AppDialogInfoContent {{
+    background: transparent;
+}}
+QDialog#AppDialog QScrollArea#MarkerLegendScroll {{
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QFrame#ImageAnnotationBottomRow {{
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QWidget#ImageAnnotationEditorHost {{
+    background: transparent;
+}}
+QDialog#AppDialog QFrame#PhotoPdfPreviewPanel {{
+    background-color: {bg_surface_alt};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+}}
+QDialog#AppDialog QFrame#AppDialogInfoSection {{
+    background-color: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
+}}
+QDialog#AppDialog QTextEdit#AppDialogDetails {{
+    background: transparent;
+    border: none;
+    color: {text_secondary};
+}}
+QDialog#AppDialog QTextEdit#AppDialogDetails:focus {{
+    border: none;
+    background: transparent;
+}}
+QWidget#AppToast {{
+    background-color: {bg_elevated};
+    border: 1px solid {border_strong};
+    border-radius: {radius_md}px;
+}}
+QDialog#AppDialog QTabWidget::pane {{
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
+    background: {bg_surface_alt};
+    top: -1px;
+}}
+QDialog#AppDialog QTabBar::tab {{
+    background: transparent;
+    color: {text_muted};
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 18px;
+    font-weight: {weight_medium};
+    margin-right: 4px;
+}}
+QDialog#AppDialog QTabBar::tab:selected {{
+    color: {senai_orange};
+    border-bottom: 2px solid {senai_orange};
+    font-weight: {weight_semibold};
+}}
+QDialog#AppDialog QTabBar::tab:hover {{
+    color: {text_primary};
+}}
+QDialog#AppDialog QScrollArea {{
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QRadioButton {{
+    color: {text_primary};
+    spacing: 10px;
+    padding: 6px 0;
+}}
+QDialog#AppDialog QRadioButton::indicator {{
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    border: 1.5px solid {border_strong};
+    background-color: {bg_surface_alt};
+}}
+QDialog#AppDialog QRadioButton::indicator:hover {{
+    border-color: {senai_blue_light};
+    background-color: {bg_elevated};
+}}
+QDialog#AppDialog QRadioButton::indicator:checked {{
+    border: 2px solid {senai_orange};
+    background: qradialgradient(
+        cx: 0.5, cy: 0.5, radius: 0.5,
+        fx: 0.5, fy: 0.5,
+        stop: 0 {senai_orange},
+        stop: 0.38 {senai_orange},
+        stop: 0.42 {bg_surface_alt},
+        stop: 1 {bg_surface_alt}
+    );
+}}
+QDialog#AppDialog QRadioButton::indicator:checked:hover {{
+    border-color: {senai_orange};
+}}
+QDialog#AppDialog QRadioButton:disabled {{
+    color: {text_disabled};
+}}
+QDialog#AppDialog QRadioButton::indicator:disabled {{
+    border-color: {border_subtle};
+    background-color: {bg_surface};
 }}
 
 /* ── Listas e Árvores ── */

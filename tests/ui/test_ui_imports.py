@@ -315,7 +315,6 @@ def test_filter_combo_uses_themed_popup() -> None:
     combo = bar._period
     assert combo.objectName() == "FilterCombo"
     assert combo.view().objectName() == "FilterComboPopup"
-    assert "FilterComboPopup" in combo.view().styleSheet()
 
 
 def test_recentes_panel_has_density_controls() -> None:
@@ -492,10 +491,13 @@ def test_help_accessibility_dialog_instantiates() -> None:
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog
+    from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog, HelpDialogMode
 
     dialog = HelpAccessibilityDialog()
-    assert dialog.windowTitle() == "Ajuda e Acessibilidade"
+    assert dialog.windowTitle() == "Ajuda"
+
+    prefs = HelpAccessibilityDialog(mode=HelpDialogMode.PREFERENCES)
+    assert prefs.windowTitle() == "Preferências"
 
 
 def test_project_setup_dialog_single_screen() -> None:
