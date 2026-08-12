@@ -86,8 +86,21 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._edit_view.manage_versions_requested.connect(self._show_historico_tab)
         self._edit_view.media_kinds_changed.connect(view_model.update_section_media_kinds)
         self._edit_view.disabled_chart_ids_changed.connect(view_model.update_disabled_chart_ids)
+        self._edit_view.catalog_section_chosen.connect(self._on_catalog_section_chosen)
         self._dados_panel.field_changed.connect(view_model.update_parsed_field)
         self._dados_panel.restore_field_requested.connect(view_model.restore_parsed_field)
+
+    def _on_catalog_section_chosen(self, catalog_section_id: str) -> None:
+        if self._vm is None or not hasattr(self._vm, "replace_custom_with_catalog"):
+            return
+        current_id = self._edit_view.current_section_id()
+        if not current_id:
+            return
+        new_id = self._vm.replace_custom_with_catalog(current_id, catalog_section_id)
+        if not new_id:
+            return
+        self.open_edit_for_section(new_id, itens_medicao=self._itens_medicao)
+        self.section_selected.emit(new_id)
 
     def refresh_appearance(self) -> None:
         self._sections_panel.refresh_appearance()
@@ -113,6 +126,8 @@ class SectionEditorPanel(BaseSidebarPanel):
     def _after_edit_opened(self, section_id: str) -> None:
         self._edit_view.render_images(self._document_images)
         self._show_sumario_tab()
+        if self._vm is not None and hasattr(self._vm, "list_addable_catalog_sections"):
+            self._edit_view.set_catalog_origin_options(self._vm.list_addable_catalog_sections())
 
     def render_global_fields(self, values: dict[str, str], overridden: set[str]) -> None:
         self._dados_panel.render_fields(values, overridden)

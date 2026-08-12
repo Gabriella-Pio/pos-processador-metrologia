@@ -33,6 +33,7 @@ def apply_template_layout(document: ReportDocument, template_repo: TemplateRepos
     ]
     document.section_order = enabled
     document.deleted_section_ids = disabled
+    document.extra_section_ids = []
 
 
 def apply_template_content_defaults(document: ReportDocument, template_repo: TemplateRepository | None) -> None:

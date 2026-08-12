@@ -23,6 +23,7 @@ def serialize_layout_snapshot(document: ReportDocument) -> dict[str, Any]:
         "section_order": document.section_order,
         "deleted_section_ids": list(document.deleted_section_ids),
         "custom_sections": list(document.custom_sections),
+        "extra_section_ids": list(getattr(document, "extra_section_ids", None) or []),
     }
 
 
@@ -42,6 +43,7 @@ def is_layout_dirty_vs_template(
         "section_order": None,
         "deleted_section_ids": [],
         "custom_sections": [],
+        "extra_section_ids": [],
     }
     current = serialize_layout_snapshot(document)
     return normalize_snapshot(current) != normalize_snapshot(baseline)

@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
+from typing import Any
 
-from src.core.domain.pdf_source import has_source_pdf_reference, source_pdf_path_from_storage, source_pdf_path_to_storage
+from src.core.domain.image_workspace import deserialize_report_image, serialize_report_image
+from src.core.domain.pdf_source import (
+    has_source_pdf_reference,
+    source_pdf_path_from_storage,
+    source_pdf_path_to_storage,
+)
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.project_workspace import ProjectSlotSnapshot, ProjectWorkspace
 
@@ -23,6 +28,27 @@ def resolved_display_name(session: ProjectSession) -> str:
     if name:
         return name
     return default_display_name(session)
+
+
+def serialize_session_draft(session: ProjectSession) -> dict[str, Any]:
+    return {
+        "unified_deleted_section_ids": list(session.unified_deleted_section_ids),
+        "unified_section_overrides": dict(session.unified_section_overrides),
+        "unified_images": [serialize_report_image(img) for img in session.unified_images],
+    }
+
+
+def apply_draft_to_session(session: ProjectSession, draft: dict[str, Any] | None) -> None:
+    if not isinstance(draft, dict):
+        return
+    session.unified_deleted_section_ids = list(draft.get("unified_deleted_section_ids") or [])
+    session.unified_section_overrides = dict(draft.get("unified_section_overrides") or {})
+    images_raw = draft.get("unified_images") or []
+    session.unified_images = [
+        image
+        for item in images_raw
+        if isinstance(item, dict) and (image := deserialize_report_image(item)) is not None
+    ]
 
 
 def session_to_workspace(session: ProjectSession) -> ProjectWorkspace:
@@ -44,6 +70,7 @@ def session_to_workspace(session: ProjectSession) -> ProjectWorkspace:
         slots=slots,
         active_index=session.active_index,
         display_name=resolved_display_name(session),
+        draft=serialize_session_draft(session),
     )
 
 
@@ -62,7 +89,7 @@ def workspace_to_session(workspace: ProjectWorkspace) -> ProjectSession:
         first = source_pdf_path_from_storage(workspace.slots[0].source_pdf_path)
         if has_source_pdf_reference(first):
             display_name = first.stem
-    return ProjectSession(
+    session = ProjectSession(
         client_project=workspace.client_project,
         template_id=workspace.template_id,
         report_mode=workspace.report_mode,
@@ -71,6 +98,8 @@ def workspace_to_session(workspace: ProjectWorkspace) -> ProjectSession:
         project_id=workspace.id,
         display_name=display_name,
     )
+    apply_draft_to_session(session, workspace.draft)
+    return session
 
 
 def slots_to_json(slots: list[ProjectSlotSnapshot]) -> list[dict]:

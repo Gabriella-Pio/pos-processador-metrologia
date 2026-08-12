@@ -24,6 +24,10 @@ from src.core.application.statistical_aggregator import (
     present_measure_tipos,
     statistical_escopo_phrase,
 )
+from src.core.application.unified_media import (
+    copy_report_image,
+    resolve_unified_layout_images,
+)
 from src.core.domain.image_workspace import new_image_id
 from src.core.domain.mixed_template_defaults import (
     ESTATISTICO_PROSE_DEFAULTS,
@@ -143,6 +147,7 @@ def _clone_document(document: ReportDocument) -> ReportDocument:
         parsed_overrides=deepcopy(document.parsed_overrides),
         custom_sections=deepcopy(document.custom_sections),
         deleted_section_ids=list(document.deleted_section_ids),
+        extra_section_ids=list(getattr(document, "extra_section_ids", None) or []),
         section_order=list(document.section_order) if document.section_order else None,
         template_layout_override=(
             deepcopy(document.template_layout_override)
@@ -224,14 +229,38 @@ def build_mixed_mmc_bosello_document(session: ProjectSession) -> ReportDocument:
     document.template_layout_override = deepcopy(MIXED_SECTIONS_CONFIG)
     document.source_kind = "calypso"
 
-    # Remove imagens tomográficas herdadas do slot MMC; reaplica a partir do Bosello.
-    document.images = [img for img in document.images if img.section_id != "tomografia" and not img.bosello_import]
-    for bosello_slot in bosello_slots:
-        assert bosello_slot.document is not None
-        document.images.extend(_copy_bosello_images(bosello_slot.document))
-        for path in bosello_slot.document.bosello_captured_paths:
-            if path not in document.bosello_captured_paths:
-                document.bosello_captured_paths.append(path)
+    # Remove imagens tomográficas herdadas do slot MMC; reaplica a partir do store
+    # unificado (se houver) ou das capturas Bosello das peças.
+    layout_images = resolve_unified_layout_images(
+        session,
+        calypso_slots,
+        layout=MIXED_SECTIONS_CONFIG,
+    )
+    document.images = [
+        img
+        for img in layout_images
+        if img.section_id != "tomografia" and not img.bosello_import
+    ]
+    has_unified_tomo = any(
+        img.section_id == "tomografia" or img.bosello_import
+        for img in (session.unified_images or [])
+    )
+    if has_unified_tomo:
+        document.images.extend(
+            copy_report_image(img)
+            for img in session.unified_images
+            if img.section_id == "tomografia" or img.bosello_import
+        )
+        for img in session.unified_images:
+            if (img.section_id == "tomografia" or img.bosello_import) and img.image_path not in document.bosello_captured_paths:
+                document.bosello_captured_paths.append(img.image_path)
+    else:
+        for bosello_slot in bosello_slots:
+            assert bosello_slot.document is not None
+            document.images.extend(_copy_bosello_images(bosello_slot.document))
+            for path in bosello_slot.document.bosello_captured_paths:
+                if path not in document.bosello_captured_paths:
+                    document.bosello_captured_paths.append(path)
 
     if not any(img.section_id == "tomografia" for img in document.images):
         raise UnifiedExportError(
@@ -293,11 +322,7 @@ def build_mixed_mmc_bosello_document(session: ProjectSession) -> ReportDocument:
 
 
 def _copy_report_image(image: ReportImage) -> ReportImage:
-    return replace(
-        image,
-        annotations=list(image.annotations),
-        crop=image.crop,
-    )
+    return copy_report_image(image)
 
 
 def _collect_layout_images(
@@ -305,29 +330,9 @@ def _collect_layout_images(
     *,
     layout: dict[str, dict],
 ) -> list[ReportImage]:
-    """Fotos das peças para seções ativas do layout unificado (ex.: introdução)."""
-    allowed = {
-        section_id
-        for section_id, cfg in layout.items()
-        if cfg.get("enabled", True) and not str(section_id).startswith("_")
-    }
-    collected: list[ReportImage] = []
-    seen: set[tuple[str, str]] = set()
-    for slot in slots:
-        document = slot.document
-        if document is None:
-            continue
-        for image in document.images:
-            if image.bosello_import:
-                continue
-            if image.section_id not in allowed:
-                continue
-            key = (str(image.image_path), image.section_id)
-            if key in seen:
-                continue
-            seen.add(key)
-            collected.append(_copy_report_image(image))
-    return collected
+    from src.core.application.unified_media import collect_layout_images_from_slots
+
+    return collect_layout_images_from_slots(slots, layout=layout)
 
 
 def _dto_attr(dto: Any, name: str, default: str = "") -> str:
@@ -393,7 +398,8 @@ def build_statistical_mmc_document(session: ProjectSession) -> ReportDocument:
     document.template_layout_override = layout
     document.source_kind = "calypso"
     document.raw_parsed_data = batch
-    document.images = _collect_layout_images(
+    document.images = resolve_unified_layout_images(
+        session,
         calypso_slots,
         layout=layout,
     )

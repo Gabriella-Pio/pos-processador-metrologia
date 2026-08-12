@@ -28,6 +28,7 @@ output_pdfs/temp/
 output_pdfs/*.db
 output_pdfs/templates.json
 output_pdfs/user_preferences.json
+/checkpoints/
 
 # Capturas Bosello renderizadas ao lado do PDF de origem (cache local)
 .pos-metrologia/

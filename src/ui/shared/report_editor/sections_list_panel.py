@@ -354,6 +354,8 @@ class SectionsListPanel(QFrame):
         row.clicked.connect(self.add_custom_section_requested.emit)
         if self._mode == "template":
             row.setToolTip("Adicionar seção personalizada ao template")
+        else:
+            row.setToolTip("Nova seção — editar e escolher do catálogo ou começar do zero")
         add_item = QListWidgetItem()
         add_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         add_item.setSizeHint(row.sizeHint())

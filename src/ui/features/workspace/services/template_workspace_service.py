@@ -32,6 +32,7 @@ class TemplateWorkspaceService:
         document.section_order = None
         document.deleted_section_ids = []
         document.custom_sections = []
+        document.extra_section_ids = []
         if self._template_repo is not None:
             apply_template_layout(document, self._template_repo)
             apply_template_content_defaults(document, self._template_repo)

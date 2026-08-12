@@ -29,3 +29,5 @@ class ProjectWorkspace:
     active_index: int = 0
     display_name: str = ""
     updated_at: datetime | None = None
+    # Estado do PDF unificado (overrides, seções desligadas, fotos).
+    draft: dict = field(default_factory=dict)

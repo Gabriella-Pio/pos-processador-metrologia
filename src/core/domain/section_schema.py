@@ -77,6 +77,28 @@ def is_custom_section_id(section_id: str) -> bool:
     return section_id.startswith("custom_") and section_id not in SECTION_TITLES
 
 
+def list_addable_catalog_sections(
+    *,
+    present_section_ids: set[str],
+    deleted_section_ids: set[str] | None = None,
+) -> list[dict[str, str]]:
+    """Seções do catálogo que ainda podem ser incluídas/reativadas no relatório.
+
+    Retorna ``{"id", "label", "action"}`` com ``action`` em ``add`` | ``restore``.
+    """
+    deleted = set(deleted_section_ids or ()) - PROTECTED_SECTION_IDS
+    present = set(present_section_ids)
+    result: list[dict[str, str]] = []
+    for section in SECTION_DEFINITIONS:
+        if not section.navigable or section.id in PROTECTED_SECTION_IDS:
+            continue
+        if section.id in present and section.id not in deleted:
+            continue
+        action = "restore" if section.id in present and section.id in deleted else "add"
+        result.append({"id": section.id, "label": section.label, "action": action})
+    return result
+
+
 def merge_saved_template_config(saved_config: dict) -> list[dict]:
     """Reconcilia config salva com schema atual (novas seções entram no fim)."""
     if not saved_config:

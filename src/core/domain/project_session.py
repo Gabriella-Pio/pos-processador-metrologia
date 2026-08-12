@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from src.core.domain.ports import ReportDocument
+from src.core.domain.ports import ReportDocument, ReportImage
 
 ReportMode = Literal["mmc_only", "tomo_only", "mixed"]
 
@@ -36,6 +36,8 @@ class ProjectSession:
     unified_deleted_section_ids: list[str] = field(default_factory=list)
     # Overrides de layout/conteúdo do PDF unificado (gráficos, media_kinds, etc.).
     unified_section_overrides: dict[str, dict] = field(default_factory=dict)
+    # Fotos do relatório consolidado (modo PDF único) — independentes das abas.
+    unified_images: list[ReportImage] = field(default_factory=list)
 
     @property
     def active_slot(self) -> ProjectDocumentSlot | None:

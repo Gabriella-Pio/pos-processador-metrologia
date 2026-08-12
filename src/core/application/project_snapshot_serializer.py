@@ -24,6 +24,7 @@ def serialize_document_workspace(document: ReportDocument) -> dict[str, Any]:
         "bosello_captured_paths": [str(path) for path in document.bosello_captured_paths],
         "custom_sections": document.custom_sections,
         "deleted_section_ids": document.deleted_section_ids,
+        "extra_section_ids": list(getattr(document, "extra_section_ids", None) or []),
         "attachment_pdf_paths": [str(path) for path in document.attachment_pdf_paths],
     }
 
@@ -42,6 +43,7 @@ def apply_workspace_to_document(document: ReportDocument, workspace: dict[str, A
     ]
     document.custom_sections = list(workspace.get("custom_sections") or [])
     document.deleted_section_ids = list(workspace.get("deleted_section_ids") or [])
+    document.extra_section_ids = list(workspace.get("extra_section_ids") or [])
     attachment_raw = workspace.get("attachment_pdf_paths") or []
     document.attachment_pdf_paths = [Path(path) for path in attachment_raw if path]
     bosello_raw = workspace.get("bosello_captured_paths") or []
@@ -96,6 +98,7 @@ def serialize_project_snapshot(session: ProjectSession) -> str:
             "active_index": session.active_index,
             "unified_deleted_section_ids": list(session.unified_deleted_section_ids),
             "unified_section_overrides": dict(session.unified_section_overrides),
+            "unified_images": [serialize_report_image(img) for img in session.unified_images],
             "slots": [
                 {
                     "source_pdf_path": str(slot.source_pdf_path),
@@ -161,6 +164,12 @@ def deserialize_project_snapshot(
             session_raw.get("unified_section_overrides") or {}
         ),
     )
+    images_raw = session_raw.get("unified_images") or []
+    session.unified_images = [
+        image
+        for item in images_raw
+        if isinstance(item, dict) and (image := deserialize_report_image(item)) is not None
+    ]
 
     workspaces: dict[str, dict[str, Any]] = {}
     histories: dict[str, list[VersionEntry]] = {}

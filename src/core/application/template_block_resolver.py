@@ -83,7 +83,37 @@ def apply_section_order(blocos: list[dict], document: ReportDocument) -> list[di
         order_index = {sid: idx for idx, sid in enumerate(document.section_order)}
         middle.sort(key=lambda b: order_index.get(b["tipo"], 10_000))
     ordered = start + middle + anexos
-    return inject_custom_sections(ordered, document)
+    with_extras = inject_extra_catalog_sections(ordered, document)
+    return inject_custom_sections(with_extras, document)
+
+
+def _insert_before_anexos(blocos: list[dict], extra_blocks: list[dict]) -> list[dict]:
+    if not extra_blocks:
+        return blocos
+    result: list[dict] = []
+    inserted = False
+    for bloco in blocos:
+        if bloco["tipo"] == "anexos" and not inserted:
+            result.extend(extra_blocks)
+            inserted = True
+        result.append(bloco)
+    if not inserted:
+        result.extend(extra_blocks)
+    return result
+
+
+def inject_extra_catalog_sections(blocos: list[dict], document: ReportDocument) -> list[dict]:
+    """Inclui seções do catálogo adicionadas manualmente no workspace."""
+    extras = getattr(document, "extra_section_ids", None) or []
+    if not extras:
+        return blocos
+    present = {b["tipo"] for b in blocos}
+    extra_blocks = [
+        {"tipo": section_id, "config": {}}
+        for section_id in extras
+        if section_id and section_id not in present
+    ]
+    return _insert_before_anexos(blocos, extra_blocks)
 
 
 def inject_custom_sections(blocos: list[dict], document: ReportDocument) -> list[dict]:
@@ -95,15 +125,4 @@ def inject_custom_sections(blocos: list[dict], document: ReportDocument) -> list
         for section in document.custom_sections
         if section.get("id") not in deleted
     ]
-    if not custom_blocks:
-        return blocos
-    result: list[dict] = []
-    inserted = False
-    for bloco in blocos:
-        if bloco["tipo"] == "anexos" and not inserted:
-            result.extend(custom_blocks)
-            inserted = True
-        result.append(bloco)
-    if not inserted:
-        result.extend(custom_blocks)
-    return result
+    return _insert_before_anexos(blocos, custom_blocks)

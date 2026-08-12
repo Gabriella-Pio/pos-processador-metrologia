@@ -30,11 +30,12 @@ from src.core.domain.section_schema import is_custom_section_id
 from src.ui.components.buttons import IconButton, SecondaryButton
 from src.ui.components.modal_presentation import present_modal_dialog
 from src.ui.components.icons import icon_close, icon_help
+from src.ui.components.inputs import ThemedComboBox
 from src.ui.components.panels import ImageManagerPanel
 from src.ui.components.panels.image_annotation_dialog import ImageAnnotationDialog
 from src.ui.components.placeholder_field import PlaceholderTextEdit
 from src.ui.shared.report_editor.sidebar_chrome import editor_panel_header
-from src.ui.styles import SPACING, caption_style, sidebar_panel_style
+from src.ui.styles import SPACING, caption_style, form_label_style, sidebar_panel_style
 from src.ui.shared.report_editor.section_help_dialog import SectionHelpDialog
 from src.ui.shared.report_editor.draggable_table_rows_editor import DraggableTableRowsEditor
 from src.ui.shared.report_editor.section_form_builder import SectionFormBuilder
@@ -65,6 +66,7 @@ class SectionEditView(QFrame):
     media_kinds_changed = pyqtSignal(str, list)
     disabled_chart_ids_changed = pyqtSignal(str, list)
     manage_versions_requested = pyqtSignal()
+    catalog_section_chosen = pyqtSignal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -75,6 +77,7 @@ class SectionEditView(QFrame):
         self._section_overrides: dict = {}
         self._version_entries: list[VersionEntry] = []
         self._locked_media_kinds: list[str] = []
+        self._catalog_origin_options: list[dict[str, str]] = []
         self._field_widgets: dict[str, PlaceholderTextEdit | QLineEdit] = {}
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
@@ -104,6 +107,28 @@ class SectionEditView(QFrame):
         title_card_layout.addWidget(section_title_header)
         title_card_layout.addWidget(self._section_title_edit)
         self._section_title_host = title_card
+
+        self._origin_picker = QFrame()
+        self._origin_picker.setObjectName("GlobalFieldCard")
+        origin_layout = QVBoxLayout(self._origin_picker)
+        origin_layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, SPACING.sm)
+        origin_layout.setSpacing(SPACING.xs)
+        origin_label = QLabel("BASE DA SEÇÃO")
+        origin_label.setObjectName("GlobalFieldLabel")
+        origin_label.setStyleSheet(form_label_style())
+        self._origin_combo = ThemedComboBox()
+        self._origin_combo.setMinimumHeight(38)
+        self._origin_combo.currentIndexChanged.connect(self._on_origin_combo_changed)
+        self._origin_hint = QLabel(
+            "Comece do zero ou troque por uma seção do catálogo ainda não usada neste relatório."
+        )
+        self._origin_hint.setWordWrap(True)
+        self._origin_hint.setObjectName("SidebarHint")
+        self._origin_hint.setStyleSheet(caption_style())
+        origin_layout.addWidget(origin_label)
+        origin_layout.addWidget(self._origin_combo)
+        origin_layout.addWidget(self._origin_hint)
+        self._origin_picker.hide()
 
         self._table_rows_editor = DraggableTableRowsEditor(
             "Linhas da tabela (como no preview)",
@@ -195,6 +220,7 @@ class SectionEditView(QFrame):
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
         scroll_layout.setSpacing(SPACING.sm)
+        scroll_layout.addWidget(self._origin_picker)
         scroll_layout.addWidget(self._section_title_host)
         scroll_layout.addWidget(self._fields_host)
         scroll_layout.addWidget(self._restore_section_btn)
@@ -224,6 +250,44 @@ class SectionEditView(QFrame):
         self._delete_btn.setVisible(not enabled)
         self._restore_section_btn.setVisible(not enabled)
         self._close_btn.setToolTip("Fechar edição" if not enabled else "Voltar ao sumário")
+        if enabled:
+            self._origin_picker.hide()
+
+    def set_catalog_origin_options(self, options: list[dict[str, str]]) -> None:
+        self._catalog_origin_options = list(options or [])
+        if self._section_id is not None:
+            is_custom = is_custom_section_id(self._section_id) or self._section_id.startswith(
+                "custom_"
+            )
+            self._sync_origin_picker(is_custom=is_custom)
+
+    def _sync_origin_picker(self, *, is_custom: bool) -> None:
+        show = (
+            is_custom
+            and not self._defaults_mode
+            and bool(self._catalog_origin_options)
+        )
+        self._origin_picker.setVisible(show)
+        if not show:
+            return
+        self._origin_combo.blockSignals(True)
+        self._origin_combo.clear()
+        self._origin_combo.addItem("Personalizada — começar do zero", None)
+        for option in self._catalog_origin_options:
+            label = option.get("label") or option.get("id", "")
+            if option.get("action") == "restore":
+                label = f"{label} (reativar)"
+            self._origin_combo.addItem(label, option.get("id"))
+        self._origin_combo.setCurrentIndex(0)
+        self._origin_combo.blockSignals(False)
+
+    def _on_origin_combo_changed(self, index: int) -> None:
+        if self._loading or index < 0:
+            return
+        catalog_id = self._origin_combo.itemData(index)
+        if not catalog_id:
+            return
+        self.catalog_section_chosen.emit(str(catalog_id))
 
     def reset_breadcrumb(self) -> None:
         self._header_title.setText("EDITAR SEÇÃO")
@@ -284,6 +348,7 @@ class SectionEditView(QFrame):
         is_custom = section.get("custom", False) or section_id.startswith("custom_")
         self._delete_btn.setVisible(is_custom and not self._defaults_mode)
         self._restore_section_btn.setVisible(not is_custom and not self._defaults_mode)
+        self._sync_origin_picker(is_custom=is_custom)
 
         self._rebuild_section_title(section_id, overrides)
         self._rebuild_table_rows(section_id, table_rows or [])

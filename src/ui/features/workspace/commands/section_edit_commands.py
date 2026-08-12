@@ -139,6 +139,12 @@ class SectionEditCommands:
         return section_id
 
     @staticmethod
+    def add_catalog_section(document: ReportDocument, section_id: str) -> str | None:
+        from src.core.application.catalog_section_add import add_catalog_section
+
+        return add_catalog_section(document, section_id)
+
+    @staticmethod
     def _sync_control_info_from_table_rows(
         document: ReportDocument,
         rows: list[dict[str, str]],

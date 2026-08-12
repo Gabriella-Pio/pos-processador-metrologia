@@ -539,7 +539,10 @@ class WorkspaceView(QWidget):
     def _on_section_selected(self, section_id: str) -> None:
         self._active_section_id = section_id
         anchor = self._section_anchor_map.get(section_id, {})
-        title = anchor.get("title", section_id) if isinstance(anchor, dict) else section_id
+        if isinstance(anchor, dict):
+            title = anchor.get("display_title") or anchor.get("title") or section_id
+        else:
+            title = section_id
         self._active_section_label.setText(f"Seção: {title}")
         self._sync_section_meta_row()
         self._focus_preview_section(section_id)
@@ -559,11 +562,13 @@ class WorkspaceView(QWidget):
 
     def _on_add_custom_section(self) -> None:
         section_id = self._vm.add_custom_section("Nova seção")
-        if section_id:
-            self._active_section_id = section_id
-            self._section_editor.open_edit_for_section(section_id)
-            self._active_section_label.setText("Seção: Nova seção")
-            self._sync_section_meta_row()
+        if not section_id:
+            return
+        self._active_section_id = section_id
+        self._section_editor.open_edit_for_section(section_id)
+        self._active_section_label.setText("Seção: Nova seção")
+        self._sync_section_meta_row()
+        self._section_editor.focus_section_title()
 
     def _on_image_dropped(self, image_path: Path) -> None:
         # Preferir a seção em edição — evita gravar foto na seção errada.
@@ -594,24 +599,69 @@ class WorkspaceView(QWidget):
         self._active_annotation_tool = tool_id
 
     def _refresh_images(self) -> None:
+        images = self._vm.images_for_workspace_ui()
+        self._section_editor.render_images(images)
+        if self._vm.export_mode_unified:
+            has_bosello = any(img.bosello_import or img.section_id == "tomografia" for img in images)
+            if not has_bosello:
+                session = self._app_state.project_session
+                if session is not None:
+                    for slot in session.documents:
+                        doc = slot.document
+                        if doc is not None and doc.bosello_captured_paths:
+                            has_bosello = True
+                            break
+            self._section_editor.set_bosello_captures_available(has_bosello)
+            return
         document = self._app_state.active_document
         if document is not None:
-            self._section_editor.render_images(document.images)
             self._section_editor.set_bosello_captures_available(
                 len(document.bosello_captured_paths) > 0
             )
 
     def _on_bosello_picker_requested(self) -> None:
-        document = self._app_state.active_document
         section_id = self._section_editor.editing_section_id() or self._active_section_id
-        if document is None or section_id is None:
+        if section_id is None:
             show_friendly_error(
                 self,
                 "Selecione uma seção",
                 "Abra a edição de uma seção antes de adicionar capturas Bosello.",
             )
             return
-        captures = [path for path in document.bosello_captured_paths if path.is_file()]
+
+        session = self._app_state.project_session
+        document = self._app_state.active_document
+        captures: list[Path] = []
+        if self._vm.export_mode_unified and session is not None:
+            seen: set[str] = set()
+            for slot in session.documents:
+                doc = slot.document
+                if doc is None:
+                    continue
+                for path in doc.bosello_captured_paths:
+                    key = str(path)
+                    if key in seen or not path.is_file():
+                        continue
+                    seen.add(key)
+                    captures.append(path)
+            paths_in_section = [
+                img.image_path
+                for img in session.unified_images
+                if img.section_id == section_id
+            ]
+        else:
+            if document is None:
+                show_friendly_error(
+                    self,
+                    "Selecione uma seção",
+                    "Abra a edição de uma seção antes de adicionar capturas Bosello.",
+                )
+                return
+            captures = [path for path in document.bosello_captured_paths if path.is_file()]
+            from src.core.application.bosello_image_import import section_image_paths
+
+            paths_in_section = section_image_paths(document, section_id)
+
         if not captures:
             show_friendly_error(
                 self,
@@ -620,7 +670,6 @@ class WorkspaceView(QWidget):
             )
             return
 
-        from src.core.application.bosello_image_import import section_image_paths
         from src.ui.features.workspace.dialogs.bosello_capture_picker_dialog import (
             BoselloCapturePickerDialog,
         )
@@ -628,7 +677,7 @@ class WorkspaceView(QWidget):
         dialog = BoselloCapturePickerDialog(
             captures,
             section_id=section_id,
-            paths_in_section=section_image_paths(document, section_id),
+            paths_in_section=paths_in_section,
             parent=self,
         )
         if present_modal_dialog(self, dialog) != dialog.DialogCode.Accepted:

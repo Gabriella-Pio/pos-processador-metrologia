@@ -44,6 +44,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
         migrations = {
             "custom_sections": "TEXT NOT NULL DEFAULT '[]'",
             "deleted_section_ids": "TEXT NOT NULL DEFAULT '[]'",
+            "extra_section_ids": "TEXT NOT NULL DEFAULT '[]'",
             "attachment_pdf_paths": "TEXT NOT NULL DEFAULT '[]'",
             "bosello_captured_paths": "TEXT NOT NULL DEFAULT '[]'",
         }
@@ -69,8 +70,8 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     source_pdf_path, client_project, evaluated_component,
                     template_id, section_overrides, parsed_overrides,
                     section_order, images, custom_sections, deleted_section_ids,
-                    attachment_pdf_paths, bosello_captured_paths, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    extra_section_ids, attachment_pdf_paths, bosello_captured_paths, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(source_pdf_path, client_project, evaluated_component)
                 DO UPDATE SET
                     template_id=excluded.template_id,
@@ -80,6 +81,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     images=excluded.images,
                     custom_sections=excluded.custom_sections,
                     deleted_section_ids=excluded.deleted_section_ids,
+                    extra_section_ids=excluded.extra_section_ids,
                     attachment_pdf_paths=excluded.attachment_pdf_paths,
                     bosello_captured_paths=excluded.bosello_captured_paths,
                     updated_at=datetime('now')
@@ -93,6 +95,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     json.dumps(images, ensure_ascii=False),
                     json.dumps(document.custom_sections, ensure_ascii=False),
                     json.dumps(document.deleted_section_ids, ensure_ascii=False),
+                    json.dumps(list(getattr(document, "extra_section_ids", None) or []), ensure_ascii=False),
                     json.dumps(attachment_paths, ensure_ascii=False),
                     json.dumps(bosello_paths, ensure_ascii=False),
                 ),
@@ -105,7 +108,7 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                 """
                 SELECT template_id, section_overrides, parsed_overrides, section_order,
                        images, custom_sections, deleted_section_ids, attachment_pdf_paths,
-                       bosello_captured_paths
+                       bosello_captured_paths, extra_section_ids
                 FROM workspace_sessions
                 WHERE source_pdf_path=? AND client_project=? AND evaluated_component=?
                 """,
@@ -134,4 +137,6 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
         document.attachment_pdf_paths = [Path(path) for path in attachment_raw if path]
         bosello_raw = json.loads(row[8] or "[]") if len(row) > 8 else []
         document.bosello_captured_paths = [Path(path) for path in bosello_raw if path]
+        extras_raw = json.loads(row[9] or "[]") if len(row) > 9 else []
+        document.extra_section_ids = list(extras_raw or [])
         return True

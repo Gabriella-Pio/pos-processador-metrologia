@@ -100,6 +100,8 @@ class ReportDocument:
     parsed_overrides: dict[str, Any] = field(default_factory=dict)
     custom_sections: list[dict] = field(default_factory=list)
     deleted_section_ids: list[str] = field(default_factory=list)
+    # Seções do catálogo adicionadas ao relatório além do template atual.
+    extra_section_ids: list[str] = field(default_factory=list)
     section_order: list[str] | None = None
     # Snapshot in-memory de sections_config (preview de template antes de salvar)
     template_layout_override: dict[str, dict] | None = None

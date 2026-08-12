@@ -170,6 +170,39 @@ def test_build_statistical_document(tmp_path: Path) -> None:
     ).strip()
 
 
+def test_statistical_uses_unified_images_store(tmp_path: Path) -> None:
+    photo = tmp_path / "peca.png"
+    photo.write_bytes(b"png")
+    slots = [
+        ProjectDocumentSlot(
+            tmp_path / "p1.pdf",
+            "Carcaça",
+            document=_calypso_doc(
+                "p1",
+                values=[("Diametro_X", "10,0", "Dentro")],
+            ),
+            source_kind="calypso",
+        ),
+        ProjectDocumentSlot(
+            tmp_path / "p2.pdf",
+            "Carcaça",
+            document=_calypso_doc(
+                "p2",
+                values=[("Diametro_X", "10,1", "Dentro")],
+            ),
+            source_kind="calypso",
+        ),
+    ]
+    session = _session(slots, mode="mmc_only")
+    session.unified_images = [
+        ReportImage(image_path=photo, section_id="introducao", image_id="u1"),
+    ]
+    doc = build_statistical_mmc_document(session)
+    assert len(doc.images) == 1
+    assert doc.images[0].section_id == "introducao"
+    assert doc.images[0].image_path == photo
+
+
 def test_statistical_altura_only_enables_altura_sections(tmp_path: Path) -> None:
     slots = [
         ProjectDocumentSlot(

@@ -273,6 +273,13 @@ class WorkspaceViewModel(QObject):
                 return False
         return True
 
+    def _reset_version_ui_state(self) -> None:
+        """Limpa status de versão ao trocar de projeto (evita 'Visualizando vN' fantasma)."""
+        self._viewing_version = None
+        self._editing_from_version = None
+        self._last_registered_version = None
+        self.version_status_changed.emit(self.version_status_text())
+
     def load_project(
         self,
         client_project: str,
@@ -287,6 +294,7 @@ class WorkspaceViewModel(QObject):
             "Preparando projeto…" if total <= 1 else f"Importando lote ({total} PDFs)…",
         )
         try:
+            self._reset_version_ui_state()
             session = self._doc_service.build_project_session(
                 client_project,
                 pdf_entries,
@@ -336,6 +344,7 @@ class WorkspaceViewModel(QObject):
                     "",
                 )
                 return False
+            self._reset_version_ui_state()
             self._app_state.set_project_session(session)
             self.project_loaded.emit(session)
             from src.core.application.piece_ordering import sort_session_documents
@@ -676,6 +685,58 @@ class WorkspaceViewModel(QObject):
         self._commit_document_change(preview=True, summary=True, layout_dirty=True, persist=False)
         return section_id
 
+    def list_addable_catalog_sections(self) -> list[dict[str, str]]:
+        document = self._active_document()
+        if document is None:
+            return []
+        from src.core.domain.section_schema import list_addable_catalog_sections
+
+        try:
+            present = {section["id"] for section in self._exporter.list_sections(document)}
+        except Exception:
+            present = set()
+        present.update(
+            sid for sid in (getattr(document, "extra_section_ids", None) or []) if sid
+        )
+        present.update(
+            str(item.get("id"))
+            for item in document.custom_sections
+            if item.get("id")
+        )
+        return list_addable_catalog_sections(
+            present_section_ids=present,
+            deleted_section_ids=set(document.deleted_section_ids),
+        )
+
+    def add_catalog_section(self, section_id: str) -> str | None:
+        document = self._active_document()
+        if document is None:
+            return None
+        added = SectionEditCommands.add_catalog_section(document, section_id)
+        if added is None:
+            return None
+        self._commit_document_change(preview=True, summary=True, layout_dirty=True, persist=False)
+        return added
+
+    def replace_custom_with_catalog(
+        self,
+        custom_section_id: str,
+        catalog_section_id: str,
+    ) -> str | None:
+        """Troca uma seção personalizada temporária por uma do catálogo."""
+        document = self._active_document()
+        if document is None:
+            return None
+        from src.core.domain.section_schema import is_custom_section_id
+
+        if is_custom_section_id(custom_section_id):
+            SectionEditCommands.delete_section(document, custom_section_id)
+        added = SectionEditCommands.add_catalog_section(document, catalog_section_id)
+        if added is None:
+            return None
+        self._commit_document_change(preview=True, summary=True, layout_dirty=True, persist=False)
+        return added
+
     def get_section_page_map(self) -> dict[str, int]:
         document = self._active_document()
         if document is None:
@@ -691,6 +752,9 @@ class WorkspaceViewModel(QObject):
     # ------------------------------------------------------------------ preview
 
     def schedule_preview(self, *, image_edit: bool = False) -> None:
+        if self._viewing_version is not None:
+            self._viewing_version = None
+            self.version_status_changed.emit(self.version_status_text())
         debounce_ms = PREVIEW_IMAGE_DEBOUNCE_MS if image_edit else None
         self._preview_runner.schedule(debounce_ms=debounce_ms)
 
@@ -743,14 +807,18 @@ class WorkspaceViewModel(QObject):
         self._export_mode_unified = unified
         if unified:
             from src.core.application.piece_ordering import sort_session_documents
+            from src.core.application.unified_media import seed_unified_images_from_pieces
 
             session = self._app_state.project_session
             if session is not None and sort_session_documents(session):
                 self.project_loaded.emit(session)
+            if session is not None and seed_unified_images_from_pieces(session):
+                self._persist_project()
             self._begin_busy("Montando relatório unificado…")
             try:
                 self.refresh_sections_summary()
                 self.schedule_preview()
+                self._app_state.notify_images_changed()
                 if hasattr(self, "_app_state") and self._active_document() is not None:
                     refresh_export_validation(self)
             finally:
@@ -758,6 +826,7 @@ class WorkspaceViewModel(QObject):
             return
         self.refresh_sections_summary()
         self.schedule_preview()
+        self._app_state.notify_images_changed()
         if hasattr(self, "_app_state") and self._active_document() is not None:
             refresh_export_validation(self)
 
@@ -790,13 +859,55 @@ class WorkspaceViewModel(QObject):
 
     # ------------------------------------------------------------------ media
 
+    def images_for_workspace_ui(self) -> list[ReportImage]:
+        """Imagens exibidas no sumário/painel — unificadas no modo PDF único."""
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is not None and session.unified_images:
+                return list(session.unified_images)
+            document = self._document_for_preview()
+            return list(document.images) if document is not None else []
+        document = self._active_document()
+        return list(document.images) if document is not None else []
+
     def add_image_to_section(self, image_path: Path, section_id: str) -> None:
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is None:
+                return
+            from src.core.application.unified_media import add_unified_image
+
+            add_unified_image(session, image_path, section_id)
+            self._persist_project()
+            self._app_state.notify_images_changed()
+            self._commit_document_change(
+                preview=True, summary=True, data_dirty_flag=True, persist=False
+            )
+            return
         if self._mutate_data(
             lambda doc: MediaCommands.add_image(doc, image_path, section_id),
         ):
             self._app_state.notify_images_changed()
 
     def add_bosello_captures_to_section(self, image_paths: list[Path], section_id: str) -> int:
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is None:
+                return 0
+            from src.core.application.unified_media import add_unified_image
+
+            added = 0
+            for path in image_paths:
+                add_unified_image(session, path, section_id, bosello_import=True)
+                added += 1
+            if added:
+                self._persist_project()
+                self._app_state.notify_images_changed()
+                self._commit_document_change(
+                    preview=True, summary=True, data_dirty_flag=True, persist=False
+                )
+            return added
+
         added = 0
 
         def mutate(doc: ReportDocument) -> None:
@@ -808,10 +919,35 @@ class WorkspaceViewModel(QObject):
         return added
 
     def remove_image(self, image: ReportImage) -> None:
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is None:
+                return
+            from src.core.application.unified_media import remove_unified_image
+
+            remove_unified_image(session, image)
+            self._persist_project()
+            self._app_state.notify_images_changed()
+            self._commit_document_change(
+                preview=True, summary=True, data_dirty_flag=True, persist=False
+            )
+            return
         if self._mutate_data(lambda doc: MediaCommands.remove_image(doc, image)):
             self._app_state.notify_images_changed()
 
     def update_image_caption(self, image: ReportImage, caption: str) -> None:
+        if self._export_mode_unified and self._is_multi_document():
+            session = self._app_state.project_session
+            if session is None:
+                return
+            from src.core.application.unified_media import update_unified_image_caption
+
+            update_unified_image_caption(session, image, caption)
+            self._persist_project()
+            self._commit_document_change(
+                preview=True, summary=False, data_dirty_flag=True, persist=False
+            )
+            return
         self._mutate_data(
             lambda doc: MediaCommands.update_image_caption(doc, image, caption),
             summary=False,
@@ -825,6 +961,8 @@ class WorkspaceViewModel(QObject):
         self._notify_image_edits_changed()
 
     def _notify_image_edits_changed(self) -> None:
+        if self._export_mode_unified and self._is_multi_document():
+            self._persist_project()
         self._app_state.notify_images_changed()
         self._commit_document_change(preview=False, summary=True, data_dirty_flag=True)
         self.schedule_preview(image_edit=True)
@@ -986,8 +1124,9 @@ class WorkspaceViewModel(QObject):
         self.export_finished.emit(outcome.path)
 
     def clear_version_view_state(self) -> None:
-        self._viewing_version = None
-        self.version_status_changed.emit(self.version_status_text())
+        """Sai do modo 'visualizando versão' e volta ao preview do rascunho atual."""
+        if self._viewing_version is None:
+            return
         self.schedule_preview()
 
     def _flush_pending_saves(self) -> None:
