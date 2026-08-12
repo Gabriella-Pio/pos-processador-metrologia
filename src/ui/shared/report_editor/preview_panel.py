@@ -266,7 +266,7 @@ class PreviewPanel(QFrame):
         if not isinstance(image_label, PreviewPageLabel) or pixmap is None:
             return
 
-        x, y, w, h = anchor_widget_rect(
+        highlight = anchor_widget_rect(
             rect,
             page_height_pts=page_item["page_height_pts"],
             zoom=self._zoom,
@@ -275,6 +275,9 @@ class PreviewPanel(QFrame):
             pixmap_width=pixmap.width(),
             pixmap_height=pixmap.height(),
         )
+        if highlight is None:
+            return
+        x, y, w, h = highlight
         image_label.set_highlight_rect(QRect(x, y, w, h))
 
     def _on_page_image_clicked(self, event, page_number: int, image_label: PreviewPageLabel) -> None:

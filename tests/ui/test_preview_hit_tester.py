@@ -119,7 +119,7 @@ def test_anchor_widget_rect_matches_pdf_bounds() -> None:
     page_height = 792.0
     zoom = 1.0
     rect = {"x": 72, "y": 700, "width": 200, "height": 18}
-    x, y, w, h = anchor_widget_rect(
+    highlight = anchor_widget_rect(
         rect,
         page_height_pts=page_height,
         zoom=zoom,
@@ -128,7 +128,37 @@ def test_anchor_widget_rect_matches_pdf_bounds() -> None:
         pixmap_width=612,
         pixmap_height=792,
     )
+    assert highlight is not None
+    x, y, w, h = highlight
     assert x == 68
     assert y == 70
     assert w == 208
     assert h == 26
+
+
+def test_anchor_bounds_rejects_none_coordinates() -> None:
+    from src.ui.shared.report_editor.preview_hit_tester import anchor_bounds
+
+    assert anchor_bounds({"x": None, "y": 10, "width": 1, "height": 1}) is None
+    assert anchor_bounds({"anchor_rect": {"x": None, "y": None, "width": None, "height": None}}) is None
+    assert anchor_bounds({"x": 1, "y": 2, "width": 3, "height": 4}) == {
+        "x": 1.0,
+        "y": 2.0,
+        "width": 3.0,
+        "height": 4.0,
+    }
+
+
+def test_anchor_widget_rect_returns_none_for_invalid_rect() -> None:
+    assert (
+        anchor_widget_rect(
+            {"x": None, "y": 1, "width": 2, "height": 3},
+            page_height_pts=792.0,
+            zoom=1.0,
+            label_width=100,
+            label_height=100,
+            pixmap_width=100,
+            pixmap_height=100,
+        )
+        is None
+    )

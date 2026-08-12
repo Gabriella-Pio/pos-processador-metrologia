@@ -49,20 +49,38 @@ def click_to_pdf_point(
     return pdf_x, pdf_y
 
 
+def _as_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
 def anchor_bounds(info: dict) -> dict | None:
     rect = info.get("anchor_rect") if isinstance(info.get("anchor_rect"), dict) else info
     if not isinstance(rect, dict):
         return None
-    if not all(key in rect for key in ("x", "y", "width", "height")):
+    x = _as_float(rect.get("x"))
+    y = _as_float(rect.get("y"))
+    width = _as_float(rect.get("width"))
+    height = _as_float(rect.get("height"))
+    if None in (x, y, width, height):
         return None
-    return rect
+    return {"x": x, "y": y, "width": width, "height": height, **{
+        key: value for key, value in rect.items() if key not in {"x", "y", "width", "height"}
+    }}
 
 
 def anchor_page_number(info: dict, rect: dict) -> int | None:
     page = rect.get("page") or info.get("page_start") or info.get("page")
     if page is None:
         return None
-    return int(page)
+    try:
+        return int(page)
+    except (TypeError, ValueError):
+        return None
 
 
 def point_in_anchor(
@@ -72,10 +90,16 @@ def point_in_anchor(
     *,
     padding_pts: float = 6.0,
 ) -> bool:
-    x0 = float(rect["x"]) - padding_pts
-    x1 = float(rect["x"]) + float(rect["width"]) + padding_pts
-    y0 = float(rect["y"]) - padding_pts
-    y1 = float(rect["y"]) + float(rect["height"]) + padding_pts
+    x = _as_float(rect.get("x"))
+    y = _as_float(rect.get("y"))
+    width = _as_float(rect.get("width"))
+    height = _as_float(rect.get("height"))
+    if None in (x, y, width, height):
+        return False
+    x0 = x - padding_pts
+    x1 = x + width + padding_pts
+    y0 = y - padding_pts
+    y1 = y + height + padding_pts
     return x0 <= pdf_x <= x1 and y0 <= pdf_y <= y1
 
 
@@ -89,16 +113,22 @@ def anchor_widget_rect(
     pixmap_width: int,
     pixmap_height: int,
     padding_pts: float = 4.0,
-) -> tuple[int, int, int, int]:
+) -> tuple[int, int, int, int] | None:
     """Retângulo (x, y, w, h) em coordenadas do QLabel para desenhar highlight."""
+    x = _as_float(rect.get("x"))
+    y = _as_float(rect.get("y"))
+    width = _as_float(rect.get("width"))
+    height = _as_float(rect.get("height"))
+    if None in (x, y, width, height):
+        return None
     offset_x, offset_y = pixmap_display_offset(
         label_width, label_height, pixmap_width, pixmap_height
     )
-    x = (float(rect["x"]) - padding_pts) * zoom + offset_x
-    top = (page_height_pts - float(rect["y"]) - float(rect["height"]) - padding_pts) * zoom
-    width = (float(rect["width"]) + padding_pts * 2) * zoom
-    height = (float(rect["height"]) + padding_pts * 2) * zoom
-    return int(x), int(top + offset_y), max(1, int(width)), max(1, int(height))
+    left = (x - padding_pts) * zoom + offset_x
+    top = (page_height_pts - y - height - padding_pts) * zoom
+    widget_w = (width + padding_pts * 2) * zoom
+    widget_h = (height + padding_pts * 2) * zoom
+    return int(left), int(top + offset_y), max(1, int(widget_w)), max(1, int(widget_h))
 
 
 def hit_test_section_at_point(
@@ -138,8 +168,11 @@ def hit_test_photo_at_point(
     for anchor in photo_anchors:
         if int(anchor.get("page") or 0) != page_number:
             continue
-        if point_in_anchor(pdf_x, pdf_y, anchor, padding_pts=padding_pts):
-            area = float(anchor.get("width") or 0) * float(anchor.get("height") or 0)
+        bounds = anchor_bounds(anchor)
+        if bounds is None:
+            continue
+        if point_in_anchor(pdf_x, pdf_y, bounds, padding_pts=padding_pts):
+            area = float(bounds["width"]) * float(bounds["height"])
             matches.append((area, anchor))
     if not matches:
         return None
