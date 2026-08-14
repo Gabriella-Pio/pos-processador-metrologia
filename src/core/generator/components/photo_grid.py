@@ -1,6 +1,8 @@
 """Grade de fotos 2 colunas para o PDF (imagem + legenda por path)."""
 from __future__ import annotations
 
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 
 from src.core.domain.image_workspace import format_number_marker_legend, lookup_foto_edits
@@ -45,6 +47,17 @@ def _photo_context(contexto_extra: dict | None, section_id: str) -> tuple[dict, 
     return extra.get("foto_edits") or {}, extra.get("photo_anchors")
 
 
+def _caption_style(styles: dict, *, centered: bool):
+    base = styles.get("legenda_foto") or styles.get("texto")
+    if not centered or base is None:
+        return base
+    return ParagraphStyle(
+        f"{getattr(base, 'name', 'legenda')}_centro",
+        parent=base,
+        alignment=TA_CENTER,
+    )
+
+
 def _build_photo_element(
     path: str,
     styles: dict,
@@ -75,6 +88,39 @@ def _build_photo_element(
     return elemento
 
 
+def _append_centered_photo_block(
+    story,
+    photo_element,
+    caption_text: str,
+    styles: dict,
+    *,
+    total_width: float,
+) -> None:
+    """Centraliza foto (+ legenda) na largura útil — 1 foto ou sobra ímpar da grade.
+
+    Lista de flowables na célula (sem KeepTogether): KeepTogether+AnchoredPhoto
+    dentro de Table estoura a altura no ReportLab (~2^24).
+    """
+    cells: list = [photo_element]
+    if caption_text:
+        cells.append(Paragraph(caption_text, _caption_style(styles, centered=True)))
+    band = Table([[cells]], colWidths=[total_width])
+    band.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
+    story.append(band)
+    story.append(Spacer(1, 8))
+
+
 def append_photo_grid(
     story,
     paths: list[str],
@@ -88,26 +134,23 @@ def append_photo_grid(
     img_height: int = 150,
     default_caption: str = "",
 ) -> None:
-    """Adiciona fotos ao story: 1 = largura cheia; 2+ = grade 2 colunas."""
+    """Adiciona fotos ao story: 1 = centralizada; 2+ = grade 2 colunas (sobra centralizada)."""
     clean = [p for p in paths if p]
     if not clean:
         return
 
-    estilo_legenda = styles.get("legenda_foto") or styles.get("texto")
-
     if len(clean) == 1:
         path = clean[0]
-        img_w = int(total_width)
-        story.append(
-            _build_photo_element(
-                path,
-                styles,
-                largura=img_w,
-                altura=img_height,
-                section_id=section_id,
-                foto_edits=foto_edits,
-                photo_anchors=photo_anchors,
-            )
+        # Largura confortável para foto isolada (não estica até a margem).
+        img_w = int(min(total_width * 0.72, 400))
+        photo = _build_photo_element(
+            path,
+            styles,
+            largura=img_w,
+            altura=img_height,
+            section_id=section_id,
+            foto_edits=foto_edits,
+            photo_anchors=photo_anchors,
         )
         legenda = _combined_caption(
             captions,
@@ -115,9 +158,13 @@ def append_photo_grid(
             lookup_foto_edits(foto_edits, path),
             default_caption=default_caption,
         )
-        if legenda:
-            story.append(Paragraph(legenda, estilo_legenda))
-        story.append(Spacer(1, 8))
+        _append_centered_photo_block(
+            story,
+            photo,
+            legenda,
+            styles,
+            total_width=total_width,
+        )
         return
 
     col_w = total_width / 2
@@ -138,26 +185,46 @@ def append_photo_grid(
         edits = lookup_foto_edits(foto_edits, path)
         legenda = _combined_caption(captions, path, edits, default_caption=default_caption)
         if legenda:
-            flowables.append(Paragraph(legenda, estilo_legenda))
+            flowables.append(Paragraph(legenda, _caption_style(styles, centered=False)))
         cells.append(flowables)
 
     index = 0
     while index < len(cells):
         take = min(2, len(cells) - index)
-        row = cells[index:index + take]
+        row = cells[index : index + take]
         index += take
         if take == 1:
-            band = Table([row + [""]], colWidths=[col_w, col_w])
-        else:
-            band = Table([row], colWidths=[col_w, col_w])
-        band.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("BOX", (0, 0), (-1, -1), 0.4, ReportTheme.COR_LINHA),
-        ]))
+            # Sobra ímpar (3ª, 5ª…): centraliza na largura total.
+            path = clean[index - 1]
+            photo = row[0][0]
+            caption_text = _combined_caption(
+                captions,
+                path,
+                lookup_foto_edits(foto_edits, path),
+                default_caption=default_caption,
+            )
+            _append_centered_photo_block(
+                story,
+                photo,
+                caption_text,
+                styles,
+                total_width=total_width,
+            )
+            continue
+        band = Table([row], colWidths=[col_w, col_w])
+        band.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("BOX", (0, 0), (-1, -1), 0.4, ReportTheme.COR_LINHA),
+                ]
+            )
+        )
         story.append(band)
         story.append(Spacer(1, 6))
 

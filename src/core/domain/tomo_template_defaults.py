@@ -4,11 +4,9 @@ from __future__ import annotations
 TOMO_PROSE_DEFAULTS: dict[str, dict[str, str]] = {
     "introducao": {
         "section_title": "RELATÓRIO TÉCNICO — INSPEÇÃO TOMOGRÁFICA INDUSTRIAL",
-        "intro": (
-            "Nota: “não identificadas” indica ausência de indicações detectáveis nas condições "
-            "do ensaio e não constitui garantia absoluta de inexistência de descontinuidades "
-            "abaixo do limite de detecção."
-        ),
+        # `intro` não é desenhado no corpo da introdução (só objetivo/escopo/referencia).
+        # A nota de rodapé fica em `nota` / `nota_deteccao`.
+        "intro": "",
         "nota": (
             "Nota: “não identificadas” indica ausência de indicações detectáveis nas condições "
             "do ensaio e não constitui garantia absoluta de inexistência de descontinuidades "
@@ -64,12 +62,21 @@ TOMO_PROSE_DEFAULTS: dict[str, dict[str, str]] = {
             "A inspeção foi executada no sistema industrial ZEISS BOSELLO MAX 80-150 por meio de "
             "um tubo gerador de raios X. O feixe é produzido eletricamente apenas quando o gerador "
             "está energizado; o equipamento não utiliza fonte radioisotópica selada para gerar a "
-            "radiação. Foram adquiridas projeções radiográficas do componente em múltiplas "
+            "radiação. Durante a aquisição existe emissão de radiação ionizante no interior do "
+            "gabinete autoblindado, construído em aço e chumbo e dotado dos dispositivos "
+            "de segurança previstos para esse tipo de sistema. \n\n"
+            "Foram adquiridas projeções radiográficas do componente em múltiplas "
             "posições angulares e, em seguida, realizada a reconstrução computacional "
-            "tridimensional do volume. A avaliação qualitativa das reconstruções e vistas "
-            "seccionais permitiu observar regiões internas não acessíveis por inspeção visual "
-            "direta. A interpretação ficou restrita ao volume efetivamente reconstruído e não "
-            "incluiu quantificação dimensional de descontinuidades nem ensaios funcionais."
+            "tridimensional do volume. Os parâmetros máximos informados para a aquisição " 
+            "foram tensão de até 225 kV e corrente de até 6,2 mA no tubo de raios X."
+            "A avaliação qualitativa das reconstruções e vistas seccionais permitiu observar "
+            "regiões internas não acessíveis por inspeção visual direta. \n\n"
+            "Foram pesquisadas indicações internas compatíveis com trincas, inclusões ou impurezas, "
+            "corpos estranhos e obstruções dos canais, "
+            "além da continuidade aparente das passagens internas. "
+            "A interpretação ficou restrita ao volume efetivamente reconstruído e não incluiu "
+            "quantificação dimensional de descontinuidades nem ensaios funcionais de vazão, "
+            "pressão, estanqueidade ou desempenho térmico."
         ),
     },
     "registro_componente": {
@@ -115,7 +122,8 @@ TOMO_PROSE_DEFAULTS: dict[str, dict[str, str]] = {
             "interna do componente {componente}. Considerando as reconstruções analisadas e a "
             "capacidade de detecção alcançada nas condições do ensaio, não foram identificadas "
             "indicações detectáveis compatíveis com trincas internas, inclusões ou impurezas "
-            "significativas, corpos estranhos ou obstruções. Dessa forma, a peça não apresentou "
+            "significativas, corpos estranhos ou obstruções. \n\n"
+            "Dessa forma, a peça não apresentou "
             "descontinuidades internas detectáveis que possam ser associadas a comprometimento "
             "aparente de sua integridade estrutural, dentro do escopo desta inspeção."
         ),

@@ -1,8 +1,6 @@
-from reportlab.lib import colors
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import HRFlowable, Paragraph, Spacer
+from reportlab.platypus import Paragraph
 
-from .base import BaseSection, anchored_section_title
+from .base import BaseSection, append_section_title
 from ..prose_helpers import format_prose_paragraph, get_section_prose, get_section_heading
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
@@ -13,10 +11,8 @@ class ConclusaoSection(BaseSection):
         heading = get_section_heading(
             contexto_extra, "conclusao", SECTION_HEADING_DEFAULTS["conclusao"],
         )
-        story.append(
-            anchored_section_title(
-                heading, styles["secao"], "conclusao", contexto_extra.get("section_anchor_map")
-            )
+        append_section_title(
+            story, heading, styles["secao"], "conclusao", contexto_extra.get("section_anchor_map"),
         )
         items = getattr(dados_parseados, "itens_medicao", []) or []
         if getattr(dados_parseados, "series", None) is not None:
@@ -38,33 +34,5 @@ class ConclusaoSection(BaseSection):
             )
 
         story.append(Paragraph(format_prose_paragraph(conclusao_texto), styles["texto"]))
-
-        # Espaço + linha de assinatura + rótulo (gov.br aplica a assinatura depois).
-        aprovacao = get_section_prose(
-            contexto_extra,
-            "conclusao",
-            "aprovacao",
-            PROSE_TEMPLATES.get("conclusao", {}).get("aprovacao", "Aprovação / Coordenação CEM"),
-        )
-        if aprovacao.strip():
-            story.append(Spacer(1, 48))
-            story.append(
-                HRFlowable(
-                    width="42%",
-                    thickness=0.7,
-                    color=colors.HexColor("#555555"),
-                    spaceBefore=0,
-                    spaceAfter=6,
-                    hAlign="CENTER",
-                )
-            )
-            estilo = ParagraphStyle(
-                "AprovacaoCemLabel",
-                parent=styles["texto"],
-                alignment=1,
-                fontSize=9,
-                textColor=colors.HexColor("#333333"),
-                spaceBefore=0,
-                spaceAfter=4,
-            )
-            story.append(Paragraph(aprovacao, estilo))
+        # Assinatura (linha + rótulo) é anexada pelo engine após todas as seções
+        # de conteúdo e antes dos anexos — ver ``append_approval_signature``.

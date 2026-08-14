@@ -3,7 +3,7 @@ from reportlab.pdfgen import canvas as pdfcanvas
 from reportlab.platypus import SimpleDocTemplate
 from .styles import ReportStyles
 from .constants import ReportTheme, TEMPLATE_PADRAO_OFICIAL
-from .prose_helpers import append_section_footer_note
+from .prose_helpers import append_approval_signature, append_section_footer_note
 from src.core.domain.section_numbering import build_section_number_map
 from .components.pdf_annex import append_source_pdfs
 from .components.photo_grid import append_section_photos_if_any
@@ -182,7 +182,10 @@ class ReportGenerator:
             "section_media_settings": opcoes_extras.get("section_media_settings") or {},
         }
 
-        for bloco in template_config:
+        content_blocks = [b for b in template_config if b.get("tipo") != "anexos"]
+        anexos_blocks = [b for b in template_config if b.get("tipo") == "anexos"]
+
+        for bloco in content_blocks:
             tipo = bloco.get("tipo")
             config = bloco.get("config", {})
 
@@ -201,6 +204,19 @@ class ReportGenerator:
                 append_section_photos_if_any(story, styles, tipo, contexto_extra)
                 append_section_footer_note(story, styles, tipo, contexto_extra)
 
+        # Assinatura sempre no fim do corpo (após conclusão/observações/etc.),
+        # imediatamente antes dos anexos quando existirem.
+        append_approval_signature(story, styles, contexto_extra)
+
+        for bloco in anexos_blocks:
+            tipo = bloco.get("tipo")
+            config = bloco.get("config", {})
+            if tipo in cls.REGISTRY_SECOES:
+                secao_classe = cls.REGISTRY_SECOES[tipo]
+                instancia_secao = secao_classe(config)
+                instancia_secao.render(story, styles, dados_parseados, contexto_extra)
+                append_section_footer_note(story, styles, tipo, contexto_extra)
+
         doc.build(
             story,
             onFirstPage=cls._adicionar_rodape,
@@ -208,7 +224,7 @@ class ReportGenerator:
             canvasmaker=_NumberedCanvas,
         )
 
-        anexos_enabled = any(b.get("tipo") == "anexos" for b in template_config)
+        anexos_enabled = bool(anexos_blocks)
         if anexos_enabled:
             append_source_pdfs(caminho_saida, contexto_extra.get("anexo_pdfs") or [])
 

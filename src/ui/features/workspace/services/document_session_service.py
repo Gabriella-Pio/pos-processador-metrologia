@@ -72,17 +72,19 @@ class DocumentSessionService:
             kind = "insp_ect"
         document.source_kind = kind
         slot.source_kind = kind
-        template_id = session.effective_template_id(slot) if slot.template_id or session.report_mode == "mixed" else session.template_id
-        if session.report_mode == "mixed":
-            template_id = slot.template_id or template_id_for_kind(kind)  # type: ignore[arg-type]
-            slot.template_id = template_id
-        elif session.report_mode == "tomo_only":
+        # Bosello/INSP ECT sempre no template de tomografia (corrige auto/combo em MMC).
+        if kind == "insp_ect" or session.report_mode == "tomo_only":
             template_id = "tomografia"
-            slot.template_id = template_id
+        elif session.report_mode == "mixed":
+            template_id = slot.template_id or template_id_for_kind(kind)  # type: ignore[arg-type]
         else:
-            template_id = session.template_id
-            slot.template_id = template_id
+            template_id = session.template_id or "default"
+        slot.template_id = template_id
         document.template_id = template_id
+        if all((s.source_kind or "calypso") == "insp_ect" for s in session.documents):
+            session.template_id = "tomografia"
+            if session.report_mode == "mmc_only":
+                session.report_mode = "tomo_only"
         self.apply_template_defaults(document)
         slot.document = document
         return True, notice

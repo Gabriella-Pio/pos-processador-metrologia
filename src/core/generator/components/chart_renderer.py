@@ -146,7 +146,7 @@ def render_cmm_geometric_chart(
     points: list[CmmGeometricPoint],
     output_path: Path,
 ) -> Path | None:
-    """Valor medido x limite estabelecido para características geométricas."""
+    """Valor medido x limite cadastrado para características geométricas."""
     if not points:
         return None
     labels = [pt.label for pt in points]
@@ -154,11 +154,11 @@ def render_cmm_geometric_chart(
     limits = [pt.limit for pt in points]
     return _render_grouped_bar_chart(
         labels,
-        {"Valor medido": measured, "Limite estabelecido": limits},
+        {"Valor medido": measured, "Limite cadastrado": limits},
         output_path,
-        title="Características geométricas — valor medido x limite",
+        title="Características geométricas — valor medido x limite cadastrado",
         ylabel="Valor (mm)",
-        series_colors={"Valor medido": "#1F4E79", "Limite estabelecido": "#E67E22"},
+        series_colors={"Valor medido": "#1F4E79", "Limite cadastrado": "#E67E22"},
     )
 
 

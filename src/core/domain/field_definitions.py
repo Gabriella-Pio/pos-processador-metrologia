@@ -74,6 +74,7 @@ _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
     ),
     "resultados": (
         _prose("intro", "Texto introdutório"),
+        _prose("resumo", "Resumo dimensional"),
         _SECTION_FOOTER_NOTE,
     ),
     "grafica": (

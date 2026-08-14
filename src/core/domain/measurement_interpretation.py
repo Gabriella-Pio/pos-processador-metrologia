@@ -116,3 +116,50 @@ def format_item_bullet_html(item: Any, *, alert_color: str) -> str:
 
 def iter_mmc_bullet_htmls(items: list[Any], *, alert_color: str) -> list[str]:
     return [format_item_bullet_html(item, alert_color=alert_color) for item in items]
+
+
+def _characteristic_label(item: Any) -> str:
+    return str(getattr(item, "caracteristica", "") or "").strip() or "característica"
+
+
+def format_dimensional_summary_sentence(item: Any) -> str:
+    """Frase curta por característica para o resumo abaixo da tabela de resultados."""
+    name = _characteristic_label(item)
+    status = str(getattr(item, "status", "") or "").strip()
+    limits = measurement_limits(item)
+    if limits is None:
+        return (
+            f"o {name} medido foi registrado sem limites de tolerância cadastrados "
+            f"no relatório de origem"
+        )
+    if status == "Dentro":
+        return f"o {name} medido apresentou resultado dentro dos limites informados"
+    if limits.valor_medido > limits.limite_superior:
+        return (
+            f"o {name} medido apresentou resultado acima do limite superior cadastrado"
+        )
+    if limits.valor_medido < limits.limite_inferior:
+        return (
+            f"o {name} medido apresentou resultado abaixo do limite inferior cadastrado"
+        )
+    return f"o {name} medido apresentou resultado fora dos limites informados"
+
+
+def build_dimensional_summary(items: list[Any] | None) -> str:
+    """Resumo dimensional com uma linha por característica."""
+    rows = list(items or [])
+    if not rows:
+        return (
+            "Resumo dimensional: nenhuma característica dimensional foi extraída "
+            "do relatório de origem."
+        )
+    lines: list[str] = ["Resumo dimensional:"]
+    for item in rows:
+        text = format_dimensional_summary_sentence(item).strip()
+        if not text:
+            continue
+        sentence = text[0].upper() + text[1:] if len(text) > 1 else text.upper()
+        if not sentence.endswith("."):
+            sentence = f"{sentence}."
+        lines.append(sentence)
+    return "\n".join(lines)

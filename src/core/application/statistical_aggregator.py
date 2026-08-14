@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.core.domain.measure_display import infer_measure_unit
+
 
 @dataclass
 class StatisticalCharacteristicSeries:
@@ -336,20 +338,6 @@ def statistical_escopo_phrase(tipos: list[str]) -> str:
         "as características dimensionais e geométricas informadas "
         f"nos relatórios de medição da MMC, incluindo {medidas}"
     )
-
-
-def infer_measure_unit(raw: str | float | int | None) -> str:
-    """Infere unidade a partir do texto bruto do CALYPSO (mm / inch / °)."""
-    text = str(raw or "").strip().lower()
-    if not text:
-        return ""
-    if "inch" in text:
-        return "inch"
-    if "mm" in text:
-        return "mm"
-    if "°" in text or "deg" in text:
-        return "°"
-    return ""
 
 
 def _is_fora(status: str) -> bool:

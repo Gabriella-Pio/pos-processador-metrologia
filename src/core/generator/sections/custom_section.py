@@ -2,7 +2,7 @@
 from reportlab.platypus import Paragraph, Spacer
 
 from ..prose_helpers import format_prose_paragraph, render_kv_table
-from .base import anchored_section_title
+from .base import append_section_title
 
 
 class CustomSection:
@@ -14,12 +14,13 @@ class CustomSection:
         prose = (contexto_extra.get("section_prose") or {}).get(section_id, {})
         title = prose.get("section_title") or prose.get("title") or "Seção personalizada"
         body = (prose.get("body") or "").strip()
-        story.append(anchored_section_title(
+        append_section_title(
+            story,
             title.upper(),
             styles["secao"],
             section_id,
             contexto_extra.get("section_anchor_map"),
-        ))
+        )
         if body:
             story.append(Paragraph(format_prose_paragraph(body), styles["texto"]))
         table_rows = (contexto_extra.get("table_rows") or {}).get(section_id, [])

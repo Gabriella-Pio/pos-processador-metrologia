@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, Paragraph, Spacer, Table, TableStyle
 
 from src.core.domain.markdown_prose import markdown_to_reportlab_html
 from src.core.domain.placeholder_utils import resolve_placeholders
@@ -43,20 +43,19 @@ def get_section_heading(contexto_extra: dict, section_id: str, default: str) -> 
 
 
 def append_anchored_section_title(story, styles, contexto_extra: dict, section_id: str) -> None:
-    from .sections.base import anchored_section_title
+    from .sections.base import append_section_title
 
     heading = get_section_heading(
         contexto_extra,
         section_id,
         SECTION_HEADING_DEFAULTS[section_id],
     )
-    story.append(
-        anchored_section_title(
-            heading,
-            styles["secao"],
-            section_id,
-            contexto_extra.get("section_anchor_map"),
-        )
+    append_section_title(
+        story,
+        heading,
+        styles["secao"],
+        section_id,
+        contexto_extra.get("section_anchor_map"),
     )
 
 
@@ -155,7 +154,7 @@ def render_kv_table(
             ("PADDING", (0, 0), (-1, -1), 5),
         ])
     )
-    story.append(tabela)
+    story.append(KeepTogether([tabela]))
     if spacer_after:
         story.append(Spacer(1, spacer_after))
 
@@ -169,20 +168,29 @@ def append_section_footer_note(story, styles, section_id: str, contexto_extra: d
     if section_id == "introducao":
         fallback = str(
             prose.get("nota")
-            or prose.get("intro")
             or prose.get("nota_deteccao")
+            or prose.get("intro")
             or ""
         )
     else:
         fallback = str(prose.get("nota") or "")
     note = get_section_prose(contexto_extra, section_id, "nota", fallback)
     if not str(note or "").strip() and section_id == "introducao":
-        note = get_section_prose(contexto_extra, section_id, "intro", fallback)
+        note = get_section_prose(
+            contexto_extra,
+            section_id,
+            "nota_deteccao",
+            str(prose.get("nota_deteccao") or prose.get("intro") or ""),
+        )
     if not str(note or "").strip():
         return
-    intro = str(prose.get("intro") or "").strip()
-    if intro and str(note).strip() == intro:
-        return
+    # Em outras seções, intro pode ser o corpo — evita imprimir a mesma frase 2×.
+    # Na introdução o corpo é objetivo/escopo/referencia; `intro` não é desenhado,
+    # então NÃO comparar nota==intro (senão a nota tomográfica some).
+    if section_id != "introducao":
+        intro = str(prose.get("intro") or "").strip()
+        if intro and str(note).strip() == intro:
+            return
     estilo = ParagraphStyle(
         f"SectionNota_{section_id}",
         parent=styles["texto"],
@@ -193,3 +201,48 @@ def append_section_footer_note(story, styles, section_id: str, contexto_extra: d
     story.append(Spacer(1, 6))
     story.append(Paragraph(f"<i>{format_prose_paragraph(note)}</i>", estilo))
     story.append(Spacer(1, 6))
+
+
+def append_approval_signature(story, styles, contexto_extra: dict) -> bool:
+    """Linha de assinatura + rótulo, sempre após o corpo do relatório (antes dos anexos).
+
+    O texto continua editável em ``conclusao.aprovacao``; a posição no PDF é fixa
+    no engine (abaixo de todas as seções de conteúdo, acima de anexos).
+    """
+    from reportlab.platypus import HRFlowable
+
+    from src.core.domain.report_field_registry import PROSE_TEMPLATES
+
+    default_label = PROSE_TEMPLATES.get("conclusao", {}).get(
+        "aprovacao", "Aprovação / Coordenação CEM"
+    )
+    aprovacao = get_section_prose(
+        contexto_extra,
+        "conclusao",
+        "aprovacao",
+        default_label,
+    )
+    if not aprovacao.strip():
+        return False
+    story.append(Spacer(1, 48))
+    story.append(
+        HRFlowable(
+            width="42%",
+            thickness=0.7,
+            color=colors.HexColor("#555555"),
+            spaceBefore=0,
+            spaceAfter=6,
+            hAlign="CENTER",
+        )
+    )
+    estilo = ParagraphStyle(
+        "AprovacaoCemLabel",
+        parent=styles["texto"],
+        alignment=1,
+        fontSize=9,
+        textColor=colors.HexColor("#333333"),
+        spaceBefore=0,
+        spaceAfter=4,
+    )
+    story.append(Paragraph(aprovacao, estilo))
+    return True

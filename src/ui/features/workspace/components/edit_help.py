@@ -45,7 +45,10 @@ _SECTION_HINTS: dict[str, str] = {
     "identificacao": (
         "Edite o texto introdutório, o título e as linhas da tabela de identificação."
     ),
-    "resultados": "Edite o texto introdutório e a grade de medições extraída do CALYPSO.",
+    "resultados": (
+        "Edite o texto introdutório, a grade de medições e o resumo dimensional "
+        "(gerado automaticamente a partir da tabela; a nota de rodapé fica separada)."
+    ),
     "grafica": "Texto introdutório e fotografias/gráficos do componente.",
     "tomografia": "Texto introdutório e fotografias da inspeção tomográfica.",
     "interpretacao": (
@@ -54,11 +57,13 @@ _SECTION_HINTS: dict[str, str] = {
         "automaticamente no workspace."
     ),
     "conclusao": (
-        "Texto da conclusão e o rótulo centrado de Aprovação / Coordenação CEM "
-        "(espaço para assinatura gov.br posterior)."
+        "Texto da conclusão. O rótulo de Aprovação / Coordenação CEM "
+        "(linha para assinatura gov.br) aparece no PDF após todas as seções "
+        "de conteúdo e imediatamente acima dos Anexos, quando houver."
     ),
     "anexos": (
-        "Lista e anexa ao final do relatório o(s) PDF(s) importado(s) pelo usuário."
+        "Lista e anexa ao final do relatório o(s) PDF(s) importado(s) pelo usuário. "
+        "A assinatura de aprovação fica sempre imediatamente acima desta seção."
     ),
     "controle_tecnico": "Edite o título, o subtítulo e as linhas da tabela de responsáveis (arraste para reordenar).",
 }

@@ -12,7 +12,10 @@ _INSP_ECT_MARKERS = (
     "Generated with ZEISS INSP EC T",
     "Generated with ZEISS INSP ECT",
     "ZEISS INSP EC T",
+    "ZEISS INSP ECT",
     "Defeito do volume",
+    "BOSELLO",
+    "ZEISS BOSELLO",
 )
 _CALYPSO_MARKERS = (
     "CALYPSO",
@@ -38,9 +41,7 @@ def detect_source_kind(pdf_path: Path | str, sample_pages: int = 2) -> SourceKin
 
     sample_upper = sample.upper()
     if any(marker.upper() in sample_upper for marker in _INSP_ECT_MARKERS):
-        # Prefer INSP ECT even if CALYPSO appears elsewhere (unlikely)
-        if "INSP EC" in sample_upper or "DEFEITO DO VOLUME" in sample_upper:
-            return "insp_ect"
+        return "insp_ect"
     if any(marker.upper() in sample_upper for marker in _CALYPSO_MARKERS):
         return "calypso"
     # Default: treat as CALYPSO (legado)
@@ -49,7 +50,7 @@ def detect_source_kind(pdf_path: Path | str, sample_pages: int = 2) -> SourceKin
 
 def detect_source_kind_from_text(text: str) -> SourceKind:
     upper = (text or "").upper()
-    if "INSP EC" in upper or "DEFEITO DO VOLUME" in upper:
+    if any(marker.upper() in upper for marker in _INSP_ECT_MARKERS):
         return "insp_ect"
     if any(marker.upper() in upper for marker in _CALYPSO_MARKERS):
         return "calypso"

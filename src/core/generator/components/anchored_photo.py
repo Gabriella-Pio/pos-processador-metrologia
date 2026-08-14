@@ -25,7 +25,13 @@ class AnchoredPhoto(Flowable):
 
     def wrap(self, avail_width, avail_height):  # noqa: N802
         if hasattr(self._inner, "wrap"):
-            return self._inner.wrap(avail_width, avail_height)
+            width, height = self._inner.wrap(avail_width, avail_height)
+        else:
+            width = getattr(self._inner, "drawWidth", getattr(self._inner, "width", self.width))
+            height = getattr(self._inner, "drawHeight", getattr(self._inner, "height", self.height))
+        # Mantém dimensões da imagem interna — evita herdar availHeight gigante de Table/KT.
+        self.width = float(width or 0)
+        self.height = float(height or 0)
         return self.width, self.height
 
     def draw(self) -> None:

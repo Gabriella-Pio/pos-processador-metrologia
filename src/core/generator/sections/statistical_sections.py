@@ -26,7 +26,7 @@ from src.core.generator.components.chart_renderer import (
 )
 from src.core.generator.constants import ReportTheme
 from src.core.generator.prose_helpers import get_section_heading
-from src.core.generator.sections.base import BaseSection, anchored_section_title
+from src.core.generator.sections.base import BaseSection, append_section_title
 from src.core.domain.chart_figure_defs import section_has_graphics
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
 
@@ -158,11 +158,8 @@ class EstatResumoTipoSection(BaseSection):
             section_id,
             SECTION_HEADING_DEFAULTS.get(section_id, heading_default),
         )
-        story.append(
-            anchored_section_title(
-                heading, styles["secao"], section_id, contexto_extra.get("section_anchor_map")
-            )
-        )
+        append_section_title(
+            story, heading, styles["secao"], section_id, contexto_extra.get("section_anchor_map"))
         series = series_by_tipo(getattr(dados_parseados, "series", []) or [], tipo)
         if not series:
             story.append(
@@ -192,11 +189,8 @@ class EstatDetalheTipoSection(BaseSection):
         )
         if self.page_break_before:
             story.append(PageBreak())
-        story.append(
-            anchored_section_title(
-                heading, styles["secao"], section_id, contexto_extra.get("section_anchor_map")
-            )
-        )
+        append_section_title(
+            story, heading, styles["secao"], section_id, contexto_extra.get("section_anchor_map"))
         story.append(
             Paragraph(
                 "Valores assinalados com * indicam medição fora dos limites informados "
@@ -266,11 +260,8 @@ class EstatGraficosSection(BaseSection):
             "estat_graficos",
             SECTION_HEADING_DEFAULTS.get("estat_graficos", "COMPORTAMENTO E ANÁLISE GRÁFICA"),
         )
-        story.append(
-            anchored_section_title(
-                heading, styles["secao"], "estat_graficos", contexto_extra.get("section_anchor_map")
-            )
-        )
+        append_section_title(
+            story, heading, styles["secao"], "estat_graficos", contexto_extra.get("section_anchor_map"))
         piece_labels = list(getattr(dados_parseados, "piece_labels", []) or [])
         all_series = list(getattr(dados_parseados, "series", []) or [])
         tipos = present_measure_tipos(all_series)
@@ -315,13 +306,11 @@ class EstatGraficosComplementarSection(BaseSection):
             ),
         )
         story.append(PageBreak())
-        story.append(
-            anchored_section_title(
-                heading,
+        append_section_title(
+            story, heading,
                 styles["secao"],
                 "estat_graficos_comp",
                 contexto_extra.get("section_anchor_map"),
-            )
         )
         all_series = list(getattr(dados_parseados, "series", []) or [])
         geometric = [

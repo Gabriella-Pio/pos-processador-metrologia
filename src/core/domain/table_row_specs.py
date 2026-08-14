@@ -47,7 +47,7 @@ IDENTIFICACAO_TABLE_ROWS: tuple[TableRowDef, ...] = (
 CONTROLE_TECNICO_TABLE_ROWS: tuple[TableRowDef, ...] = (
     TableRowDef("measured_by", "Medido por", ""),
     TableRowDef("reviewed_by", "Revisado por", ""),
-    TableRowDef("approved_by", "Aprovado por", "Não aplicável"),
+    TableRowDef("approved_by", "Aprovado por", "Matheus de Oliveira e Silva"),
     TableRowDef("role", "Cargo", ""),
     TableRowDef("institutional_email", "E-mail institucional", ""),
     TableRowDef("timestamp_str", "Data/Hora", ""),

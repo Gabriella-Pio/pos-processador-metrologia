@@ -292,9 +292,6 @@ class SectionEditView(QFrame):
     def reset_breadcrumb(self) -> None:
         self._header_title.setText("EDITAR SEÇÃO")
 
-    def has_pending_textarea(self) -> bool:
-        return self._pending_textarea_key is not None or self._debounce.isActive()
-
     def has_focused_editor(self) -> bool:
         """True se o usuário está digitando em algum PlaceholderTextEdit desta view."""
         if self._section_title_edit.has_editor_focus():
@@ -303,10 +300,19 @@ class SectionEditView(QFrame):
             return True
         if self._annotation_dialog.is_caption_editing():
             return True
+        if self._table_rows_editor.has_focused_editor():
+            return True
         for widget in self._field_widgets.values():
             if isinstance(widget, PlaceholderTextEdit) and widget.has_editor_focus():
                 return True
         return False
+
+    def has_pending_textarea(self) -> bool:
+        return (
+            self._pending_textarea_key is not None
+            or self._debounce.isActive()
+            or self._table_rows_editor.has_pending_emit()
+        )
 
     def refresh_appearance(self) -> None:
         self.setStyleSheet(sidebar_panel_style())

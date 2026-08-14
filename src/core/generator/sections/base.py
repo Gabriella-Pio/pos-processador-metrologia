@@ -1,6 +1,14 @@
 from abc import ABC, abstractmethod
 
-from reportlab.platypus import Paragraph
+from reportlab.platypus import CondPageBreak, Paragraph
+
+# Espaço mínimo (pt) para caber título + início do conteúdo. Se sobrar menos
+# na página, ReportLab quebra antes — evita seção “órfã” no rodapé.
+SECTION_MIN_SPACE = 180
+
+# Seções que começam o documento (não forçar quebra antes).
+_SKIP_COND_PAGEBREAK = frozenset({"cabecalho", "introducao"})
+
 
 class BaseSection(ABC):
     def __init__(self, config: dict = None):
@@ -23,6 +31,8 @@ class SectionTitleParagraph(Paragraph):
         super().__init__(text, style)
         self._section_id = section_id
         self._anchor_map = anchor_map
+        # Evita título sozinho no fim da página (fica com o próximo flowable).
+        self.keepWithNext = True
 
     def drawOn(self, canvas, x, y, _sW=0):  # noqa: N802
         self._anchor_x = x
@@ -44,3 +54,18 @@ class SectionTitleParagraph(Paragraph):
 
 def anchored_section_title(text: str, style, section_id: str, anchor_map: dict | None = None):
     return SectionTitleParagraph(text, style, section_id, anchor_map)
+
+
+def append_section_title(
+    story: list,
+    text: str,
+    style,
+    section_id: str,
+    anchor_map: dict | None = None,
+    *,
+    min_space: float = SECTION_MIN_SPACE,
+) -> None:
+    """Insere quebra condicional (se preciso) + título ancorado."""
+    if section_id not in _SKIP_COND_PAGEBREAK:
+        story.append(CondPageBreak(min_space))
+    story.append(anchored_section_title(text, style, section_id, anchor_map))

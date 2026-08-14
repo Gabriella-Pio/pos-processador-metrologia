@@ -1,18 +1,23 @@
 from reportlab.lib import colors
 from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import ParagraphStyle
-from .base import BaseSection, anchored_section_title
+from .base import BaseSection, append_section_title
 from ..constants import ReportTheme
 from ..prose_helpers import format_prose_paragraph, get_section_prose, get_section_heading
+from src.core.domain.measure_display import format_item_measure_cells
+from src.core.domain.measurement_interpretation import build_dimensional_summary
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
+
 
 class ResultadosSection(BaseSection):
     def render(self, story, styles, dados_parseados, contexto_extra):
         heading = get_section_heading(
             contexto_extra, "resultados", SECTION_HEADING_DEFAULTS["resultados"],
         )
-        story.append(anchored_section_title(heading, styles['secao'], "resultados", contexto_extra.get("section_anchor_map")))
+        append_section_title(
+            story, heading, styles["secao"], "resultados", contexto_extra.get("section_anchor_map"),
+        )
         intro_default = PROSE_TEMPLATES.get("resultados", {}).get("intro", "")
         intro_text = get_section_prose(contexto_extra, "resultados", "intro", intro_default)
         story.append(Paragraph(format_prose_paragraph(intro_text), styles['texto']))
@@ -33,20 +38,22 @@ class ResultadosSection(BaseSection):
         ]
 
         linhas_tabela = [cabecalho_tabela]
+        itens = list(getattr(dados_parseados, "itens_medicao", []) or [])
 
-        for idx, item in enumerate(dados_parseados.itens_medicao, 1):
+        for idx, item in enumerate(itens, 1):
             cor_status = ReportTheme.COR_ALERTA if item.status == "Fora" else ReportTheme.COR_SUCESSO
             status_parag = Paragraph(f"<font color='{cor_status.hexval()}'><b>{item.status}</b></font>", styles['celula_centro'])
-            
+            cells = format_item_measure_cells(item)
+
             linha = [
                 Paragraph(str(idx), styles['celula_centro']),
                 Paragraph(item.tipo, styles['celula']),
                 Paragraph(item.caracteristica, styles['celula']),
-                Paragraph(item.valor_medido, styles['celula_centro']),
-                Paragraph(item.nominal, styles['celula_centro']),
-                Paragraph(item.tol_superior, styles['celula_centro']),
-                Paragraph(item.tol_inferior, styles['celula_centro']),
-                Paragraph(item.desvio, styles['celula_centro']),
+                Paragraph(cells["valor_medido"], styles['celula_centro']),
+                Paragraph(cells["nominal"], styles['celula_centro']),
+                Paragraph(cells["tol_superior"], styles['celula_centro']),
+                Paragraph(cells["tol_inferior"], styles['celula_centro']),
+                Paragraph(cells["desvio"], styles['celula_centro']),
                 status_parag
             ]
             linhas_tabela.append(linha)
@@ -62,3 +69,9 @@ class ResultadosSection(BaseSection):
 
         story.append(tabela_itens)
         story.append(Spacer(1, 10))
+
+        resumo_default = build_dimensional_summary(itens)
+        resumo_text = get_section_prose(contexto_extra, "resultados", "resumo", resumo_default)
+        if str(resumo_text or "").strip():
+            story.append(Paragraph(format_prose_paragraph(resumo_text), styles["texto"]))
+            story.append(Spacer(1, 8))

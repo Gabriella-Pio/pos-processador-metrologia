@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 from src.core.domain.measurement_interpretation import (
+    build_dimensional_summary,
     format_item_bullet_html,
     format_item_bullet_plain,
     item_has_tolerance,

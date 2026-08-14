@@ -286,7 +286,15 @@ class WorkspaceView(QWidget):
 
     def _populate_template_combo(self, templates: list[dict]) -> None:
         session = self._app_state.project_session
-        current_id = session.template_id if session else "default"
+        document = self._app_state.active_document
+        slot = session.active_slot if session is not None else None
+        # Em lote misto, o layout exibido é o da aba ativa — não o template da sessão.
+        current_id = (
+            (document.template_id if document is not None else None)
+            or (slot.template_id if slot is not None else None)
+            or (session.template_id if session is not None else None)
+            or "default"
+        )
         self._template_combo.blockSignals(True)
         self._template_combo.clear()
         for template in templates:
@@ -301,7 +309,12 @@ class WorkspaceView(QWidget):
             return
         template_id = self._template_combo.itemData(index)
         session = self._app_state.project_session
-        if session is None or template_id == session.template_id:
+        document = self._app_state.active_document
+        current_id = (
+            (document.template_id if document is not None else None)
+            or (session.template_id if session is not None else None)
+        )
+        if session is None or document is None or template_id == current_id:
             return
         if self._vm.is_layout_dirty():
             if not confirm_action(

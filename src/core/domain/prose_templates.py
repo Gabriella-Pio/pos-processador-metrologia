@@ -9,7 +9,7 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
         "intro": "",
         "objetivo": (
             "Apresentar os resultados da inspeção dimensional realizada no componente "
-            "identificado como {componente}, com base no relatório ZEISS CALYPSO."
+            "identificado como {componente}, com base no relatório de medição ZEISS CALYPSO."
         ),
         "escopo": (
             "A análise contempla as características cadastradas, avaliando conformidade "
@@ -29,11 +29,12 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
             "A classificação “Dentro” ou “Fora” foi determinada com base nos limites cadastrados "
             "no relatório ZEISS CALYPSO."
         ),
+        # Gerado automaticamente a partir da tabela; editável no workspace.
+        "resumo": "",
     },
     "grafica": {
         "intro": (
-            "Espaço reservado para inserção de fotografias, diagramas ou gráficos analíticos "
-            "do componente."
+            "Análises gráficas das características dimensionais do componente."
         ),
     },
     "tomografia": {
@@ -74,11 +75,17 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
         "texto_aprovado": (
             "O componente analisado atende plenamente aos requisitos dimensionais especificados "
             "no relatório de origem, estando aprovado."
+            "Este relatório apresenta os dados consolidados para suporte técnico à avaliação do componente. A declaração "
+            "formal de conformidade deve considerar os critérios de aceitação definidos em desenho, norma ou "
+            "especificação técnica do cliente."
         ),
         "texto_reprovado": (
             "O componente analisado encontra-se reprovado parcialmente devido às divergências "
             "dimensionais constatadas, cabendo avaliação do setor de engenharia e qualidade "
             "para liberação ou retrabalho."
+            "Este relatório apresenta os dados consolidados para suporte técnico à avaliação do componente. A declaração "
+            "formal de conformidade deve considerar os critérios de aceitação definidos em desenho, norma ou "
+            "especificação técnica do cliente."
         ),
         "aprovacao": "Aprovação / Coordenação CEM",
     },
@@ -87,7 +94,7 @@ PROSE_TEMPLATES: dict[str, dict[str, str]] = {
     },
     "anexos": {
         "intro": (
-            "Seguem anexos os PDFs de origem fornecidos na importação do projeto, "
+            "Seguem anexos os PDFs de origem, provenientes do software ZEISS CALYPSO, "
             "para consulta e rastreabilidade."
         ),
     },

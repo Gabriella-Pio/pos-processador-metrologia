@@ -87,12 +87,6 @@ SECTION_CATALOG: tuple[SectionMeta, ...] = (
         numbered=True,
     ),
     _meta(
-        "controle_tecnico",
-        "Controle técnico",
-        pdf_heading="CONTROLE TÉCNICO",
-        numbered=True,
-    ),
-    _meta(
         "resultados",
         "Resultados dimensionais",
         pdf_heading="RESULTADOS DIMENSIONAIS",
@@ -265,12 +259,6 @@ SECTION_CATALOG: tuple[SectionMeta, ...] = (
         numbered=True,
     ),
     _meta(
-        "conclusao",
-        "Conclusão",
-        pdf_heading="CONCLUSÃO",
-        numbered=True,
-    ),
-    _meta(
         "observacoes_limitacoes",
         "Observações e limitações",
         pdf_heading="OBSERVAÇÕES E LIMITAÇÕES",
@@ -281,6 +269,19 @@ SECTION_CATALOG: tuple[SectionMeta, ...] = (
         "historico_versoes",
         "Histórico de versões",
         pdf_heading="HISTÓRICO DE VERSÕES",
+        numbered=True,
+    ),
+    _meta(
+        "controle_tecnico",
+        "Controle técnico",
+        pdf_heading="CONTROLE TÉCNICO",
+        # enabled_by_default=False,
+        numbered=True,
+    ),
+    _meta(
+        "conclusao",
+        "Conclusão",
+        pdf_heading="CONCLUSÃO",
         numbered=True,
     ),
     _meta(
@@ -303,15 +304,15 @@ TEMPLATE_PROFILE_TOMOGRAFIA: dict[str, dict] = {
     "identificacao": {"enabled": True, "order": 2},
     "metodo_escopo": {"enabled": True, "order": 3},
     "registro_componente": {"enabled": True, "order": 4},
-    "controle_tecnico": {"enabled": True, "order": 5},
-    "resultados": {"enabled": False, "order": 6},
-    "grafica": {"enabled": False, "order": 7},
-    "tomografia": {"enabled": True, "order": 8},
-    "resultados_inspecao": {"enabled": True, "order": 9},
-    "interpretacao": {"enabled": True, "order": 10},
-    "conclusao": {"enabled": True, "order": 11},
+    "resultados": {"enabled": False, "order": 5},
+    "grafica": {"enabled": False, "order": 6},
+    "tomografia": {"enabled": True, "order": 7},
+    "resultados_inspecao": {"enabled": True, "order": 8},
+    "interpretacao": {"enabled": True, "order": 9},
+    "historico_versoes": {"enabled": True, "order": 10},
+    "controle_tecnico": {"enabled": True, "order": 11},
     "observacoes_limitacoes": {"enabled": True, "order": 12},
-    "historico_versoes": {"enabled": True, "order": 13},
+    "conclusao": {"enabled": True, "order": 13},
     "anexos": {"enabled": True, "order": 14},
 }
 
@@ -324,10 +325,10 @@ _TOMOGRAPHY_BLOCK_ORDER: tuple[str, ...] = (
     "tomografia",
     "resultados_inspecao",
     "interpretacao",
-    "conclusao",
-    "observacoes_limitacoes",
-    "controle_tecnico",
     "historico_versoes",
+    "controle_tecnico",
+    "observacoes_limitacoes",
+    "conclusao",
     "anexos",
 )
 

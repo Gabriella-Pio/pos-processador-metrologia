@@ -155,7 +155,8 @@ class IntroducaoSection(BaseSection):
                 colWidths=[270, 270],
             )
             hero.setStyle(TableStyle([
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("VALIGN", (0, 0), (0, 0), "TOP"),
+                ("VALIGN", (1, 0), (1, 0), "MIDDLE"),
                 ("ALIGN", (1, 0), (1, 0), "CENTER"),
                 ("BOX", (0, 0), (-1, -1), 0.5, ReportTheme.COR_LINHA),
                 ("LEFTPADDING", (0, 0), (-1, -1), 8),

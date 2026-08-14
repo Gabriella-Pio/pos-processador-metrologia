@@ -132,7 +132,7 @@ class SectionEditorPanel(BaseSidebarPanel):
     def render_global_fields(self, values: dict[str, str], overridden: set[str]) -> None:
         self._dados_panel.render_fields(values, overridden)
         if self._edit_open and self._active_section_id:
-            if self._edit_view.has_pending_textarea():
+            if self._edit_view.has_pending_textarea() or self._edit_view.has_focused_editor():
                 return
             self._refresh_edit_if_open()
 

@@ -118,6 +118,10 @@ class DraggableTableRowsEditor(QFrame):
         self._multiline_value = multiline_value
         self._allow_add_remove = allow_add_remove
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(400)
+        self._debounce.timeout.connect(self._emit_rows)
 
         title_label = QLabel(title)
         title_label.setStyleSheet(heading_style(4))
@@ -171,10 +175,36 @@ class DraggableTableRowsEditor(QFrame):
         super().resizeEvent(event)
         self._sync_all_item_widths()
 
+    def get_rows(self) -> list[dict[str, str]]:
+        rows: list[dict[str, str]] = []
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            widget = self._list.itemWidget(item)
+            if isinstance(widget, _TableRowWidget):
+                rows.append(widget.to_dict())
+        return rows
+
+    def has_focused_editor(self) -> bool:
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            widget = self._list.itemWidget(item)
+            if not isinstance(widget, _TableRowWidget):
+                continue
+            if widget._label_edit.has_editor_focus() or widget._value_edit.has_editor_focus():
+                return True
+        return False
+
     def set_rows(self, rows: list[dict[str, str]]) -> None:
+        # Nunca remonta enquanto o usuário digita — o refresh do sumário
+        # reenviava as linhas e destruía o foco a cada tecla.
+        if self.has_focused_editor():
+            return
+        incoming = list(rows or [])
+        if self.get_rows() == incoming:
+            return
         self._loading = True
         self._list.clear()
-        for row in rows:
+        for row in incoming:
             self._append_row_item(row, emit_on_ready=False)
         self._loading = False
         QTimer.singleShot(0, self._sync_all_item_widths)
@@ -195,8 +225,8 @@ class DraggableTableRowsEditor(QFrame):
             multiline_value=self._multiline_value,
             allow_remove=self._allow_add_remove,
         )
-        widget._label_edit.text_changed.connect(self._emit_rows)
-        widget._value_edit.text_changed.connect(self._emit_rows)
+        widget._label_edit.text_changed.connect(self._schedule_emit_rows)
+        widget._value_edit.text_changed.connect(self._schedule_emit_rows)
         widget._label_edit.height_changed.connect(
             lambda w=widget: self._sync_widget_height(w)
         )
@@ -262,16 +292,17 @@ class DraggableTableRowsEditor(QFrame):
         except RuntimeError:
             return
 
-    def get_rows(self) -> list[dict[str, str]]:
-        rows: list[dict[str, str]] = []
-        for index in range(self._list.count()):
-            item = self._list.item(index)
-            widget = self._list.itemWidget(item)
-            if isinstance(widget, _TableRowWidget):
-                rows.append(widget.to_dict())
-        return rows
+    def has_pending_emit(self) -> bool:
+        return self._debounce.isActive()
+
+    def _schedule_emit_rows(self, *_args) -> None:
+        if self._loading:
+            return
+        self._debounce.start()
 
     def _emit_rows(self, *_args) -> None:
         if self._loading:
             return
+        if self._debounce.isActive():
+            self._debounce.stop()
         self.rows_changed.emit(self.get_rows())

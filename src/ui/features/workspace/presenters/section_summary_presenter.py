@@ -107,6 +107,13 @@ class SectionSummaryPresenter:
                 ) or ""
                 fields["modo"] = "reprovado" if total_fora > 0 else "aprovado"
 
+            if section_id == "resultados" and not str(overrides.get("resumo") or "").strip():
+                from src.core.domain.measurement_interpretation import build_dimensional_summary
+
+                fields["resumo"] = build_dimensional_summary(
+                    getattr(effective, "itens_medicao", []) or []
+                )
+
             if section_id == "interpretacao":
                 from src.core.application.interpretacao_edit import build_interpretacao_editor_fields
 

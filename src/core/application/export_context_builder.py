@@ -232,6 +232,12 @@ def build_section_prose(
                     title_key = f"title_{row_id}"
                     if row.get("label") and not str(overrides.get(title_key) or "").strip():
                         merged[title_key] = str(row.get("label") or "")
+        if section_id == "resultados" and not str(overrides.get("resumo") or "").strip():
+            from src.core.domain.measurement_interpretation import build_dimensional_summary
+
+            merged["resumo"] = build_dimensional_summary(
+                getattr(effective_dto, "itens_medicao", []) or []
+            )
         result[section_id] = merged
     return result
 
