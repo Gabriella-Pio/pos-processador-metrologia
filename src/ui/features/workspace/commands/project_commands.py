@@ -23,44 +23,87 @@ class RecentFileResolution:
 
 class ProjectCommands:
     @staticmethod
-    def default_attachment_paths(
-        document: ReportDocument,
-        session: ProjectSession,
-    ) -> list[Path]:
-        """PDFs de origem para anexos — preserva sessão salva ou deriva dos slots."""
-        if document.attachment_pdf_paths:
-            return list(document.attachment_pdf_paths)
-        if session.documents:
-            return [slot.source_pdf_path for slot in session.documents]
-        if document.source_pdf_path:
-            return [document.source_pdf_path]
-        return []
+    def _path_key(path: Path | str) -> str:
+        try:
+            return str(Path(path).resolve())
+        except OSError:
+            return str(path)
 
     @staticmethod
-    def sync_attachment_paths(document: ReportDocument, session: ProjectSession) -> list[Path]:
-        paths = ProjectCommands.default_attachment_paths(document, session)
-        if paths and not document.attachment_pdf_paths:
-            document.attachment_pdf_paths = list(paths)
-        return paths
+    def _same_path_set(left: list[Path], right: list[Path]) -> bool:
+        return {ProjectCommands._path_key(p) for p in left} == {
+            ProjectCommands._path_key(p) for p in right
+        }
 
     @staticmethod
-    def ensure_project_attachment_paths(session: ProjectSession) -> None:
-        """Define anexos como PDFs ZEISS originais de todos os slots do projeto."""
-        originals = [
+    def session_source_pdfs(session: ProjectSession) -> list[Path]:
+        return [
             slot.source_pdf_path
             for slot in session.documents
             if slot.source_pdf_path and str(slot.source_pdf_path).strip()
         ]
-        if not originals:
+
+    @staticmethod
+    def default_attachment_paths(
+        document: ReportDocument,
+        session: ProjectSession,
+    ) -> list[Path]:
+        """Anexos da peça: só o PDF de origem dela (o unificado agrega o lote na exportação)."""
+        if document.attachment_pdf_paths:
+            return list(document.attachment_pdf_paths)
+        if document.source_pdf_path and str(document.source_pdf_path).strip():
+            return [document.source_pdf_path]
+        for slot in session.documents:
+            if slot.document is document and slot.source_pdf_path:
+                return [slot.source_pdf_path]
+        return []
+
+    @staticmethod
+    def sync_attachment_paths(document: ReportDocument, session: ProjectSession) -> list[Path]:
+        ProjectCommands._normalize_piece_attachments(document, session)
+        paths = ProjectCommands.default_attachment_paths(document, session)
+        if paths and not document.attachment_pdf_paths:
+            document.attachment_pdf_paths = list(paths)
+        return list(document.attachment_pdf_paths or paths)
+
+    @staticmethod
+    def _normalize_piece_attachments(
+        document: ReportDocument,
+        session: ProjectSession,
+        *,
+        own_source: Path | None = None,
+    ) -> None:
+        """Garante 1 PDF por peça; remove o lote inteiro gravado por engano."""
+        own = own_source or document.source_pdf_path
+        if own is None or not str(own).strip():
             return
+        lote = ProjectCommands.session_source_pdfs(session)
+        export_path = str(document.last_export_path) if document.last_export_path else None
+        current = [
+            p
+            for p in document.attachment_pdf_paths
+            if export_path is None or str(p) != export_path
+        ]
+        if not current:
+            document.attachment_pdf_paths = [own]
+            return
+        # Sessões antigas: cada peça recebia todos os PDFs do lote.
+        if len(lote) > 1 and ProjectCommands._same_path_set(current, lote):
+            document.attachment_pdf_paths = [own]
+
+    @staticmethod
+    def ensure_project_attachment_paths(session: ProjectSession) -> None:
+        """Anexa em cada peça só o PDF ZEISS original daquela peça."""
         for slot in session.documents:
             doc = slot.document
             if doc is None:
                 continue
-            export_path = str(doc.last_export_path) if doc.last_export_path else None
-            current = [p for p in doc.attachment_pdf_paths if str(p) != export_path]
-            if not current:
-                doc.attachment_pdf_paths = list(originals)
+            own = slot.source_pdf_path or doc.source_pdf_path
+            if own is None or not str(own).strip():
+                continue
+            if not doc.source_pdf_path:
+                doc.source_pdf_path = own
+            ProjectCommands._normalize_piece_attachments(doc, session, own_source=own)
 
     @staticmethod
     def remove_document_slot(session: ProjectSession, index: int) -> tuple[bool, str]:

@@ -812,7 +812,8 @@ class WorkspaceViewModel(QObject):
             session = self._app_state.project_session
             if session is not None and sort_session_documents(session):
                 self.project_loaded.emit(session)
-            if session is not None and seed_unified_images_from_pieces(session):
+            if session is not None:
+                seed_unified_images_from_pieces(session)
                 self._persist_project()
             self._begin_busy("Montando relatório unificado…")
             try:
@@ -863,7 +864,8 @@ class WorkspaceViewModel(QObject):
         """Imagens exibidas no sumário/painel — unificadas no modo PDF único."""
         if self._export_mode_unified and self._is_multi_document():
             session = self._app_state.project_session
-            if session is not None and session.unified_images:
+            if session is not None:
+                # Store unificado mesmo vazio (usuário removeu todas) — não voltar às peças.
                 return list(session.unified_images)
             document = self._document_for_preview()
             return list(document.images) if document is not None else []

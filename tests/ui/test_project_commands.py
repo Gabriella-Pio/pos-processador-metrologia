@@ -27,7 +27,7 @@ def test_sync_attachment_paths_preserves_persisted_paths() -> None:
     assert paths == [original_a, original_b]
 
 
-def test_sync_attachment_paths_defaults_from_project_slots() -> None:
+def test_sync_attachment_paths_defaults_to_own_source_only() -> None:
     original_a = Path("/data/zeiss_a.pdf")
     original_b = Path("/data/zeiss_b.pdf")
     document = ReportDocument(
@@ -43,8 +43,43 @@ def test_sync_attachment_paths_defaults_from_project_slots() -> None:
         ],
     )
     paths = ProjectCommands.sync_attachment_paths(document, session)
-    assert paths == [original_a, original_b]
-    assert document.attachment_pdf_paths == [original_a, original_b]
+    assert paths == [original_a]
+    assert document.attachment_pdf_paths == [original_a]
+
+
+def test_ensure_project_attachment_paths_collapses_full_lote() -> None:
+    original_a = Path("/data/zeiss_a.pdf")
+    original_b = Path("/data/zeiss_b.pdf")
+    doc_a = ReportDocument(
+        source_pdf_path=original_a,
+        client_project="Cliente",
+        evaluated_component="Peça A",
+        attachment_pdf_paths=[original_a, original_b],
+    )
+    doc_b = ReportDocument(
+        source_pdf_path=original_b,
+        client_project="Cliente",
+        evaluated_component="Peça B",
+        attachment_pdf_paths=[original_a, original_b],
+    )
+    session = ProjectSession(
+        client_project="Cliente",
+        documents=[
+            ProjectDocumentSlot(
+                source_pdf_path=original_a,
+                evaluated_component="Peça A",
+                document=doc_a,
+            ),
+            ProjectDocumentSlot(
+                source_pdf_path=original_b,
+                evaluated_component="Peça B",
+                document=doc_b,
+            ),
+        ],
+    )
+    ProjectCommands.ensure_project_attachment_paths(session)
+    assert doc_a.attachment_pdf_paths == [original_a]
+    assert doc_b.attachment_pdf_paths == [original_b]
 
 
 def test_resolve_recent_file_prefers_source_pdf_path(tmp_path: Path) -> None:

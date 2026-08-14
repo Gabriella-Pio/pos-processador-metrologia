@@ -35,6 +35,7 @@ def serialize_session_draft(session: ProjectSession) -> dict[str, Any]:
         "unified_deleted_section_ids": list(session.unified_deleted_section_ids),
         "unified_section_overrides": dict(session.unified_section_overrides),
         "unified_images": [serialize_report_image(img) for img in session.unified_images],
+        "unified_images_ready": bool(session.unified_images_ready),
     }
 
 
@@ -49,6 +50,11 @@ def apply_draft_to_session(session: ProjectSession, draft: dict[str, Any] | None
         for item in images_raw
         if isinstance(item, dict) and (image := deserialize_report_image(item)) is not None
     ]
+    if "unified_images_ready" in draft:
+        session.unified_images_ready = bool(draft.get("unified_images_ready"))
+    else:
+        # Snapshots antigos: lista não vazia implica store já em uso.
+        session.unified_images_ready = bool(session.unified_images)
 
 
 def session_to_workspace(session: ProjectSession) -> ProjectWorkspace:

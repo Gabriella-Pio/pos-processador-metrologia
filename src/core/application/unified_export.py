@@ -273,7 +273,13 @@ def build_mixed_mmc_bosello_document(session: ProjectSession) -> ReportDocument:
         for slot in calypso_slots
         if slot.source_pdf_path and str(slot.source_pdf_path).strip()
     ]
-    document.attachment_pdf_paths = list(dict.fromkeys(calypso_paths))
+    # Unificado: todos os PDFs de origem do lote (peças MMC + Bosello).
+    all_source_paths = [
+        slot.source_pdf_path
+        for slot in slots
+        if slot.source_pdf_path and str(slot.source_pdf_path).strip()
+    ]
+    document.attachment_pdf_paths = list(dict.fromkeys(all_source_paths or calypso_paths))
     document.source_pdf_path = calypso_paths[0] if calypso_paths else document.source_pdf_path
 
     methods = collect_lab_methods(slots)

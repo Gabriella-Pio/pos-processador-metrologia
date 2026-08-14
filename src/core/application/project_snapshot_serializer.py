@@ -99,6 +99,7 @@ def serialize_project_snapshot(session: ProjectSession) -> str:
             "unified_deleted_section_ids": list(session.unified_deleted_section_ids),
             "unified_section_overrides": dict(session.unified_section_overrides),
             "unified_images": [serialize_report_image(img) for img in session.unified_images],
+            "unified_images_ready": bool(session.unified_images_ready),
             "slots": [
                 {
                     "source_pdf_path": str(slot.source_pdf_path),
@@ -170,6 +171,10 @@ def deserialize_project_snapshot(
         for item in images_raw
         if isinstance(item, dict) and (image := deserialize_report_image(item)) is not None
     ]
+    if "unified_images_ready" in session_raw:
+        session.unified_images_ready = bool(session_raw.get("unified_images_ready"))
+    else:
+        session.unified_images_ready = bool(session.unified_images)
 
     workspaces: dict[str, dict[str, Any]] = {}
     histories: dict[str, list[VersionEntry]] = {}

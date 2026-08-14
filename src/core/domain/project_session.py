@@ -38,6 +38,8 @@ class ProjectSession:
     unified_section_overrides: dict[str, dict] = field(default_factory=dict)
     # Fotos do relatório consolidado (modo PDF único) — independentes das abas.
     unified_images: list[ReportImage] = field(default_factory=list)
+    # True após seed/edição no unificado: lista vazia = sem fotos (não reimportar das peças).
+    unified_images_ready: bool = False
 
     @property
     def active_slot(self) -> ProjectDocumentSlot | None:

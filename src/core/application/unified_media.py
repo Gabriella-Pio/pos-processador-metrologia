@@ -53,19 +53,26 @@ def add_unified_image(
         bosello_import=bosello_import,
     )
     session.unified_images.append(image)
+    session.unified_images_ready = True
     return image
+
+
+def _is_same_unified_image(left: ReportImage, right: ReportImage) -> bool:
+    if left.section_id != right.section_id:
+        return False
+    if str(left.image_path) != str(right.image_path):
+        return False
+    # image_id só desempata quando os dois têm id — evita falhar o X por cópia sem id.
+    if left.image_id and right.image_id and left.image_id != right.image_id:
+        return False
+    return True
 
 
 def remove_unified_image(session: ProjectSession, image: ReportImage) -> None:
     session.unified_images = [
-        img
-        for img in session.unified_images
-        if not (
-            img.section_id == image.section_id
-            and str(img.image_path) == str(image.image_path)
-            and (img.image_id or "") == (image.image_id or "")
-        )
+        img for img in session.unified_images if not _is_same_unified_image(img, image)
     ]
+    session.unified_images_ready = True
 
 
 def update_unified_image_caption(
@@ -74,11 +81,7 @@ def update_unified_image_caption(
     caption: str,
 ) -> None:
     for img in session.unified_images:
-        if (
-            img.section_id == image.section_id
-            and str(img.image_path) == str(image.image_path)
-            and (not image.image_id or img.image_id == image.image_id)
-        ):
+        if _is_same_unified_image(img, image):
             img.caption = caption
             break
 
@@ -88,14 +91,15 @@ def collect_layout_images_from_slots(
     *,
     layout: dict[str, dict],
 ) -> list[ReportImage]:
-    """Fotos das peças para seções ativas do layout unificado."""
+    """Fotos das peças para seções ativas do layout unificado (1 por seção)."""
     allowed = {
         section_id
         for section_id, cfg in layout.items()
         if cfg.get("enabled", True) and not str(section_id).startswith("_")
     }
     collected: list[ReportImage] = []
-    seen: set[tuple[str, str]] = set()
+    seen_paths: set[tuple[str, str]] = set()
+    sections_taken: set[str] = set()
     for slot in slots:
         document = slot.document
         if document is None:
@@ -106,9 +110,13 @@ def collect_layout_images_from_slots(
             if image.section_id not in allowed:
                 continue
             key = (str(image.image_path), image.section_id)
-            if key in seen:
+            if key in seen_paths:
                 continue
-            seen.add(key)
+            # Relatório unificado: uma foto representativa por seção (não N peças).
+            if image.section_id in sections_taken:
+                continue
+            seen_paths.add(key)
+            sections_taken.add(image.section_id)
             collected.append(copy_report_image(image))
     return collected
 
@@ -136,17 +144,24 @@ def resolve_unified_layout_images(
     *,
     layout: dict[str, dict],
 ) -> list[ReportImage]:
-    """Prefere ``session.unified_images``; senão agrega fotos das peças."""
-    if session.unified_images:
+    """Usa o store unificado quando já foi inicializado (mesmo vazio após remover fotos)."""
+    if session.unified_images_ready or session.unified_images:
         return filter_unified_images_for_layout(session, layout=layout)
     return collect_layout_images_from_slots(slots, layout=layout)
 
 
 def seed_unified_images_from_pieces(session: ProjectSession) -> bool:
-    """Copia fotos das peças para o store unificado (só se ainda estiver vazio)."""
-    if session.unified_images:
+    """Copia fotos das peças para o store unificado (só se ainda estiver vazio).
+
+    Fotos MMC/ilustrativas: no máximo **uma por seção** (primeira peça que tiver).
+    Capturas Bosello: mantém todas (vistas distintas da tomografia).
+    Se o usuário já editou ``unified_images``, não altera.
+    """
+    if session.unified_images or session.unified_images_ready:
+        session.unified_images_ready = True
         return False
-    seen: set[tuple[str, str]] = set()
+    seen_paths: set[tuple[str, str]] = set()
+    sections_taken: set[str] = set()
     seeded: list[ReportImage] = []
     for slot in session.documents:
         document = slot.document
@@ -154,14 +169,20 @@ def seed_unified_images_from_pieces(session: ProjectSession) -> bool:
             continue
         for image in document.images:
             key = (str(image.image_path), image.section_id)
-            if key in seen:
+            if key in seen_paths:
                 continue
-            seen.add(key)
+            if image.bosello_import:
+                seen_paths.add(key)
+                seeded.append(copy_report_image(image))
+                continue
+            if image.section_id in sections_taken:
+                continue
+            seen_paths.add(key)
+            sections_taken.add(image.section_id)
             seeded.append(copy_report_image(image))
-    if not seeded:
-        return False
     session.unified_images = seeded
-    return True
+    session.unified_images_ready = True
+    return bool(seeded)
 
 
 def storage_document_for_unified(session: ProjectSession) -> ReportDocument | None:
