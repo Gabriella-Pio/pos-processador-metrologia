@@ -3,8 +3,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent, QKeyEvent, QResizeEvent
+from PyQt6.QtCore import QAbstractItemModel, QEvent, QObject, QRectF, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import (
+    QColor,
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QKeyEvent,
+    QPainter,
+    QPaintEvent,
+    QPen,
+)
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
@@ -15,7 +24,9 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QSizePolicy,
+    QStackedLayout,
     QVBoxLayout,
+    QWidget,
 )
 
 from src.ui.components.app_dialog import AppDialog
@@ -58,8 +69,12 @@ class _PdfListRow(QFrame):
         return QSize(super().sizeHint().width(), self._ROW_HEIGHT)
 
 
-class DropZone(QListWidget):
-    """Área de arrastar-e-soltar com animação de hover — restrita a arquivos .pdf."""
+class DropZone(QFrame):
+    """Área de drop com borda tracejada desenhada no paint (QSS dashed+radius corta a base)."""
+
+    _HEIGHT = 168
+    _BORDER = 2.0
+    _INSET = 2.0
 
     def __init__(
         self,
@@ -70,76 +85,127 @@ class DropZone(QListWidget):
         super().__init__(parent)
         self._counter_label = counter_label
         self._warning_label = warning_label
+        self._drag_active = False
+        self.setObjectName("PdfDropZone")
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setAcceptDrops(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
-        self.setDefaultDropAction(Qt.DropAction.CopyAction)
-        self.setDragEnabled(False)
-        self.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
-        self._empty_hint = QLabel("Arraste PDFs aqui", self)
+        self.setFixedHeight(self._HEIGHT)
+        self.setMinimumWidth(200)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        # Sem border no QSS — o tracejado completo é pintado em paintEvent.
+        self.setStyleSheet("QFrame#PdfDropZone { background: transparent; border: none; }")
+
+        self._empty_hint = QLabel("Arraste PDFs aqui\nou use o botão acima")
         self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint.setWordWrap(True)
         self._empty_hint.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._empty_hint.setStyleSheet(
-            f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_body}px; background: transparent;"
+            f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_body}px; "
+            f"background: transparent; border: none;"
         )
-        self._apply_idle_style()
-        self._update_counter()
 
-    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
-        super().resizeEvent(event)
-        self._empty_hint.setGeometry(self.rect())
-
-    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
-        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
-            self.remove_selected()
-            event.accept()
-            return
-        super().keyPressEvent(event)
-
-    def _apply_idle_style(self) -> None:
-        p = PALETTE
-        self.setStyleSheet(f"""
+        self._list = QListWidget()
+        self._list.setAcceptDrops(False)
+        self._list.setDragEnabled(False)
+        self._list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        self._list.setFrameShape(QFrame.Shape.NoFrame)
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self._list.setStyleSheet(f"""
             QListWidget {{
-                border: 2px dashed {p.border_strong};
-                border-radius: {SPACING.radius_md}px;
-                background-color: {p.bg_surface_alt};
-                color: {p.text_primary};
-                padding: {SPACING.md}px;
+                border: none;
+                background: transparent;
+                color: {PALETTE.text_primary};
                 font-size: {TYPOGRAPHY.size_body}px;
+                outline: none;
             }}
             QListWidget::item {{
                 padding: 0px;
                 margin: 2px 0px;
                 border-radius: 4px;
-                border-bottom: 1px solid {p.border_subtle};
+                border-bottom: 1px solid {PALETTE.border_subtle};
                 min-height: {_PdfListRow._ROW_HEIGHT}px;
             }}
             QListWidget::item:selected {{
                 background-color: rgba(74, 111, 212, 0.20);
-                color: {p.senai_blue_light};
+                color: {PALETTE.senai_blue_light};
             }}
         """)
+        self._list.installEventFilter(self)
 
-    def _apply_hover_style(self) -> None:
-        p = PALETTE
-        self.setStyleSheet(f"""
-            QListWidget {{
-                border: 2px dashed {p.senai_blue_light};
-                border-radius: {SPACING.radius_md}px;
-                background-color: rgba(74, 111, 212, 0.08);
-                color: {p.text_primary};
-                padding: {SPACING.md}px;
-            }}
-            QListWidget::item {{
-                padding: 0px;
-                margin: 2px 0px;
-                border-radius: 4px;
-                min-height: {_PdfListRow._ROW_HEIGHT}px;
-            }}
-        """)
+        pages = QWidget(self)
+        pages.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self._pages = QStackedLayout(pages)
+        self._pages.setContentsMargins(0, 0, 0, 0)
+        self._pages.addWidget(self._empty_hint)
+        self._pages.addWidget(self._list)
+
+        pad = int(self._INSET + self._BORDER + 6)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(pad, pad, pad, pad)
+        root.setSpacing(0)
+        root.addWidget(pages)
+
+        self._update_counter()
+
+    def count(self) -> int:
+        return self._list.count()
+
+    def model(self) -> QAbstractItemModel | None:
+        return self._list.model()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
+        if watched is self._list and event.type() == QEvent.Type.KeyPress:
+            key_event = event
+            if isinstance(key_event, QKeyEvent) and key_event.key() in (
+                Qt.Key.Key_Delete,
+                Qt.Key.Key_Backspace,
+            ):
+                self.remove_selected()
+                return True
+        return super().eventFilter(watched, event)
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
+        del event
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        rect = QRectF(self.rect()).adjusted(self._INSET, self._INSET, -self._INSET, -self._INSET)
+        radius = float(SPACING.radius_md)
+
+        if self._drag_active:
+            fill = QColor(74, 111, 212, 28)
+            stroke = QColor(PALETTE.senai_blue_light)
+        else:
+            fill = QColor(PALETTE.bg_surface_alt)
+            stroke = QColor(PALETTE.border_strong)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(fill)
+        painter.drawRoundedRect(rect, radius, radius)
+
+        pen = QPen(stroke, self._BORDER)
+        pen.setStyle(Qt.PenStyle.CustomDashLine)
+        pen.setDashPattern([5.0, 4.0])
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        # Meia espessura para dentro: a linha inferior não é clipada na borda do widget.
+        stroke_rect = rect.adjusted(1.0, 1.0, -1.0, -1.0)
+        painter.drawRoundedRect(stroke_rect, radius - 1.0, radius - 1.0)
+        painter.end()
+
+    def _set_drag_active(self, active: bool) -> None:
+        if self._drag_active == active:
+            return
+        self._drag_active = active
+        self.update()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if event.mimeData().hasUrls():
-            self._apply_hover_style()
+            self._set_drag_active(True)
             event.acceptProposedAction()
         else:
             event.ignore()
@@ -151,10 +217,11 @@ class DropZone(QListWidget):
             event.ignore()
 
     def dragLeaveEvent(self, event) -> None:  # noqa: N802
-        self._apply_idle_style()
+        self._set_drag_active(False)
+        event.accept()
 
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
-        self._apply_idle_style()
+        self._set_drag_active(False)
         pdf_paths = [
             Path(url.toLocalFile())
             for url in event.mimeData().urls()
@@ -171,8 +238,8 @@ class DropZone(QListWidget):
     def _add_path(self, path: Path) -> bool:
         """Adiciona o PDF. Retorna False se já estava na lista."""
         path_str = str(path.resolve())
-        for index in range(self.count()):
-            existing = self.item(index)
+        for index in range(self._list.count()):
+            existing = self._list.item(index)
             if existing is not None and existing.data(Qt.ItemDataRole.UserRole) == path_str:
                 return False
         item = QListWidgetItem()
@@ -180,9 +247,9 @@ class DropZone(QListWidget):
         item.setToolTip(path_str)
         row = _PdfListRow(path)
         row.remove_requested.connect(self._remove_path)
-        self.addItem(item)
-        self.setItemWidget(item, row)
-        item.setSizeHint(QSize(self.viewport().width(), _PdfListRow._ROW_HEIGHT))
+        self._list.addItem(item)
+        self._list.setItemWidget(item, row)
+        item.setSizeHint(QSize(max(self._list.viewport().width(), 120), _PdfListRow._ROW_HEIGHT))
         self._update_counter()
         if self._warning_label is not None:
             self._warning_label.clear()
@@ -193,10 +260,10 @@ class DropZone(QListWidget):
         return self._add_path(Path(path_str))
 
     def _remove_path(self, path_str: str) -> None:
-        for index in range(self.count()):
-            item = self.item(index)
+        for index in range(self._list.count()):
+            item = self._list.item(index)
             if item is not None and item.data(Qt.ItemDataRole.UserRole) == path_str:
-                self.takeItem(index)
+                self._list.takeItem(index)
                 break
         self._update_counter()
         if self._warning_label is not None:
@@ -204,9 +271,8 @@ class DropZone(QListWidget):
             self._warning_label.hide()
 
     def remove_selected(self) -> None:
-        for item in list(self.selectedItems()):
-            row = self.row(item)
-            self.takeItem(row)
+        for item in list(self._list.selectedItems()):
+            self._list.takeItem(self._list.row(item))
         self._update_counter()
         if self._warning_label is not None:
             self._warning_label.clear()
@@ -224,22 +290,27 @@ class DropZone(QListWidget):
             QMessageBox.information(self.window(), "Arquivo já importado", msg)
 
     def _update_counter(self) -> None:
-        count = self.count()
-        self._empty_hint.setVisible(count == 0)
+        count = self._list.count()
+        self._pages.setCurrentIndex(0 if count == 0 else 1)
         if count == 0:
             self._counter_label.setText("Nenhum arquivo selecionado")
             self._counter_label.setStyleSheet(
                 f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent;"
             )
         else:
-            self._counter_label.setText(f"{count} arquivo{'s' if count != 1 else ''} selecionado{'s' if count != 1 else ''}")
+            self._counter_label.setText(
+                f"{count} arquivo{'s' if count != 1 else ''} selecionado{'s' if count != 1 else ''}"
+            )
             self._counter_label.setStyleSheet(
                 f"color: {PALETTE.success}; font-size: {TYPOGRAPHY.size_caption}px; "
                 f"font-weight: {TYPOGRAPHY.weight_medium}; background: transparent;"
             )
 
     def selected_paths(self) -> list[Path]:
-        return [Path(self.item(i).data(Qt.ItemDataRole.UserRole)) for i in range(self.count())]
+        return [
+            Path(self._list.item(i).data(Qt.ItemDataRole.UserRole))
+            for i in range(self._list.count())
+        ]
 
 
 class ImportDialog(AppDialog):
@@ -273,6 +344,7 @@ class ImportDialog(AppDialog):
         )
 
         browse_row = QHBoxLayout()
+        browse_row.setSpacing(SPACING.sm)
         browse_btn = SecondaryButton("Selecionar arquivos…")
         browse_btn.clicked.connect(self._browse_files)
         remove_btn = SecondaryButton("Remover selecionados")
@@ -280,11 +352,11 @@ class ImportDialog(AppDialog):
         remove_btn.clicked.connect(self._drop_zone.remove_selected)
         browse_row.addWidget(browse_btn)
         browse_row.addWidget(remove_btn)
-        browse_row.addWidget(self._counter_label)
-        browse_row.addStretch()
+        browse_row.addWidget(self._counter_label, stretch=1)
 
-        layout.addWidget(self._drop_zone, stretch=1)
         layout.addLayout(browse_row)
+        layout.addWidget(self._drop_zone)
+        layout.addSpacing(SPACING.sm)
         layout.addWidget(self._warning_label)
         layout.addWidget(self._client_field)
         layout.addWidget(self._component_field)
