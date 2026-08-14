@@ -22,16 +22,27 @@ class ConclusaoSection(BaseSection):
                 1 for i in items if str(getattr(i, "status", "")).lower() == "fora"
             )
 
-        texto_customizado = get_section_prose(contexto_extra, "conclusao", "texto", "")
-        if not texto_customizado:
-            texto_customizado = self.config.get("texto_personalizado")
-        if texto_customizado:
-            conclusao_texto = texto_customizado
-        else:
+        # Preferência: campo único `texto` (editor / estatístico).
+        conclusao_texto = get_section_prose(contexto_extra, "conclusao", "texto", "")
+        if not conclusao_texto:
+            conclusao_texto = str(self.config.get("texto_personalizado") or "")
+        if not conclusao_texto:
+            # Templates mistos/tomo: texto_aprovado / texto_reprovado no section_prose.
             tmpl = PROSE_TEMPLATES.get("conclusao", {})
-            conclusao_texto = (
-                tmpl.get("texto_reprovado", "") if total_fora > 0 else tmpl.get("texto_aprovado", "")
-            )
+            if total_fora > 0:
+                conclusao_texto = get_section_prose(
+                    contexto_extra,
+                    "conclusao",
+                    "texto_reprovado",
+                    tmpl.get("texto_reprovado", ""),
+                )
+            else:
+                conclusao_texto = get_section_prose(
+                    contexto_extra,
+                    "conclusao",
+                    "texto_aprovado",
+                    tmpl.get("texto_aprovado", ""),
+                )
 
         story.append(Paragraph(format_prose_paragraph(conclusao_texto), styles["texto"]))
         # Assinatura (linha + rótulo) é anexada pelo engine após todas as seções

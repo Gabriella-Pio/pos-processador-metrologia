@@ -40,6 +40,11 @@ MIXED_PROSE_DEFAULTS: dict[str, dict[str, str]] = {
             "qualitativa e baseada nas reconstruções fornecidas."
         ),
         "valor_amostra": "1 peça",
+        "nota": (
+            "Nota: “não identificadas” indica ausência de indicações detectáveis nas condições "
+            "do ensaio e não constitui garantia absoluta de inexistência de descontinuidades "
+            "abaixo do limite de detecção."
+        ),
     },
     "tomografia": {
         "section_title": "INSPEÇÃO TOMOGRÁFICA",
@@ -64,13 +69,21 @@ MIXED_PROSE_DEFAULTS: dict[str, dict[str, str]] = {
         "texto_aprovado": (
             "Com base no relatório dimensional e nas imagens tomográficas analisadas, "
             "o componente apresentou resultados dimensionais conformes e a inspeção "
-            "tomográfica não indicou presença de anomalias internas aparentes."
+            "tomográfica não indicou presença de anomalias internas aparentes. \n\n"
+            "Este relatório apresenta os dados consolidados para suporte técnico à "
+            "avaliação do componente. "
+            "A declaração formal de conformidade deve considerar os critérios de aceitação definidos "
+            "em desenho, norma ou especificação técnica do cliente."
         ),
         "texto_reprovado": (
             "Com base no relatório dimensional e nas imagens tomográficas analisadas, "
             "o componente apresentou ocorrências dimensionais indicadas pelo software. "
             "A inspeção tomográfica não indicou presença de anomalias internas aparentes "
-            "nas imagens fornecidas."
+            "nas imagens fornecidas. \n\n"
+            "Este relatório apresenta os dados consolidados para suporte técnico à "
+            "avaliação do componente. "
+            "A declaração formal de conformidade deve considerar os critérios de aceitação definidos "
+            "em desenho, norma ou especificação técnica do cliente."
         ),
     },
     "anexos": {
