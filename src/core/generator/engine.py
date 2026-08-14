@@ -18,6 +18,11 @@ from .sections.tomo_extra_sections import (
     ResultadosInspecaoSection,
     ObservacoesLimitacoesSection,
 )
+from .sections.falha_sections import (
+    DiscussaoFalhaSection,
+    InspecaoOpticaSection,
+    ResultadosSuperficiesSection,
+)
 from .sections.statistical_sections import (
     EstatDetalheAlturasSection,
     EstatDetalheAngulosSection,
@@ -80,6 +85,9 @@ class ReportGenerator:
         "identificacao": IdentificacaoSection,
         "metodo_escopo": MetodoEscopoSection,
         "registro_componente": RegistroComponenteSection,
+        "inspecao_optica": InspecaoOpticaSection,
+        "resultados_superficies": ResultadosSuperficiesSection,
+        "discussao_falha": DiscussaoFalhaSection,
         "controle_tecnico": ControleTecnicoSection,
         "resultados": ResultadosSection,
         "grafica": GraficaSection,
@@ -117,6 +125,7 @@ class ReportGenerator:
         "grafica",
         "tomografia",
         "registro_componente",
+        "inspecao_optica",
     })
 
     @classmethod

@@ -13,6 +13,7 @@ from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import (
     INTRODUCAO_BLOCK_TITLES,
     SECTION_HEADING_DEFAULTS,
+    default_falha_introducao_rows,
     default_table_rows,
     default_tomo_introducao_rows,
 )
@@ -175,8 +176,11 @@ class IntroducaoSection(BaseSection):
 
         table_rows = (contexto_extra.get("table_rows") or {}).get("introducao", [])
         if not table_rows:
-            if contexto_extra.get("report_kind") == "tomografia":
+            kind = contexto_extra.get("report_kind")
+            if kind == "tomografia":
                 table_rows = default_tomo_introducao_rows()
+            elif kind == "falha":
+                table_rows = default_falha_introducao_rows()
             else:
                 table_rows = default_table_rows("introducao")
 

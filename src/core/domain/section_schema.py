@@ -17,6 +17,10 @@ from src.core.domain.section_catalog import (
     section_titles,
     tomography_blocks,
 )
+from src.core.domain.falha_template_defaults import (
+    FALHA_SECTIONS_CONFIG,
+    falha_blocks,
+)
 
 # Variáveis disponíveis em templates (modo editor)
 TEMPLATE_VARIABLES = [
@@ -60,6 +64,11 @@ TEMPLATE_PADRAO_OFICIAL: list[dict] = default_enabled_blocks()
 TEMPLATE_TOMOGRAFIA_OFICIAL: list[dict] = tomography_blocks()
 
 TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG: dict[str, dict] = dict(TEMPLATE_PROFILE_TOMOGRAFIA)
+
+# Template oficial de análise de falha (óptico + tomografia).
+TEMPLATE_FALHA_OFICIAL: list[dict] = falha_blocks()
+
+TEMPLATE_FALHA_SECTIONS_CONFIG: dict[str, dict] = dict(FALHA_SECTIONS_CONFIG)
 
 _NAVIGABLE_IDS = frozenset(s.id for s in SECTION_DEFINITIONS if s.navigable)
 
@@ -168,6 +177,10 @@ def is_navigable_section(section_id: str) -> bool:
 
 def is_tomography_template(template_id: str) -> bool:
     return template_id in {"tomografia", "tomo"}
+
+
+def is_falha_template(template_id: str) -> bool:
+    return template_id in {"analise_falha", "falha"}
 
 
 def is_mixed_template(template_id: str) -> bool:

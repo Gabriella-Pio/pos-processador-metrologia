@@ -12,6 +12,7 @@ from src.core.application.batch_processing import (
 )
 from src.core.application.bosello_image_import import (
     build_bosello_image_document,
+    build_manual_falha_document,
     build_manual_tomography_document,
 )
 from src.core.application.piece_ordering import sort_pdf_entries, sort_paths
@@ -41,10 +42,16 @@ class DocumentSessionService:
         notice = ""
         try:
             if not is_usable_source_pdf(slot.source_pdf_path):
-                document = build_manual_tomography_document(
-                    slot.evaluated_component,
-                    client_project=session.client_project,
-                )
+                if session.report_mode == "falha":
+                    document = build_manual_falha_document(
+                        slot.evaluated_component,
+                        client_project=session.client_project,
+                    )
+                else:
+                    document = build_manual_tomography_document(
+                        slot.evaluated_component,
+                        client_project=session.client_project,
+                    )
             elif self._use_bosello_image_import(session, slot):
                 document = build_bosello_image_document(slot.source_pdf_path)
                 attached = sum(
@@ -70,10 +77,14 @@ class DocumentSessionService:
         kind = document.source_kind or detect_source_kind(slot.source_pdf_path) if slot.source_pdf_path else "insp_ect"
         if session.report_mode == "tomo_only":
             kind = "insp_ect"
+        if session.report_mode == "falha":
+            kind = document.source_kind or kind or "insp_ect"
         document.source_kind = kind
         slot.source_kind = kind
-        # Bosello/INSP ECT sempre no template de tomografia (corrige auto/combo em MMC).
-        if kind == "insp_ect" or session.report_mode == "tomo_only":
+        # Bosello/INSPECT sempre no template de tomografia (corrige auto/combo em MMC).
+        if session.report_mode == "falha":
+            template_id = "analise_falha"
+        elif kind == "insp_ect" or session.report_mode == "tomo_only":
             template_id = "tomografia"
         elif session.report_mode == "mixed":
             template_id = slot.template_id or template_id_for_kind(kind)  # type: ignore[arg-type]
@@ -81,7 +92,9 @@ class DocumentSessionService:
             template_id = session.template_id or "default"
         slot.template_id = template_id
         document.template_id = template_id
-        if all((s.source_kind or "calypso") == "insp_ect" for s in session.documents):
+        if session.report_mode == "falha":
+            session.template_id = "analise_falha"
+        elif all((s.source_kind or "calypso") == "insp_ect" for s in session.documents):
             session.template_id = "tomografia"
             if session.report_mode == "mmc_only":
                 session.report_mode = "tomo_only"
@@ -95,6 +108,9 @@ class DocumentSessionService:
             return False
         if session.report_mode == "tomo_only":
             return True
+        if session.report_mode == "falha":
+            kind = slot.source_kind or detect_source_kind(slot.source_pdf_path)
+            return kind == "insp_ect"
         kind = slot.source_kind or detect_source_kind(slot.source_pdf_path)
         if kind == "insp_ect":
             return True
@@ -135,6 +151,8 @@ class DocumentSessionService:
 
         if mode == "tomo_only":
             effective_template = "tomografia"
+        elif mode == "falha":
+            effective_template = "analise_falha"
         elif mode == "mmc_only":
             effective_template = template_id if template_id != "tomografia" else "default"
         else:
@@ -143,16 +161,20 @@ class DocumentSessionService:
         session = ProjectSession(
             client_project=client_project,
             template_id=effective_template,
-            report_mode=mode if mode in {"mmc_only", "tomo_only", "mixed"} else "mixed",
+            report_mode=(
+                mode
+                if mode in {"mmc_only", "tomo_only", "mixed", "falha"}
+                else "mixed"
+            ),
         )
-        if not pdf_entries and mode == "tomo_only":
+        if not pdf_entries and mode in {"tomo_only", "falha"}:
             component = default_component.strip() or "Componente avaliado"
             session.documents.append(
                 ProjectDocumentSlot(
                     source_pdf_path=Path(),
                     evaluated_component=component,
                     source_kind="insp_ect",
-                    template_id="tomografia",
+                    template_id="analise_falha" if mode == "falha" else "tomografia",
                 )
             )
             session.display_name = default_display_name(session)
@@ -162,11 +184,12 @@ class DocumentSessionService:
             kind = detect_source_kind(pdf_path)
             if session.report_mode == "tomo_only":
                 kind = "insp_ect"
-            slot_template = (
-                template_id_for_kind(kind)  # type: ignore[arg-type]
-                if session.report_mode == "mixed"
-                else session.template_id
-            )
+            if session.report_mode == "falha":
+                slot_template = "analise_falha"
+            elif session.report_mode == "mixed":
+                slot_template = template_id_for_kind(kind)  # type: ignore[arg-type]
+            else:
+                slot_template = session.template_id
             session.documents.append(
                 ProjectDocumentSlot(
                     source_pdf_path=pdf_path,

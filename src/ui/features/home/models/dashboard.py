@@ -74,6 +74,7 @@ class ProjectSummary:
         labels = {
             "mmc_only": "MMC",
             "tomo_only": "Tomografia",
+            "falha": "Análise de falha",
             "mixed": "Misto",
         }
         return labels.get(self.report_mode, self.report_mode)

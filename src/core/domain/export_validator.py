@@ -20,7 +20,11 @@ def validate_for_export(document: ReportDocument) -> list[ExportIssue]:
     if not document.evaluated_component.strip():
         issues.append(ExportIssue("error", "Componente avaliado não informado."))
 
-    from src.core.domain.section_schema import is_statistical_template
+    from src.core.domain.section_schema import (
+        is_falha_template,
+        is_mixed_template,
+        is_statistical_template,
+    )
 
     if is_statistical_template(document.template_id):
         batch = document.raw_parsed_data
@@ -34,7 +38,18 @@ def validate_for_export(document: ReportDocument) -> list[ExportIssue]:
             )
         return issues
 
-    from src.core.domain.section_schema import is_mixed_template
+    if is_falha_template(document.template_id):
+        has_optica = any(img.section_id == "inspecao_optica" for img in document.images)
+        has_tomo = any(img.section_id == "tomografia" for img in document.images)
+        if not has_optica and not has_tomo:
+            issues.append(
+                ExportIssue(
+                    "error",
+                    "Análise de falha exige ao menos uma foto em Inspeção óptica "
+                    "ou Tomografia.",
+                )
+            )
+        return issues
 
     if is_mixed_template(document.template_id):
         if not any(img.section_id == "tomografia" for img in document.images):
@@ -54,7 +69,14 @@ def validate_for_export(document: ReportDocument) -> list[ExportIssue]:
 
     # Só alerta falta de foto se a seção realmente tiver imagens esperadas
     # (já associadas) ou media_kinds explícito pedindo photos — prosa sozinha não conta.
-    photo_sections = {"identificacao", "resultados", "grafica", "tomografia", "registro_componente"}
+    photo_sections = {
+        "identificacao",
+        "resultados",
+        "grafica",
+        "tomografia",
+        "registro_componente",
+        "inspecao_optica",
+    }
     for section_id in photo_sections:
         overrides = document.section_overrides.get(section_id, {})
         media_kinds = overrides.get("media_kinds")

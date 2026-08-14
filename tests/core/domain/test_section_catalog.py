@@ -66,12 +66,12 @@ def test_mmc_default_blocks_snapshot() -> None:
         "cabecalho",
         "introducao",
         "identificacao",
-        "controle_tecnico",
         "resultados",
         "grafica",
         "interpretacao",
-        "conclusao",
         "historico_versoes",
+        "controle_tecnico",
+        "conclusao",
         "anexos",
     ]
     blocks = default_enabled_blocks()
@@ -89,10 +89,10 @@ def test_tomography_blocks_snapshot() -> None:
         "tomografia",
         "resultados_inspecao",
         "interpretacao",
-        "conclusao",
-        "observacoes_limitacoes",
-        "controle_tecnico",
         "historico_versoes",
+        "controle_tecnico",
+        "observacoes_limitacoes",
+        "conclusao",
         "anexos",
     ]
     blocks = tomography_blocks()
@@ -100,6 +100,48 @@ def test_tomography_blocks_snapshot() -> None:
     assert TEMPLATE_TOMOGRAFIA_OFICIAL == blocks
     intro = next(b for b in blocks if b["tipo"] == "introducao")
     assert intro["config"].get("variant") == "tomografia"
+
+
+def test_falha_blocks_snapshot() -> None:
+    from src.core.domain.falha_template_defaults import falha_blocks
+    from src.core.domain.section_schema import (
+        TEMPLATE_FALHA_OFICIAL,
+        TEMPLATE_FALHA_SECTIONS_CONFIG,
+        is_falha_template,
+    )
+
+    expected_types = [
+        "cabecalho",
+        "introducao",
+        "identificacao",
+        "metodo_escopo",
+        "registro_componente",
+        "inspecao_optica",
+        "resultados_superficies",
+        "tomografia",
+        "resultados_inspecao",
+        "discussao_falha",
+        "historico_versoes",
+        "controle_tecnico",
+        "conclusao",
+        "observacoes_limitacoes",
+        "anexos",
+    ]
+    blocks = falha_blocks()
+    assert [b["tipo"] for b in blocks] == expected_types
+    assert TEMPLATE_FALHA_OFICIAL == blocks
+    assert is_falha_template("analise_falha")
+    for section_id in TEMPLATE_FALHA_SECTIONS_CONFIG:
+        assert section_id in catalog_by_id()
+    enabled = {
+        sid for sid, cfg in TEMPLATE_FALHA_SECTIONS_CONFIG.items() if cfg.get("enabled")
+    }
+    assert "inspecao_optica" in enabled
+    assert "discussao_falha" in enabled
+    assert "resultados" not in enabled
+    assert "grafica" not in enabled
+    intro = next(b for b in blocks if b["tipo"] == "introducao")
+    assert intro["config"].get("variant") == "falha"
 
 
 def test_catalog_has_unique_ids() -> None:

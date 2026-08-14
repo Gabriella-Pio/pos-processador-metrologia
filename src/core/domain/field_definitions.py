@@ -68,6 +68,22 @@ _SECTION_FIELDS: dict[str, tuple[SectionFieldDef, ...]] = {
         _prose("intro", "Texto introdutório"),
         _SECTION_FOOTER_NOTE,
     ),
+    "inspecao_optica": (
+        _prose("body", "Texto da inspeção visual/óptica"),
+        _SECTION_FOOTER_NOTE,
+    ),
+    "resultados_superficies": (
+        _prose("intro", "Texto introdutório"),
+        _prose("bullet_1", "Resultado 1"),
+        _prose("bullet_2", "Resultado 2"),
+        _prose("bullet_3", "Resultado 3"),
+        _prose("bullet_4", "Resultado 4"),
+        _SECTION_FOOTER_NOTE,
+    ),
+    "discussao_falha": (
+        _prose("intro", "Texto introdutório"),
+        _SECTION_FOOTER_NOTE,
+    ),
     "controle_tecnico": (
         _prose("intro", "Texto introdutório / subtítulo"),
         _SECTION_FOOTER_NOTE,
@@ -130,9 +146,11 @@ _SECTION_MEDIA: dict[str, tuple[SectionMediaDef, ...]] = {
     "estat_graficos_comp": (SectionMediaDef("graphics", "Gráficos automáticos"),),
     "tomografia": (SectionMediaDef("photos", "Fotografias"),),
     "registro_componente": (SectionMediaDef("photos", "Fotografias"),),
+    "inspecao_optica": (SectionMediaDef("photos", "Fotografias"),),
     "resultados": (SectionMediaDef("tables", "Tabela de resultados"),),
     "identificacao": (SectionMediaDef("tables", "Tabela de identificação"),),
     "controle_tecnico": (SectionMediaDef("tables", "Tabela de controle técnico"),),
+    "discussao_falha": (SectionMediaDef("tables", "Tabela do mecanismo de falha"),),
 }
 
 CHART_SECTION_IDS: frozenset[str] = frozenset(

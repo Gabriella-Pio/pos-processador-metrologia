@@ -82,6 +82,25 @@ def _slot_kind(slot: ProjectDocumentSlot) -> str:
     return "calypso"
 
 
+def _session_has_tomo_images(session: ProjectSession) -> bool:
+    """True se há capturas Bosello/tomo no store unificado ou nas peças."""
+    for img in session.unified_images or []:
+        if img.section_id == "tomografia" or img.bosello_import:
+            return True
+    for slot in session.documents:
+        doc = slot.document
+        if doc is None:
+            continue
+        if any(
+            img.section_id == "tomografia" or img.bosello_import
+            for img in doc.images
+        ):
+            return True
+        if doc.bosello_captured_paths:
+            return True
+    return False
+
+
 def resolve_unified_export_kind(session: ProjectSession) -> UnifiedExportKind:
     slots = _parsed_slots(session)
     if len(slots) < 2:
@@ -92,6 +111,14 @@ def resolve_unified_export_kind(session: ProjectSession) -> UnifiedExportKind:
     bosello_count = sum(1 for kind in kinds if kind == "insp_ect")
 
     if calypso_count >= 1 and bosello_count >= 1 and calypso_count + bosello_count == len(slots):
+        return UnifiedExportKind.MIXED_MMC_BOSSELLO
+
+    # Híbrido sem slot Bosello quando já existem fotos tomográficas no projeto.
+    if (
+        calypso_count == len(slots)
+        and calypso_count >= 2
+        and _session_has_tomo_images(session)
+    ):
         return UnifiedExportKind.MIXED_MMC_BOSSELLO
 
     if calypso_count == len(slots) and calypso_count >= 2:
@@ -206,13 +233,18 @@ def _copy_bosello_images(source: ReportDocument, *, section_id: str = "tomografi
 
 
 def build_mixed_mmc_bosello_document(session: ProjectSession) -> ReportDocument:
-    """1+ CALYPSO + 1+ Bosello → relatório híbrido dimensional + tomográfico."""
+    """1+ CALYPSO + (1+ Bosello OU fotos tomo já no store) → relatório híbrido."""
     slots = _parsed_slots(session)
     calypso_slots = [slot for slot in slots if _slot_kind(slot) == "calypso"]
     bosello_slots = [slot for slot in slots if _slot_kind(slot) == "insp_ect"]
-    if not calypso_slots or not bosello_slots:
+    has_tomo_images = _session_has_tomo_images(session)
+    if not calypso_slots:
         raise UnifiedExportError(
-            "Relatório híbrido exige pelo menos um PDF CALYPSO e um PDF Bosello."
+            "Relatório híbrido exige pelo menos um PDF CALYPSO."
+        )
+    if not bosello_slots and not has_tomo_images:
+        raise UnifiedExportError(
+            "Relatório híbrido exige um PDF Bosello ou capturas tomográficas já importadas."
         )
 
     base_slot = calypso_slots[0]
@@ -254,11 +286,18 @@ def build_mixed_mmc_bosello_document(session: ProjectSession) -> ReportDocument:
         for img in session.unified_images:
             if (img.section_id == "tomografia" or img.bosello_import) and img.image_path not in document.bosello_captured_paths:
                 document.bosello_captured_paths.append(img.image_path)
-    else:
+    elif bosello_slots:
         for bosello_slot in bosello_slots:
             assert bosello_slot.document is not None
             document.images.extend(_copy_bosello_images(bosello_slot.document))
             for path in bosello_slot.document.bosello_captured_paths:
+                if path not in document.bosello_captured_paths:
+                    document.bosello_captured_paths.append(path)
+    else:
+        for slot in calypso_slots:
+            assert slot.document is not None
+            document.images.extend(_copy_bosello_images(slot.document))
+            for path in slot.document.bosello_captured_paths:
                 if path not in document.bosello_captured_paths:
                     document.bosello_captured_paths.append(path)
 

@@ -54,5 +54,5 @@ def calypso_sample_pdf(calypso_sample_pdfs: list[Path]) -> Path:
 @pytest.fixture
 def require_insp_ect_fixture(insp_ect_fixture: Path) -> Path:
     if not insp_ect_fixture.is_file():
-        pytest.skip("fixture INSP ECT ausente")
+        pytest.skip("fixture INSPECT ausente")
     return insp_ect_fixture

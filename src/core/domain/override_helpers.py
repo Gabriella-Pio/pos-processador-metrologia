@@ -9,10 +9,15 @@ from src.core.domain.table_row_specs import INTRODUCAO_BLOCK_TITLES
 def default_prose_values(section_id: str, context: dict[str, str] | None = None) -> dict[str, str]:
     """Templates de prosa com placeholders — não resolve valores globais."""
     base = dict(PROSE_TEMPLATES.get(section_id, {}))
-    if context and context.get("report_kind") == "tomografia":
+    kind = (context or {}).get("report_kind") or ""
+    if kind == "tomografia":
         from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
 
         base.update(TOMO_PROSE_DEFAULTS.get(section_id, {}))
+    elif kind == "falha":
+        from src.core.domain.falha_template_defaults import FALHA_PROSE_DEFAULTS
+
+        base.update(FALHA_PROSE_DEFAULTS.get(section_id, {}))
     return base
 
 

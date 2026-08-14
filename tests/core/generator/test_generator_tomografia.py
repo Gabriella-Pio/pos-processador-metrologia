@@ -1,4 +1,4 @@
-"""Smoke: exporta PDF com template tomográfico a partir de fixture INSP ECT."""
+"""Smoke: exporta PDF com template tomográfico a partir de fixture INSPECT."""
 from __future__ import annotations
 
 from pathlib import Path

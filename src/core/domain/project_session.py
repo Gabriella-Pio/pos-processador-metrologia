@@ -7,7 +7,7 @@ from typing import Literal
 
 from src.core.domain.ports import ReportDocument, ReportImage
 
-ReportMode = Literal["mmc_only", "tomo_only", "mixed"]
+ReportMode = Literal["mmc_only", "tomo_only", "mixed", "falha"]
 
 
 @dataclass
@@ -63,4 +63,6 @@ class ProjectSession:
             return slot.template_id
         if self.report_mode == "tomo_only":
             return slot.template_id or "tomografia"
+        if self.report_mode == "falha":
+            return slot.template_id or "analise_falha"
         return self.template_id or "default"

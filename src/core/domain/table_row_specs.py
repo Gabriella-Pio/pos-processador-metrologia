@@ -64,7 +64,7 @@ INTRODUCAO_ROW_SPECS: tuple[tuple[str, str, str], ...] = (
     ("mmc", "title_mmc", "valor_mmc"),
 )
 
-TABLE_SECTIONS = frozenset({"identificacao", "controle_tecnico", "introducao"})
+TABLE_SECTIONS = frozenset({"identificacao", "controle_tecnico", "introducao", "discussao_falha"})
 
 
 def default_table_rows(section_id: str) -> list[dict[str, str]]:
@@ -80,6 +80,8 @@ def default_table_rows(section_id: str) -> list[dict[str, str]]:
             {"id": row.id, "label": row.label, "value": row.default_value}
             for row in source
         ]
+    if section_id == "discussao_falha":
+        return default_discussao_falha_rows()
     if section_id == "introducao":
         prose = PROSE_TEMPLATES.get("introducao", {})
         return [
@@ -108,6 +110,33 @@ def default_tomo_identificacao_rows() -> list[dict[str, str]]:
     return [
         {"id": row_id, "label": label, "value": value}
         for row_id, label, value in IDENTIFICACAO_TOMO_TABLE_ROWS
+    ]
+
+
+def default_falha_introducao_rows() -> list[dict[str, str]]:
+    from src.core.domain.falha_template_defaults import INTRODUCAO_FALHA_TABLE_ROWS
+
+    return [
+        {"id": row_id, "label": label, "value": value}
+        for row_id, label, value in INTRODUCAO_FALHA_TABLE_ROWS
+    ]
+
+
+def default_falha_identificacao_rows() -> list[dict[str, str]]:
+    from src.core.domain.falha_template_defaults import IDENTIFICACAO_FALHA_TABLE_ROWS
+
+    return [
+        {"id": row_id, "label": label, "value": value}
+        for row_id, label, value in IDENTIFICACAO_FALHA_TABLE_ROWS
+    ]
+
+
+def default_discussao_falha_rows() -> list[dict[str, str]]:
+    from src.core.domain.falha_template_defaults import DISCUSSAO_FALHA_TABLE_ROWS
+
+    return [
+        {"id": row_id, "label": label, "value": value}
+        for row_id, label, value in DISCUSSAO_FALHA_TABLE_ROWS
     ]
 
 

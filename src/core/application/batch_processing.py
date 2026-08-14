@@ -8,10 +8,11 @@ from typing import Literal
 from src.core.domain.ports import ReportDocument, ReportExporter, ReportParser
 from src.core.parser.source_kind import SourceKind, detect_source_kind
 
-ReportMode = Literal["mmc_only", "tomo_only", "mixed", "auto"]
+ReportMode = Literal["mmc_only", "tomo_only", "mixed", "falha", "auto"]
 
 TEMPLATE_ID_MMC = "default"
 TEMPLATE_ID_TOMO = "tomografia"
+TEMPLATE_ID_FALHA = "analise_falha"
 
 
 @dataclass
@@ -45,6 +46,9 @@ def filter_paths_for_mode(
     for path in paths:
         kind = detect_source_kind(path)
         if report_mode == "tomo_only":
+            accepted.append(path)
+            continue
+        if report_mode == "falha":
             accepted.append(path)
             continue
         if report_mode == "mmc_only" and kind != "calypso":
@@ -81,6 +85,8 @@ def parse_batch(
             template_id = template_id_for_kind(kind)
         elif report_mode == "tomo_only":
             template_id = TEMPLATE_ID_TOMO
+        elif report_mode == "falha":
+            template_id = TEMPLATE_ID_FALHA
         else:
             template_id = TEMPLATE_ID_MMC
         document.template_id = template_id

@@ -150,11 +150,14 @@ def resolve_unified_layout_images(
     return collect_layout_images_from_slots(slots, layout=layout)
 
 
+_MULTI_PHOTO_SECTIONS = frozenset({"tomografia", "inspecao_optica"})
+
+
 def seed_unified_images_from_pieces(session: ProjectSession) -> bool:
     """Copia fotos das peças para o store unificado (só se ainda estiver vazio).
 
     Fotos MMC/ilustrativas: no máximo **uma por seção** (primeira peça que tiver).
-    Capturas Bosello: mantém todas (vistas distintas da tomografia).
+    Capturas Bosello e seções multi-foto (tomografia / inspeção óptica): mantém todas.
     Se o usuário já editou ``unified_images``, não altera.
     """
     if session.unified_images or session.unified_images_ready:
@@ -171,7 +174,7 @@ def seed_unified_images_from_pieces(session: ProjectSession) -> bool:
             key = (str(image.image_path), image.section_id)
             if key in seen_paths:
                 continue
-            if image.bosello_import:
+            if image.bosello_import or image.section_id in _MULTI_PHOTO_SECTIONS:
                 seen_paths.add(key)
                 seeded.append(copy_report_image(image))
                 continue

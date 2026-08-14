@@ -1,4 +1,4 @@
-"""Importação de imagens de PDFs Bosello (INSP ECT) para a seção Tomografia."""
+"""Importação de imagens de PDFs Bosello (INSPECT) para a seção Tomografia."""
 from __future__ import annotations
 
 import shutil
@@ -312,6 +312,33 @@ def build_manual_tomography_document(
         raw_parsed_data=dto,
         source_kind="insp_ect",
         template_id="tomografia",
+    )
+
+
+def build_manual_falha_document(
+    evaluated_component: str,
+    *,
+    client_project: str = "Cliente Padrão",
+) -> ReportDocument:
+    """Documento de análise de falha sem PDF — fotos ópticas/tomo via editor."""
+    from src.core.domain.ports import ReportDocument, TechnicalControlInfo
+
+    component = evaluated_component.strip() or "Componente avaliado"
+    dto = RelatorioInspEctDto(componente=component, source_kind="insp_ect")
+    return ReportDocument(
+        source_pdf_path=Path(),
+        client_project=client_project,
+        evaluated_component=component,
+        control_info=TechnicalControlInfo(
+            measured_by="Operador Metrologista",
+            reviewed_by="Supervisor SENAI",
+            approved_by="",
+            role="Técnico de Laboratório",
+            institutional_email="metrologia@senaigo.com.br",
+        ),
+        raw_parsed_data=dto,
+        source_kind="insp_ect",
+        template_id="analise_falha",
     )
 
 

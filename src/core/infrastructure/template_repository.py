@@ -9,7 +9,7 @@ from pathlib import Path
 
 from src.core.domain.ports import TemplateRepository
 
-_BUILTIN_TEMPLATE_IDS = frozenset({"default", "tomografia"})
+_BUILTIN_TEMPLATE_IDS = frozenset({"default", "tomografia", "analise_falha"})
 
 
 def is_builtin_template_id(template_id: str) -> bool:
@@ -35,9 +35,13 @@ class JSONTemplateRepository(TemplateRepository):
         self.ensure_builtin_templates()
 
     def ensure_builtin_templates(self) -> None:
-        """Garante template oficial de tomografia (Bosello / CEMSZ)."""
-        from src.core.domain.section_schema import TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG
+        """Garante templates oficiais de tomografia e análise de falha."""
+        from src.core.domain.section_schema import (
+            TEMPLATE_FALHA_SECTIONS_CONFIG,
+            TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG,
+        )
         from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
+        from src.core.domain.falha_template_defaults import FALHA_PROSE_DEFAULTS
 
         estado = self._carregar_estado()
         templates = estado.setdefault("templates", [])
@@ -47,12 +51,23 @@ class JSONTemplateRepository(TemplateRepository):
                 "name": "Template Tomografia SENAI/Bosello",
                 "is_default": False,
             })
+        if not any(t.get("id") == "analise_falha" for t in templates):
+            templates.append({
+                "id": "analise_falha",
+                "name": "Template Análise de Falha (óptico + tomografia)",
+                "is_default": False,
+            })
         configs = estado.setdefault("configs", {})
-        if not configs.get("tomografia"):
-            configs["tomografia"] = dict(TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG)
+        # Builtins: código é fonte da verdade (ordem/enabled). Evita JSON antigo travar layout.
+        configs["tomografia"] = dict(TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG)
+        configs["analise_falha"] = dict(TEMPLATE_FALHA_SECTIONS_CONFIG)
         content = estado.setdefault("content_defaults", {})
         if not content.get("tomografia"):
             content["tomografia"] = {sid: dict(vals) for sid, vals in TOMO_PROSE_DEFAULTS.items()}
+        if not content.get("analise_falha"):
+            content["analise_falha"] = {
+                sid: dict(vals) for sid, vals in FALHA_PROSE_DEFAULTS.items()
+            }
         self._salvar_estado(estado)
 
     def list_templates(self) -> list[dict]:

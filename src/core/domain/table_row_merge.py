@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from src.core.domain.table_row_specs import (
     INTRODUCAO_PROSE_ROW_IDS,
+    default_falha_introducao_rows,
     default_table_rows,
     default_tomo_introducao_rows,
 )
@@ -95,6 +96,11 @@ def resolve_introducao_table_rows(
         stored = _strip_introducao_prose_rows(stored)
     if report_kind == "tomografia":
         defaults = default_tomo_introducao_rows()
+        if stored:
+            return merge_with_defaults(defaults, stored, append_missing=False)
+        return apply_legacy_introducao_overrides(defaults, overrides)
+    if report_kind == "falha":
+        defaults = default_falha_introducao_rows()
         if stored:
             return merge_with_defaults(defaults, stored, append_missing=False)
         return apply_legacy_introducao_overrides(defaults, overrides)

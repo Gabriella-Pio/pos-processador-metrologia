@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING
 from src.core.domain.section_catalog import fixed_position_start_ids
 from src.core.domain.section_schema import (
     PROTECTED_SECTION_IDS,
+    TEMPLATE_FALHA_OFICIAL,
     TEMPLATE_TOMOGRAFIA_OFICIAL,
+    is_falha_template,
     is_tomography_template,
     sections_config_to_blocks,
 )
@@ -34,6 +36,17 @@ def resolve_template_blocks(
             sections_config_to_blocks(config_salva)
             if config_salva
             else list(TEMPLATE_TOMOGRAFIA_OFICIAL)
+        )
+    elif is_falha_template(document.template_id):
+        config_salva = (
+            template_repository.get_template_config(document.template_id)
+            if template_repository is not None
+            else {}
+        )
+        blocos = (
+            sections_config_to_blocks(config_salva)
+            if config_salva
+            else list(TEMPLATE_FALHA_OFICIAL)
         )
     elif document.template_id == "default" or template_repository is None:
         blocos = list(TEMPLATE_PADRAO_OFICIAL)

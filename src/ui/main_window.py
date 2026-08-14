@@ -268,7 +268,7 @@ class MainWindow(QMainWindow):
         data = dialog.get_result()
         entries = data["pdf_entries"]
         report_mode = data.get("report_mode", "auto")
-        if not entries and report_mode != "tomo_only":
+        if not entries and report_mode not in {"tomo_only", "falha"}:
             return
         self._workspace_vm.load_project(
             data["client_project"],

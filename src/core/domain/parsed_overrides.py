@@ -81,6 +81,8 @@ def build_prose_context(dto: Any, document: Any) -> dict[str, str]:
             ctx["report_kind"] = "estatistico"
         elif template_id in {"mixed", "hibrido"}:
             ctx["report_kind"] = "mixed"
+        elif template_id in {"analise_falha", "falha"}:
+            ctx["report_kind"] = "falha"
         elif template_id in {"tomografia", "tomo"} or source_kind == "insp_ect":
             ctx["report_kind"] = "tomografia"
         else:

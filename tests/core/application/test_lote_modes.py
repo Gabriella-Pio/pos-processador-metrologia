@@ -30,7 +30,7 @@ def test_template_id_for_kind() -> None:
     assert template_id_for_kind("insp_ect") == "tomografia"
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture INSP ECT ausente")
+@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture INSPECT ausente")
 def test_parse_batch_tomo_only() -> None:
     parser = RealReportParserAdapter()
     slots, rejected = parse_batch(
@@ -47,7 +47,7 @@ def test_parse_batch_tomo_only() -> None:
     assert slots[0].document.template_id == "tomografia"
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture INSP ECT ausente")
+@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture INSPECT ausente")
 def test_mixed_project_assigns_templates_by_source_kind() -> None:
     parser = RealReportParserAdapter()
     service = DocumentSessionService(parser)

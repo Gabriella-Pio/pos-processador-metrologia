@@ -1,4 +1,4 @@
-"""Detecção do tipo de PDF de origem (CALYPSO vs INSP ECT / Bosello)."""
+"""Detecção do tipo de PDF de origem (CALYPSO vs INSPECT / Bosello)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,9 +10,9 @@ SourceKind = Literal["calypso", "insp_ect"]
 
 _INSP_ECT_MARKERS = (
     "Generated with ZEISS INSP EC T",
-    "Generated with ZEISS INSP ECT",
+    "Generated with ZEISS INSPECT",
     "ZEISS INSP EC T",
-    "ZEISS INSP ECT",
+    "ZEISS INSPECT",
     "Defeito do volume",
     "BOSELLO",
     "ZEISS BOSELLO",

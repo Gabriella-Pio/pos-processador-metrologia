@@ -104,12 +104,18 @@ def _build_placeholder_context_for_kind(
 
 
 def resolve_report_kind(document: ReportDocument) -> str:
-    from src.core.domain.section_schema import is_mixed_template, is_statistical_template
+    from src.core.domain.section_schema import (
+        is_falha_template,
+        is_mixed_template,
+        is_statistical_template,
+    )
 
     if is_statistical_template(document.template_id):
         return "estatistico"
     if is_mixed_template(document.template_id):
         return "mixed"
+    if is_falha_template(document.template_id):
+        return "falha"
     if is_tomography_template(document.template_id) or document.source_kind == "insp_ect":
         return "tomografia"
     return "mmc"
@@ -206,6 +212,10 @@ def build_section_prose(
         from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
 
         section_ids |= set(TOMO_PROSE_DEFAULTS.keys())
+    if report_kind == "falha":
+        from src.core.domain.falha_template_defaults import FALHA_PROSE_DEFAULTS
+
+        section_ids |= set(FALHA_PROSE_DEFAULTS.keys())
     for section_id in section_ids:
         overrides = dict(document.section_overrides.get(section_id, {}))
         merged = merge_section_prose(section_id, overrides, ctx)
@@ -253,11 +263,16 @@ def build_table_rows(document: ReportDocument, report_kind: str) -> dict[str, li
     result: dict[str, list] = {}
 
     from src.core.domain.table_row_merge import merge_with_defaults
-    from src.core.domain.table_row_specs import default_table_rows
+    from src.core.domain.table_row_specs import (
+        default_falha_identificacao_rows,
+        default_table_rows,
+    )
 
     stored_ident = document.section_overrides.get("identificacao", {}).get("table_rows")
     if report_kind == "tomografia" and not stored_ident:
         result["identificacao"] = default_tomo_identificacao_rows()
+    elif report_kind == "falha" and not stored_ident:
+        result["identificacao"] = default_falha_identificacao_rows()
     elif report_kind == "estatistico" and stored_ident:
         # Só as linhas do export unificado — não anexar defaults MMC vazios.
         result["identificacao"] = merge_with_defaults(
@@ -321,6 +336,11 @@ def build_table_rows(document: ReportDocument, report_kind: str) -> dict[str, li
             intro_overrides,
             report_kind=report_kind,
         )
+
+    stored_discussao = document.section_overrides.get("discussao_falha", {}).get("table_rows")
+    if report_kind == "falha" or stored_discussao:
+        result["discussao_falha"] = merge_table_rows("discussao_falha", stored_discussao)
+
     for custom in document.custom_sections:
         section_id = custom.get("id", "")
         if not section_id:

@@ -51,6 +51,16 @@ _SECTION_HINTS: dict[str, str] = {
     ),
     "grafica": "Texto introdutório e fotografias/gráficos do componente.",
     "tomografia": "Texto introdutório e fotografias da inspeção tomográfica.",
+    "inspecao_optica": (
+        "Texto da inspeção visual/macro/óptica e fotografias das superfícies avaliadas."
+    ),
+    "resultados_superficies": (
+        "Texto introdutório e bullets com a síntese das evidências superficiais."
+    ),
+    "discussao_falha": (
+        "Texto introdutório e tabela das etapas do mecanismo de falha "
+        "(rótulo = mecanismo, valor = descrição)."
+    ),
     "interpretacao": (
         "Texto introdutório, itens de interpretação e nota de rodapé. "
         "No template, edite o parágrafo inicial; os itens por medição são gerados "
@@ -75,9 +85,11 @@ def build_help_text(section_id: str, *, has_table: bool = False, has_media: bool
     if section_hint:
         parts.append(section_hint)
     parts.append(_PLACEHOLDERS.strip())
-    if has_table or section_id in ("introducao", "identificacao", "controle_tecnico", "resultados"):
+    if has_table or section_id in (
+        "introducao", "identificacao", "controle_tecnico", "resultados", "discussao_falha",
+    ):
         parts.append(_TABLE_ROWS.strip())
-    if has_media or section_id in ("introducao", "grafica", "tomografia"):
+    if has_media or section_id in ("introducao", "grafica", "tomografia", "inspecao_optica"):
         parts.append(_MEDIA.strip())
     return "\n\n".join(parts)
 

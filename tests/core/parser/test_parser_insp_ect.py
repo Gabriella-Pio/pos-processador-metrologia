@@ -1,4 +1,4 @@
-"""Testes do parser INSP ECT / detecção de source kind."""
+"""Testes do parser INSPECT / detecção de source kind."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -23,7 +23,7 @@ def test_detect_from_text_markers() -> None:
 def test_insp_ect_extracts_volume_and_pores(require_insp_ect_fixture: Path) -> None:
     dto = InspEctParser.parse(str(require_insp_ect_fixture))
     assert dto.source_kind == "insp_ect"
-    assert dto.software.startswith("ZEISS INSP ECT")
+    assert dto.software.startswith("ZEISS INSPECT")
     assert dto.pore_count == 370
     assert len(dto.defect_items) == 370
     assert len(dto.itens_medicao) == 370

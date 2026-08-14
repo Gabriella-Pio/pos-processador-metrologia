@@ -1,4 +1,4 @@
-"""Parser de relatórios ZEISS INSP ECT (equipamento Bosello / tomografia)."""
+"""Parser de relatórios ZEISS INSPECT (equipamento Bosello / tomografia)."""
 from __future__ import annotations
 
 import re
@@ -40,7 +40,7 @@ class RelatorioInspEctDto:
     numero_medicoes_cabecalho: int = 0
     fora_tolerancia_cabecalho: int = 0
     duracao_medicao: str = "00:00:00,0"
-    software: str = "ZEISS INSP ECT"
+    software: str = "ZEISS INSPECT"
     versao_software: str = "Não informada"
     itens_medicao: List[MedicaoItemDto] = field(default_factory=list)
     avisos_auditoria: List[str] = field(default_factory=list)
@@ -57,7 +57,7 @@ class RelatorioInspEctDto:
 
 
 class InspEctParser:
-    """Extrai resumo de volume e poros (Vp) de PDFs ZEISS INSP ECT."""
+    """Extrai resumo de volume e poros (Vp) de PDFs ZEISS INSPECT."""
 
     _RENDER_ZOOM = 2.0
     _MIN_VIEWPORT_PT = 80.0
@@ -113,7 +113,7 @@ class InspEctParser:
         match = re.search(r"Generated with ZEISS INSP EC T?\s*(\d{4})", text, re.IGNORECASE)
         if match:
             dto.versao_software = match.group(1)
-            dto.software = f"ZEISS INSP ECT {match.group(1)}"
+            dto.software = f"ZEISS INSPECT {match.group(1)}"
 
     @staticmethod
     def _fill_volume_summary(dto: RelatorioInspEctDto, text: str) -> None:

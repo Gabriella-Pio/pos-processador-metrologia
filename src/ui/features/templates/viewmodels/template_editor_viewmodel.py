@@ -282,8 +282,10 @@ class TemplateEditorViewModel(QObject):
         self.sections_summary_ready.emit(sections)
 
     def _report_kind(self) -> str:
-        from src.core.domain.section_schema import is_tomography_template
+        from src.core.domain.section_schema import is_falha_template, is_tomography_template
 
+        if is_falha_template(self._template_id):
+            return "falha"
         return "tomografia" if is_tomography_template(self._template_id) else "mmc"
 
     def _emit_global_fields(self) -> None:

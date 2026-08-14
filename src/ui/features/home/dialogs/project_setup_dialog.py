@@ -57,7 +57,8 @@ class ProjectSetupDialog(AppDialog):
         self._mode_combo = ThemedComboBox()
         self._mode_combo.addItem("Detectar automaticamente", "auto")
         self._mode_combo.addItem("Somente MMC (CALYPSO)", "mmc_only")
-        self._mode_combo.addItem("Somente Tomografia (INSP ECT / Bosello)", "tomo_only")
+        self._mode_combo.addItem("Somente Tomografia (INSPECT / Bosello)", "tomo_only")
+        self._mode_combo.addItem("Análise de falha (óptico + tomografia)", "falha")
         self._mode_combo.addItem("Misto (MMC + Tomografia)", "mixed")
         self._mode_hint = QLabel("")
         self._mode_hint.setWordWrap(True)
@@ -186,6 +187,8 @@ class ProjectSetupDialog(AppDialog):
         index = self._template_combo.findData(template_id)
         if index < 0 and template_id == "tomografia":
             index = self._template_combo.findData("tomo")
+        if index < 0 and template_id == "analise_falha":
+            index = self._template_combo.findData("falha")
         if index >= 0:
             self._syncing_template = True
             self._template_combo.setCurrentIndex(index)
@@ -218,7 +221,12 @@ class ProjectSetupDialog(AppDialog):
                 )
         elif mode == "tomo_only":
             self._mode_hint.setText(
-                "Força o fluxo e o template de Tomografia (INSP ECT / Bosello)."
+                "Força o fluxo e o template de Tomografia (INSPECT / Bosello)."
+            )
+        elif mode == "falha":
+            self._mode_hint.setText(
+                "Análise de falha: PDF opcional. Fotos ópticas e tomográficas "
+                "podem ser adicionadas no workspace; Bosello é opcional."
             )
         elif mode == "mmc_only":
             self._mode_hint.setText(
@@ -233,6 +241,14 @@ class ProjectSetupDialog(AppDialog):
         lock_tomo = effective == "tomo_only" or (
             mode == "auto" and inferred == "tomo_only"
         )
+        lock_falha = mode == "falha"
+        if lock_falha:
+            self._select_template_id("analise_falha")
+            self._template_combo.setEnabled(False)
+            self._template_hint.setText(
+                "Template travado em Análise de Falha (óptico + tomografia)."
+            )
+            return
         if lock_tomo:
             self._select_template_id("tomografia")
             self._template_combo.setEnabled(False)
@@ -247,14 +263,16 @@ class ProjectSetupDialog(AppDialog):
         if (
             mode in {"auto", "mixed"}
             and inferred == "mixed"
-            and current in {"tomografia", "tomo"}
+            and current in {"tomografia", "tomo", "analise_falha"}
         ):
             self._select_template_id("default")
             current = "default"
-        if mode == "mmc_only" and current in {"tomografia", "tomo"}:
+        if mode == "mmc_only" and current in {"tomografia", "tomo", "analise_falha"}:
             self._select_template_id("default")
             current = "default"
-        if mode == "auto" and inferred == "mmc_only" and current in {"tomografia", "tomo"}:
+        if mode == "auto" and inferred == "mmc_only" and current in {
+            "tomografia", "tomo", "analise_falha",
+        }:
             self._select_template_id("default")
         if mode == "mixed" or (mode == "auto" and inferred == "mixed"):
             labels = []
@@ -318,7 +336,7 @@ class ProjectSetupDialog(AppDialog):
 
         if self._drop_zone.count() == 0:
             mode = self._mode_combo.currentData()
-            if mode != "tomo_only":
+            if mode not in {"tomo_only", "falha"}:
                 self._files_error.setText("Selecione ao menos um arquivo PDF.")
                 self._files_error.show()
                 valid = False
@@ -342,7 +360,11 @@ class ProjectSetupDialog(AppDialog):
 
         return {
             "client_project": self._client_field.text(),
-            "template_id": self._template_combo.currentData() or "default",
+            "template_id": (
+                "analise_falha"
+                if (self._mode_combo.currentData() or "") == "falha"
+                else (self._template_combo.currentData() or "default")
+            ),
             "report_mode": self._mode_combo.currentData() or "auto",
             "pdf_entries": pdf_entries,
             "default_component": default_component,
