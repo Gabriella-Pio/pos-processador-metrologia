@@ -1,6 +1,11 @@
 """Monta o sumário de seções a partir do documento e do exportador."""
 from __future__ import annotations
 
+from src.core.application.export_context_builder import build_table_rows, resolve_report_kind
+from src.core.application.statistical_aggregator import (
+    build_estat_section_editor_rows,
+    tipo_from_estat_section_id,
+)
 from src.core.domain.chart_figure_defs import enabled_chart_count, section_has_graphics
 from src.core.domain.parsed_overrides import (
     build_effective_dto,
@@ -21,9 +26,34 @@ from src.core.domain.table_row_registry import (
     TABLE_SECTIONS,
     apply_control_info_to_rows,
     merge_table_rows,
-    resolve_introducao_table_rows,
 )
 from src.ui.features.workspace.models.section_summary import SectionSummaryItem
+
+
+def _is_estat_table_section(section_id: str) -> bool:
+    return bool(tipo_from_estat_section_id(section_id))
+
+
+_IDENT_LIKE_ROW_IDS = frozenset({
+    "client_project",
+    "evaluated_component",
+    "cliente",
+    "componente",
+    "n_pecas",
+    "maquina",
+    "maquina_mmc",
+    "numero_mmc",
+    "operador",
+    "software",
+    "data_hora",
+})
+
+
+def _looks_like_identificacao_rows(rows: list | None) -> bool:
+    if not rows:
+        return False
+    ids = {str(row.get("id") or "") for row in rows}
+    return bool(ids & _IDENT_LIKE_ROW_IDS)
 
 
 class SectionSummaryPresenter:
@@ -42,6 +72,9 @@ class SectionSummaryPresenter:
     ) -> list[SectionSummaryItem]:
         effective = build_effective_dto(document.raw_parsed_data, document.parsed_overrides)
         ctx = build_prose_context(effective, document)
+        report_kind = resolve_report_kind(document)
+        ctx["report_kind"] = report_kind
+        resolved_tables = build_table_rows(document, report_kind)
         deleted = set(document.deleted_section_ids)
         merged: list[SectionSummaryItem] = []
 
@@ -63,20 +96,32 @@ class SectionSummaryPresenter:
             section_num = section.get("section_number")
 
             table_rows = None
-            if section_id in TABLE_SECTIONS:
-                if section_id == "introducao":
-                    table_rows = resolve_introducao_table_rows(
-                        overrides,
-                        report_kind=str(ctx.get("report_kind", "mmc")),
-                    )
-                else:
-                    table_rows = merge_table_rows(section_id, overrides.get("table_rows"))
+            if section_id in TABLE_SECTIONS or section_id in resolved_tables:
+                table_rows = list(resolved_tables.get(section_id) or [])
                 if (
                     section_id == "controle_tecnico"
                     and document.control_info is not None
                     and not overrides.get("table_rows")
+                    and not table_rows
                 ):
-                    table_rows = apply_control_info_to_rows(table_rows, document.control_info)
+                    table_rows = apply_control_info_to_rows(
+                        merge_table_rows(section_id, None),
+                        document.control_info,
+                    )
+            elif _is_estat_table_section(section_id):
+                stored = overrides.get("table_rows")
+                computed = build_estat_section_editor_rows(
+                    document.raw_parsed_data, section_id
+                )
+                # Evita reaproveitar linhas da Identificação ou o formato antigo concatenado.
+                if (
+                    stored
+                    and not _looks_like_identificacao_rows(stored)
+                    and any(str(row.get("n") or "").strip() for row in stored)
+                ):
+                    table_rows = list(stored)
+                else:
+                    table_rows = computed
 
             if section_id == "introducao" and not str(fields.get("nota") or "").strip():
                 fields["nota"] = str(
@@ -120,7 +165,7 @@ class SectionSummaryPresenter:
                 fields.update(
                     build_interpretacao_editor_fields(
                         effective,
-                        report_kind=ctx.get("report_kind", "mmc"),
+                        report_kind=report_kind,
                         existing=fields,
                         user_overrides=document.section_overrides.get("interpretacao", {}),
                     )
@@ -189,6 +234,7 @@ class SectionSummaryPresenter:
                 table_rows=merge_table_rows(section_id, stored_rows),
                 image_count=img_count,
                 has_images=img_count > 0,
+                media_kinds=effective_media_kinds(section_id, overrides),
                 override_keys=list(overrides.keys()),
                 enabled=not is_disabled,
                 protected=False,

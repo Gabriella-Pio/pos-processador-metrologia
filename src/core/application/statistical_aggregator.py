@@ -476,6 +476,49 @@ def series_by_tipo(
     return [item for item in series if item.tipo == tipo]
 
 
+def build_estat_section_editor_rows(batch, section_id: str) -> list[dict[str, str]]:
+    """Linhas da aba Tabela do editor estatístico — campos separados como no PDF."""
+    tipo = tipo_from_estat_section_id(section_id)
+    if not tipo:
+        return []
+    series_list = series_by_tipo(getattr(batch, "series", []) or [], tipo)
+    rows: list[dict[str, str]] = []
+    for item in series_list:
+        unit = item.unit or ""
+        nominal_value = parse_measure_number(item.nominal)
+        nominal_text = (
+            format_stat_number(nominal_value, unit=unit)
+            if nominal_value is not None
+            else (f"{item.nominal} {unit}".strip() if item.nominal else "—")
+        )
+        rows.append({
+            "id": item.key,
+            "label": display_characteristic_name(item.display_name),
+            "nominal": nominal_text,
+            "limits": format_series_limits_range(item),
+            "n": str(item.n),
+            "mean": format_stat_number(item.mean, unit=unit),
+            "stdev": format_stat_number(item.stdev, unit=unit),
+            "minimum": format_stat_number(item.minimum, unit=unit),
+            "maximum": format_stat_number(item.maximum, unit=unit),
+            "fora": str(item.fora_count),
+        })
+    return rows
+
+
+# Colunas do editor (rótulo = característica; demais = células do PDF).
+ESTAT_EDITOR_VALUE_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("nominal", "Nominal"),
+    ("limits", "Limites"),
+    ("n", "N"),
+    ("mean", "Média"),
+    ("stdev", "DesvPad"),
+    ("minimum", "Mín."),
+    ("maximum", "Máx."),
+    ("fora", "Fora"),
+)
+
+
 def build_estatistico_sections_config(measure_tipos: list[str]) -> dict[str, dict]:
     """Liga resumo/detalhe apenas para os tipos de medida presentes no lote."""
     from copy import deepcopy

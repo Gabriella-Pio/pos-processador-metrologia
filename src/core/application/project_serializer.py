@@ -34,6 +34,8 @@ def serialize_session_draft(session: ProjectSession) -> dict[str, Any]:
     return {
         "unified_deleted_section_ids": list(session.unified_deleted_section_ids),
         "unified_section_overrides": dict(session.unified_section_overrides),
+        "unified_custom_sections": list(session.unified_custom_sections),
+        "unified_extra_section_ids": list(session.unified_extra_section_ids),
         "unified_images": [serialize_report_image(img) for img in session.unified_images],
         "unified_images_ready": bool(session.unified_images_ready),
     }
@@ -44,6 +46,12 @@ def apply_draft_to_session(session: ProjectSession, draft: dict[str, Any] | None
         return
     session.unified_deleted_section_ids = list(draft.get("unified_deleted_section_ids") or [])
     session.unified_section_overrides = dict(draft.get("unified_section_overrides") or {})
+    session.unified_custom_sections = [
+        item for item in (draft.get("unified_custom_sections") or []) if isinstance(item, dict)
+    ]
+    session.unified_extra_section_ids = [
+        str(sid) for sid in (draft.get("unified_extra_section_ids") or []) if str(sid).strip()
+    ]
     images_raw = draft.get("unified_images") or []
     session.unified_images = [
         image

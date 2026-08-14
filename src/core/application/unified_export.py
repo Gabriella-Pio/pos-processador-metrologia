@@ -58,15 +58,29 @@ def _merge_session_unified_overrides(
     document: ReportDocument,
     session: ProjectSession,
 ) -> None:
-    """Aplica preferências do workspace unificado (gráficos, media_kinds, etc.)."""
+    """Aplica preferências do workspace unificado sobre o documento virtual."""
     for section_id, overrides in (session.unified_section_overrides or {}).items():
         if not isinstance(overrides, dict):
             continue
         current = dict(document.section_overrides.get(section_id) or {})
-        for key in ("media_kinds", "disabled_chart_ids", "section_title"):
-            if key in overrides:
-                current[key] = overrides[key]
+        for key, value in overrides.items():
+            current[key] = value
         document.section_overrides[section_id] = current
+
+
+def _apply_session_unified_sections(
+    document: ReportDocument,
+    session: ProjectSession,
+) -> None:
+    """Seções personalizadas / extras do catálogo no PDF unificado."""
+    document.custom_sections = [
+        dict(item)
+        for item in (session.unified_custom_sections or [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+    document.extra_section_ids = [
+        str(sid) for sid in (session.unified_extra_section_ids or []) if str(sid).strip()
+    ]
 
 
 def _parsed_slots(session: ProjectSession) -> list[ProjectDocumentSlot]:
@@ -362,6 +376,7 @@ def build_mixed_mmc_bosello_document(session: ProjectSession) -> ReportDocument:
         for sid in session.unified_deleted_section_ids
         if sid not in {"cabecalho", "introducao"}
     ]
+    _apply_session_unified_sections(document, session)
     _merge_session_unified_overrides(document, session)
     return document
 
@@ -520,11 +535,23 @@ def build_statistical_mmc_document(session: ProjectSession) -> ReportDocument:
             current["nota"] = note
             document.section_overrides[section_id] = current
 
+    for section_id, cfg in layout.items():
+        if not cfg.get("enabled"):
+            continue
+        if section_id.startswith("estat_resumo_") or section_id.startswith("estat_detalhe_"):
+            section_ov = dict(document.section_overrides.get(section_id) or {})
+            kinds = list(section_ov.get("media_kinds") or [])
+            if "tables" not in kinds:
+                kinds.append("tables")
+            section_ov["media_kinds"] = kinds
+            document.section_overrides[section_id] = section_ov
+
     for chart_section in ("estat_graficos", "estat_graficos_comp"):
         if layout.get(chart_section, {}).get("enabled"):
             chart_overrides = dict(document.section_overrides.get(chart_section) or {})
             chart_overrides.setdefault("media_kinds", ["graphics"])
             document.section_overrides[chart_section] = chart_overrides
+    _apply_session_unified_sections(document, session)
     _merge_session_unified_overrides(document, session)
     return document
 

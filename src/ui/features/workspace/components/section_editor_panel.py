@@ -82,6 +82,7 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._edit_view.tool_selected.connect(self.tool_selected.emit)
         self._edit_view.bosello_picker_requested.connect(self.bosello_picker_requested.emit)
         self._edit_view.itens_medicao_changed.connect(view_model.update_itens_medicao)
+        self._edit_view.itens_medicao_restore_requested.connect(view_model.restore_itens_medicao)
         self._edit_view.section_restore_requested.connect(view_model.restore_section)
         self._edit_view.manage_versions_requested.connect(self._show_historico_tab)
         self._edit_view.media_kinds_changed.connect(view_model.update_section_media_kinds)
@@ -118,6 +119,8 @@ class SectionEditorPanel(BaseSidebarPanel):
         return True
 
     def _itens_medicao_for_refresh(self) -> list[dict[str, str]] | None:
+        if self._vm is not None and hasattr(self._vm, "get_effective_itens_medicao"):
+            self._itens_medicao = self._vm.get_effective_itens_medicao()
         return self._itens_medicao
 
     def _on_edit_closed(self) -> None:
@@ -147,10 +150,25 @@ class SectionEditorPanel(BaseSidebarPanel):
         self._sections_panel.set_active_section(section_id)
         self.section_selected.emit(section_id)
 
+    def open_edit_for_section(
+        self,
+        section_id: str,
+        *,
+        itens_medicao: list[dict[str, str]] | None = None,
+    ) -> None:
+        if itens_medicao is None and self._vm is not None and hasattr(
+            self._vm, "get_effective_itens_medicao"
+        ):
+            self._itens_medicao = self._vm.get_effective_itens_medicao()
+            itens_medicao = self._itens_medicao
+        elif itens_medicao is not None:
+            self._itens_medicao = itens_medicao
+        super().open_edit_for_section(section_id, itens_medicao=itens_medicao)
+
     def _on_section_edit_requested(self, section_id: str) -> None:
         if self._sidebar_tabs.currentIndex() != 0:
             self._sidebar_tabs.setCurrentIndex(0)
-        self.open_edit_for_section(section_id, itens_medicao=self._itens_medicao)
+        self.open_edit_for_section(section_id)
         self.section_selected.emit(section_id)
 
     def navigate_to_section(self, section_id: str) -> None:

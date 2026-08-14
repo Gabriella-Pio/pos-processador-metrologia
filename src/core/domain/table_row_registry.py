@@ -24,6 +24,7 @@ from src.core.domain.table_row_specs import (
     default_table_rows,
     default_tomo_identificacao_rows,
     default_tomo_introducao_rows,
+    uses_table_rows_editor,
 )
 
 # Alias interno preservado para código que importava _merge_with_defaults
@@ -52,4 +53,5 @@ __all__ = [
     "merge_table_rows",
     "merge_with_defaults",
     "resolve_introducao_table_rows",
+    "uses_table_rows_editor",
 ]

@@ -25,6 +25,7 @@ from src.core.domain.table_row_registry import (
     INTRODUCAO_BLOCK_TITLES,
     SECTION_HEADING_DEFAULTS,
     TABLE_SECTIONS,
+    uses_table_rows_editor,
 )
 from src.core.domain.section_schema import is_custom_section_id
 from src.ui.components.buttons import IconButton, SecondaryButton
@@ -302,6 +303,8 @@ class SectionEditView(QFrame):
             return True
         if self._table_rows_editor.has_focused_editor():
             return True
+        if self._medicoes_editor.has_focused_editor():
+            return True
         for widget in self._field_widgets.values():
             if isinstance(widget, PlaceholderTextEdit) and widget.has_editor_focus():
                 return True
@@ -312,6 +315,7 @@ class SectionEditView(QFrame):
             self._pending_textarea_key is not None
             or self._debounce.isActive()
             or self._table_rows_editor.has_pending_emit()
+            or self._medicoes_editor.has_pending_emit()
         )
 
     def refresh_appearance(self) -> None:
@@ -415,7 +419,16 @@ class SectionEditView(QFrame):
             elif isinstance(widget, QLineEdit):
                 widget.setText(value)
 
-        if (section_id in TABLE_SECTIONS or is_custom_section_id(section_id)) and table_rows is not None:
+        if uses_table_rows_editor(section_id) and table_rows is not None:
+            from src.core.application.statistical_aggregator import (
+                ESTAT_EDITOR_VALUE_COLUMNS,
+                tipo_from_estat_section_id,
+            )
+
+            if tipo_from_estat_section_id(section_id):
+                self._table_rows_editor.set_value_columns(ESTAT_EDITOR_VALUE_COLUMNS)
+            else:
+                self._table_rows_editor.set_value_columns(())
             self._table_rows_editor.set_rows(table_rows)
         if section_id == "resultados" and itens_medicao is not None:
             self._medicoes_editor.set_rows(itens_medicao)
@@ -444,8 +457,19 @@ class SectionEditView(QFrame):
         self._section_title_edit.set_text(overrides.get("section_title", default))
 
     def _rebuild_table_rows(self, section_id: str, rows: list[dict[str, str]]) -> None:
-        if section_id not in TABLE_SECTIONS and not is_custom_section_id(section_id):
+        if not uses_table_rows_editor(section_id):
+            self._table_rows_editor.set_value_columns(())
+            self._table_rows_editor.set_rows([])
             return
+        from src.core.application.statistical_aggregator import (
+            ESTAT_EDITOR_VALUE_COLUMNS,
+            tipo_from_estat_section_id,
+        )
+
+        if tipo_from_estat_section_id(section_id):
+            self._table_rows_editor.set_value_columns(ESTAT_EDITOR_VALUE_COLUMNS)
+        else:
+            self._table_rows_editor.set_value_columns(())
         self._table_rows_editor.set_rows(rows)
 
     def set_locked_media_kinds(self, kinds: list[str]) -> None:

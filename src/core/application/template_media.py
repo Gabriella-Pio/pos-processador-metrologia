@@ -58,7 +58,7 @@ def workspace_addable_media_kinds(section_id: str) -> list[str]:
     if is_custom_section_id(section_id):
         return list(_ADDABLE_KINDS)
     addable = ["photos", "graphics"]
-    if section_id in TABLE_SECTIONS:
+    if section_id in TABLE_SECTIONS or section_id.startswith("estat_resumo_") or section_id.startswith("estat_detalhe_"):
         addable.append("tables")
     return addable
 

@@ -341,6 +341,32 @@ def build_table_rows(document: ReportDocument, report_kind: str) -> dict[str, li
     if report_kind == "falha" or stored_discussao:
         result["discussao_falha"] = merge_table_rows("discussao_falha", stored_discussao)
 
+    # Resumos estatísticos editados no workspace unificado.
+    for section_id, overrides in document.section_overrides.items():
+        if not (
+            section_id.startswith("estat_resumo_")
+            or section_id.startswith("estat_detalhe_")
+        ):
+            continue
+        stored = overrides.get("table_rows")
+        if stored:
+            result[section_id] = [
+                {
+                    "id": str(row.get("id") or ""),
+                    "label": str(row.get("label") or ""),
+                    **{
+                        key: str(row.get(key) or "")
+                        for key in (
+                            "nominal", "limits", "n", "mean", "stdev",
+                            "minimum", "maximum", "fora", "value",
+                        )
+                        if key in row
+                    },
+                }
+                for row in stored
+                if isinstance(row, dict)
+            ]
+
     for custom in document.custom_sections:
         section_id = custom.get("id", "")
         if not section_id:

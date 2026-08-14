@@ -2,18 +2,21 @@
 from __future__ import annotations
 
 import uuid
+from typing import Sequence
 
 from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtWidgets import (
     QAbstractScrollArea,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QSizePolicy,
     QVBoxLayout,
+    QWidget,
 )
 
 from src.ui.components.buttons import IconButton, SecondaryButton
@@ -32,7 +35,7 @@ def _micro_label(text: str) -> QLabel:
 
 
 class _TableRowWidget(QFrame):
-    """Uma linha no estilo do PDF: rótulo + valor no mesmo card."""
+    """Uma linha no estilo do PDF: rótulo + valor(es) no mesmo card."""
 
     remove_requested = pyqtSignal()
 
@@ -42,10 +45,13 @@ class _TableRowWidget(QFrame):
         *,
         multiline_value: bool = True,
         allow_remove: bool = False,
+        value_columns: Sequence[tuple[str, str]] = (),
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.row_id = row.get("id", "")
+        self._value_columns = tuple(value_columns)
+        self._value_edits: dict[str, PlaceholderTextEdit] = {}
         self.setObjectName("IdentTableRow")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self.setStyleSheet(
@@ -73,15 +79,34 @@ class _TableRowWidget(QFrame):
         fields.setContentsMargins(0, 0, 0, 0)
         fields.setSpacing(4)
 
-        fields.addWidget(_micro_label("Rótulo (como no PDF)"))
+        fields.addWidget(_micro_label("Característica" if self._value_columns else "Rótulo (como no PDF)"))
         self._label_edit = PlaceholderTextEdit(multiline=False)
         self._label_edit.set_text(row.get("label", ""))
         fields.addWidget(self._label_edit)
 
-        fields.addWidget(_micro_label("Valor"))
-        self._value_edit = PlaceholderTextEdit(multiline=multiline_value)
-        self._value_edit.set_text(row.get("value", ""))
-        fields.addWidget(self._value_edit)
+        if self._value_columns:
+            grid_host = QWidget()
+            grid = QGridLayout(grid_host)
+            grid.setContentsMargins(0, 4, 0, 0)
+            grid.setHorizontalSpacing(SPACING.sm)
+            grid.setVerticalSpacing(4)
+            for index, (key, title) in enumerate(self._value_columns):
+                cell = QVBoxLayout()
+                cell.setContentsMargins(0, 0, 0, 0)
+                cell.setSpacing(2)
+                cell.addWidget(_micro_label(title))
+                edit = PlaceholderTextEdit(multiline=False)
+                edit.set_text(str(row.get(key, "")))
+                self._value_edits[key] = edit
+                cell.addWidget(edit)
+                grid.addLayout(cell, index // 2, index % 2)
+            fields.addWidget(grid_host)
+            self._value_edit = None
+        else:
+            fields.addWidget(_micro_label("Valor"))
+            self._value_edit = PlaceholderTextEdit(multiline=multiline_value)
+            self._value_edit.set_text(row.get("value", ""))
+            fields.addWidget(self._value_edit)
 
         layout.addWidget(self._drag_handle, alignment=Qt.AlignmentFlag.AlignTop)
         layout.addLayout(fields, stretch=1)
@@ -93,12 +118,23 @@ class _TableRowWidget(QFrame):
             remove_btn.clicked.connect(self.remove_requested.emit)
             layout.addWidget(remove_btn, alignment=Qt.AlignmentFlag.AlignTop)
 
+    def iter_value_edits(self):
+        if self._value_edit is not None:
+            yield self._value_edit
+        yield from self._value_edits.values()
+
     def to_dict(self) -> dict[str, str]:
-        return {
+        data = {
             "id": self.row_id,
             "label": self._label_edit.get_text(),
-            "value": self._value_edit.get_text(),
         }
+        if self._value_columns:
+            for key, _title in self._value_columns:
+                edit = self._value_edits.get(key)
+                data[key] = edit.get_text() if edit is not None else ""
+        else:
+            data["value"] = self._value_edit.get_text() if self._value_edit is not None else ""
+        return data
 
 
 class DraggableTableRowsEditor(QFrame):
@@ -117,23 +153,24 @@ class DraggableTableRowsEditor(QFrame):
         self._loading = False
         self._multiline_value = multiline_value
         self._allow_add_remove = allow_add_remove
+        self._value_columns: tuple[tuple[str, str], ...] = ()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(400)
         self._debounce.timeout.connect(self._emit_rows)
 
-        title_label = QLabel(title)
-        title_label.setStyleSheet(heading_style(4))
-        title_label.setWordWrap(True)
+        self._title_label = QLabel(title)
+        self._title_label.setStyleSheet(heading_style(4))
+        self._title_label.setWordWrap(True)
 
-        hint = QLabel(
+        self._hint = QLabel(
             "Cada card é uma célula da tabela no PDF. Arraste ⠿ para reordenar; "
             "use ✕ para remover."
         )
-        hint.setWordWrap(True)
-        hint.setObjectName("SidebarHint")
-        hint.setStyleSheet(caption_style())
+        self._hint.setWordWrap(True)
+        self._hint.setObjectName("SidebarHint")
+        self._hint.setStyleSheet(caption_style())
 
         self._list = QListWidget()
         self._list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
@@ -166,10 +203,30 @@ class DraggableTableRowsEditor(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING.sm)
-        layout.addWidget(title_label)
-        layout.addWidget(hint)
+        layout.addWidget(self._title_label)
+        layout.addWidget(self._hint)
         layout.addWidget(self._list)
         layout.addLayout(self._actions)
+
+    def set_value_columns(self, columns: Sequence[tuple[str, str]] | None) -> None:
+        """Alterna entre valor único e grade de campos (seções estatísticas)."""
+        next_columns = tuple(columns or ())
+        if next_columns == self._value_columns:
+            return
+        current_rows = self.get_rows()
+        self._value_columns = next_columns
+        if next_columns:
+            self._hint.setText(
+                "Cada card é uma característica da tabela do PDF. "
+                "Edite os campos separados; arraste ⠿ para reordenar."
+            )
+        else:
+            self._hint.setText(
+                "Cada card é uma célula da tabela no PDF. Arraste ⠿ para reordenar; "
+                "use ✕ para remover."
+            )
+        if current_rows:
+            self.set_rows(current_rows)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
         super().resizeEvent(event)
@@ -190,8 +247,11 @@ class DraggableTableRowsEditor(QFrame):
             widget = self._list.itemWidget(item)
             if not isinstance(widget, _TableRowWidget):
                 continue
-            if widget._label_edit.has_editor_focus() or widget._value_edit.has_editor_focus():
+            if widget._label_edit.has_editor_focus():
                 return True
+            for edit in widget.iter_value_edits():
+                if edit.has_editor_focus():
+                    return True
         return False
 
     def set_rows(self, rows: list[dict[str, str]]) -> None:
@@ -224,15 +284,15 @@ class DraggableTableRowsEditor(QFrame):
             row,
             multiline_value=self._multiline_value,
             allow_remove=self._allow_add_remove,
+            value_columns=self._value_columns,
         )
         widget._label_edit.text_changed.connect(self._schedule_emit_rows)
-        widget._value_edit.text_changed.connect(self._schedule_emit_rows)
         widget._label_edit.height_changed.connect(
             lambda w=widget: self._sync_widget_height(w)
         )
-        widget._value_edit.height_changed.connect(
-            lambda w=widget: self._sync_widget_height(w)
-        )
+        for edit in widget.iter_value_edits():
+            edit.text_changed.connect(self._schedule_emit_rows)
+            edit.height_changed.connect(lambda w=widget: self._sync_widget_height(w))
         if self._allow_add_remove:
             widget.remove_requested.connect(lambda w=widget: self._remove_widget(w))
         self._list.addItem(item)
@@ -244,10 +304,13 @@ class DraggableTableRowsEditor(QFrame):
 
     def _on_add_row(self) -> None:
         row_id = f"custom_{uuid.uuid4().hex[:8]}"
-        self._append_row_item(
-            {"id": row_id, "label": "Novo campo", "value": ""},
-            emit_on_ready=True,
-        )
+        row: dict[str, str] = {"id": row_id, "label": "Novo campo"}
+        if self._value_columns:
+            for key, _title in self._value_columns:
+                row[key] = ""
+        else:
+            row["value"] = ""
+        self._append_row_item(row, emit_on_ready=True)
 
     def _remove_widget(self, widget: _TableRowWidget) -> None:
         item = self._item_for_widget(widget)
@@ -287,7 +350,8 @@ class DraggableTableRowsEditor(QFrame):
             widget.setFixedWidth(width)
             widget.adjustSize()
             hint = widget.sizeHint()
-            height = max(hint.height(), widget.minimumSizeHint().height(), 88)
+            min_h = 140 if self._value_columns else 88
+            height = max(hint.height(), widget.minimumSizeHint().height(), min_h)
             item.setSizeHint(QSize(width, height))
         except RuntimeError:
             return
@@ -303,6 +367,4 @@ class DraggableTableRowsEditor(QFrame):
     def _emit_rows(self, *_args) -> None:
         if self._loading:
             return
-        if self._debounce.isActive():
-            self._debounce.stop()
         self.rows_changed.emit(self.get_rows())

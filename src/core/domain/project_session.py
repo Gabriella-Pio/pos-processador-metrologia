@@ -34,8 +34,11 @@ class ProjectSession:
     display_name: str = ""
     # Seções desativadas no PDF unificado (estatístico/híbrido), independentes das peças.
     unified_deleted_section_ids: list[str] = field(default_factory=list)
-    # Overrides de layout/conteúdo do PDF unificado (gráficos, media_kinds, etc.).
+    # Overrides de layout/conteúdo do PDF unificado (gráficos, media_kinds, prosa, tabelas).
     unified_section_overrides: dict[str, dict] = field(default_factory=dict)
+    # Seções personalizadas e extras do catálogo no PDF unificado.
+    unified_custom_sections: list[dict] = field(default_factory=list)
+    unified_extra_section_ids: list[str] = field(default_factory=list)
     # Fotos do relatório consolidado (modo PDF único) — independentes das abas.
     unified_images: list[ReportImage] = field(default_factory=list)
     # True após seed/edição no unificado: lista vazia = sem fotos (não reimportar das peças).

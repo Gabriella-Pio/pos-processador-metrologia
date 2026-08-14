@@ -41,7 +41,7 @@ def _header_style(styles):
     )
 
 
-def _summary_table(styles, series_list, contexto_extra):
+def _summary_table(styles, series_list, contexto_extra, *, section_id: str = ""):
     header = _header_style(styles)
     rows = [[
         Paragraph("Característica", header),
@@ -54,27 +54,46 @@ def _summary_table(styles, series_list, contexto_extra):
         Paragraph("Máx.", header),
         Paragraph("Fora", header),
     ]]
-    for series in series_list:
-        unit = series.unit or ""
-        nominal_value = parse_measure_number(series.nominal)
-        nominal_text = (
-            format_stat_number(nominal_value, unit=unit)
-            if nominal_value is not None
-            else (f"{series.nominal} {unit}".strip() if series.nominal else "—")
-        )
-        limits = format_series_limits_range(series)
-        name = display_characteristic_name(series.display_name)
-        rows.append([
-            Paragraph(name, styles["celula"]),
-            Paragraph(nominal_text, styles["celula_centro"]),
-            Paragraph(limits, styles["celula_centro"]),
-            Paragraph(str(series.n), styles["celula_centro"]),
-            Paragraph(format_stat_number(series.mean, unit=unit), styles["celula_centro"]),
-            Paragraph(format_stat_number(series.stdev, unit=unit), styles["celula_centro"]),
-            Paragraph(format_stat_number(series.minimum, unit=unit), styles["celula_centro"]),
-            Paragraph(format_stat_number(series.maximum, unit=unit), styles["celula_centro"]),
-            Paragraph(str(series.fora_count), styles["celula_centro"]),
-        ])
+    edited = list((contexto_extra.get("table_rows") or {}).get(section_id) or [])
+    use_edited = bool(edited) and any(
+        str(row.get("n") or row.get("mean") or row.get("maximum") or "").strip()
+        for row in edited
+    )
+    if use_edited:
+        for row in edited:
+            rows.append([
+                Paragraph(str(row.get("label") or "—"), styles["celula"]),
+                Paragraph(str(row.get("nominal") or "—"), styles["celula_centro"]),
+                Paragraph(str(row.get("limits") or "—"), styles["celula_centro"]),
+                Paragraph(str(row.get("n") or "—"), styles["celula_centro"]),
+                Paragraph(str(row.get("mean") or "—"), styles["celula_centro"]),
+                Paragraph(str(row.get("stdev") or "—"), styles["celula_centro"]),
+                Paragraph(str(row.get("minimum") or "—"), styles["celula_centro"]),
+                Paragraph(str(row.get("maximum") or "—"), styles["celula_centro"]),
+                Paragraph(str(row.get("fora") or "—"), styles["celula_centro"]),
+            ])
+    else:
+        for series in series_list:
+            unit = series.unit or ""
+            nominal_value = parse_measure_number(series.nominal)
+            nominal_text = (
+                format_stat_number(nominal_value, unit=unit)
+                if nominal_value is not None
+                else (f"{series.nominal} {unit}".strip() if series.nominal else "—")
+            )
+            limits = format_series_limits_range(series)
+            name = display_characteristic_name(series.display_name)
+            rows.append([
+                Paragraph(name, styles["celula"]),
+                Paragraph(nominal_text, styles["celula_centro"]),
+                Paragraph(limits, styles["celula_centro"]),
+                Paragraph(str(series.n), styles["celula_centro"]),
+                Paragraph(format_stat_number(series.mean, unit=unit), styles["celula_centro"]),
+                Paragraph(format_stat_number(series.stdev, unit=unit), styles["celula_centro"]),
+                Paragraph(format_stat_number(series.minimum, unit=unit), styles["celula_centro"]),
+                Paragraph(format_stat_number(series.maximum, unit=unit), styles["celula_centro"]),
+                Paragraph(str(series.fora_count), styles["celula_centro"]),
+            ])
     table = Table(rows, colWidths=[140, 54, 90, 28, 50, 46, 50, 50, 30])
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), ReportTheme.COR_PRIMARIA),
@@ -167,7 +186,7 @@ class EstatResumoTipoSection(BaseSection):
             )
             story.append(Spacer(1, 8))
             return
-        story.append(_summary_table(styles, series, contexto_extra))
+        story.append(_summary_table(styles, series, contexto_extra, section_id=section_id))
         story.append(Spacer(1, 10))
 
 
