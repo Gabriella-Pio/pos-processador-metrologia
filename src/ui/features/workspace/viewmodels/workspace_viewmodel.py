@@ -138,6 +138,8 @@ class WorkspaceViewModel(QObject):
         self._session_timer.setSingleShot(True)
         self._session_timer.setInterval(_SESSION_SAVE_DEBOUNCE_MS)
         self._session_timer.timeout.connect(lambda: persist_session(self))
+        self._pending_parse_indices: list[int] = []
+        self._deferred_parse_generation = 0
 
     # ------------------------------------------------------------------ commit
 
@@ -259,8 +261,29 @@ class WorkspaceViewModel(QObject):
     def _end_busy(self) -> None:
         self.busy_changed.emit(False, "", "")
 
-    def _parse_session_slots(self, session: ProjectSession) -> bool:
+    def _parse_session_slots(self, session: ProjectSession, *, active_first: bool = True) -> bool:
+        """Parse dos slots. Com vários PDFs: só o ativo na abertura; demais em idle."""
         total = len(session.documents)
+        if total == 0:
+            return True
+
+        self._cancel_deferred_parse()
+        active = min(max(session.active_index, 0), total - 1)
+
+        if active_first and total > 1:
+            slot = session.documents[active]
+            label = (
+                slot.source_pdf_path.name
+                if slot.source_pdf_path and slot.source_pdf_path.name
+                else slot.evaluated_component or f"arquivo {active + 1}"
+            )
+            self._update_busy_progress(1, total, label)
+            if not self._parse_slot(session, active):
+                return False
+            self._pending_parse_indices = [i for i in range(total) if i != active]
+            self._schedule_deferred_parse(session)
+            return True
+
         for index in range(total):
             slot = session.documents[index]
             label = (
@@ -272,6 +295,92 @@ class WorkspaceViewModel(QObject):
             if not self._parse_slot(session, index):
                 return False
         return True
+
+    def _cancel_deferred_parse(self) -> None:
+        self._pending_parse_indices.clear()
+        self._deferred_parse_generation += 1
+
+    def _schedule_deferred_parse(self, session: ProjectSession) -> None:
+        if not self._pending_parse_indices:
+            return
+        generation = self._deferred_parse_generation
+        QTimer.singleShot(0, lambda: self._parse_next_deferred(session, generation))
+
+    def _parse_next_deferred(self, session: ProjectSession, generation: int) -> None:
+        if generation != self._deferred_parse_generation:
+            return
+        if self._app_state.project_session is not session:
+            return
+        if not self._pending_parse_indices:
+            return
+        index = self._pending_parse_indices.pop(0)
+        slot = session.documents[index]
+        if slot.document is not None:
+            self._schedule_deferred_parse(session)
+            return
+        label = (
+            slot.source_pdf_path.name
+            if slot.source_pdf_path and slot.source_pdf_path.name
+            else slot.evaluated_component or f"arquivo {index + 1}"
+        )
+        remaining = len(self._pending_parse_indices) + 1
+        total = len(session.documents)
+        done = total - remaining + 1
+        self.busy_changed.emit(True, f"Lendo PDFs em segundo plano… ({done}/{total})", label)
+        ok = self._parse_slot(session, index)
+        if not ok:
+            self._cancel_deferred_parse()
+            self._end_busy()
+            return
+        if self._pending_parse_indices:
+            self._schedule_deferred_parse(session)
+        else:
+            self._end_busy()
+            ProjectCommands.ensure_project_attachment_paths(session)
+            self._persist_project()
+
+    def _ensure_slot_parsed(self, session: ProjectSession, index: int) -> bool:
+        if not (0 <= index < len(session.documents)):
+            return False
+        if session.documents[index].document is not None:
+            return True
+        if index in self._pending_parse_indices:
+            self._pending_parse_indices = [i for i in self._pending_parse_indices if i != index]
+        slot = session.documents[index]
+        label = (
+            slot.source_pdf_path.name
+            if slot.source_pdf_path and slot.source_pdf_path.name
+            else slot.evaluated_component or f"arquivo {index + 1}"
+        )
+        self._begin_busy("Lendo PDF…", label)
+        try:
+            return self._parse_slot(session, index)
+        finally:
+            self._end_busy()
+            if self._pending_parse_indices:
+                self._schedule_deferred_parse(session)
+
+    def _ensure_all_slots_parsed(self, session: ProjectSession) -> bool:
+        self._cancel_deferred_parse()
+        total = len(session.documents)
+        pending = [i for i, slot in enumerate(session.documents) if slot.document is None]
+        if not pending:
+            return True
+        self._begin_busy(f"Preparando {len(pending)} PDF(s)…")
+        try:
+            for offset, index in enumerate(pending, start=1):
+                slot = session.documents[index]
+                label = (
+                    slot.source_pdf_path.name
+                    if slot.source_pdf_path and slot.source_pdf_path.name
+                    else f"arquivo {index + 1}"
+                )
+                self._update_busy_progress(offset, len(pending), label)
+                if not self._parse_slot(session, index):
+                    return False
+            return True
+        finally:
+            self._end_busy()
 
     def _reset_version_ui_state(self) -> None:
         """Limpa status de versão ao trocar de projeto (evita 'Visualizando vN' fantasma)."""
@@ -290,6 +399,7 @@ class WorkspaceViewModel(QObject):
         default_component: str = "",
     ) -> None:
         total = len(pdf_entries)
+        self._cancel_deferred_parse()
         self._begin_busy(
             "Preparando projeto…" if total <= 1 else f"Importando lote ({total} PDFs)…",
         )
@@ -321,6 +431,7 @@ class WorkspaceViewModel(QObject):
                 "",
             )
             return False
+        self._cancel_deferred_parse()
         self._begin_busy("Abrindo projeto…")
         try:
             session = self._project_service.load_session(project_id)
@@ -420,6 +531,8 @@ class WorkspaceViewModel(QObject):
         if session.active_index != index and self._session_timer.isActive():
             self._session_timer.stop()
             persist_session(self)
+        if not self._ensure_slot_parsed(session, index):
+            return
         document = ProjectCommands.activate_document(
             session, index, self._doc_service, self._session_repo
         )
@@ -998,6 +1111,10 @@ class WorkspaceViewModel(QObject):
         unified = bool(unified) and self._is_multi_document()
         if self._export_mode_unified == unified:
             return
+        if unified:
+            session = self._app_state.project_session
+            if session is not None and not self._ensure_all_slots_parsed(session):
+                return
         self._export_mode_unified = unified
         if unified:
             from src.core.application.piece_ordering import sort_session_documents
@@ -1376,8 +1493,11 @@ class WorkspaceViewModel(QObject):
         self.export_finished.emit(outcome.path)
 
     def export_unified_document(self, output_path: Path) -> None:
+        session = self._app_state.project_session
+        if session is not None and not self._ensure_all_slots_parsed(session):
+            return
         outcome = self._export_commands.export_unified_document(
-            self._app_state.project_session,
+            session,
             output_path,
             version_history=self.list_version_timeline(),
         )
@@ -1392,8 +1512,11 @@ class WorkspaceViewModel(QObject):
         self.export_finished.emit(outcome.path)
 
     def export_all_documents(self, output_dir: Path) -> list[Path]:
+        session = self._app_state.project_session
+        if session is not None and not self._ensure_all_slots_parsed(session):
+            return []
         return self._export_commands.export_all_documents(
-            self._app_state.project_session,
+            session,
             output_dir,
             switch_document=self.switch_document,
             export_document=self.export_document,

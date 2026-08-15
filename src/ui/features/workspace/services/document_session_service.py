@@ -74,7 +74,15 @@ class DocumentSessionService:
 
         document.client_project = session.client_project
         document.evaluated_component = slot.evaluated_component
-        kind = document.source_kind or detect_source_kind(slot.source_pdf_path) if slot.source_pdf_path else "insp_ect"
+        kind = (
+            document.source_kind
+            or slot.source_kind
+            or (
+                detect_source_kind(slot.source_pdf_path)
+                if slot.source_pdf_path and str(slot.source_pdf_path).strip()
+                else "insp_ect"
+            )
+        )
         if session.report_mode == "tomo_only":
             kind = "insp_ect"
         if session.report_mode == "falha":
