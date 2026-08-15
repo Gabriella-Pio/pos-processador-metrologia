@@ -59,6 +59,7 @@ from src.ui.features.workspace.commands.version_commands import VersionCommands
 from src.ui.features.workspace.presenters.section_summary_presenter import SectionSummaryPresenter
 from src.ui.features.workspace.services.document_session_service import DocumentSessionService
 from src.ui.features.workspace.services.preview_service import PreviewService
+from src.ui.features.workspace.services.slot_parse_worker import BackgroundSlotParseQueue
 from src.ui.features.workspace.services.template_workspace_service import TemplateWorkspaceService
 from src.ui.features.workspace.undo_stack import DocumentUndoStack
 from src.ui.controllers.app_state import AppState
@@ -138,8 +139,12 @@ class WorkspaceViewModel(QObject):
         self._session_timer.setSingleShot(True)
         self._session_timer.setInterval(_SESSION_SAVE_DEBOUNCE_MS)
         self._session_timer.timeout.connect(lambda: persist_session(self))
-        self._pending_parse_indices: list[int] = []
-        self._deferred_parse_generation = 0
+        self._bg_parse = BackgroundSlotParseQueue(self._doc_service, parent=self)
+        self._bg_parse.slot_ready.connect(self._on_background_slot_ready)
+        self._bg_parse.slot_failed.connect(self._on_background_slot_failed)
+        self._bg_parse.queue_idle.connect(self._on_background_parse_idle)
+        self._bg_parse_session: ProjectSession | None = None
+        self._bg_parse_total = 0
 
     # ------------------------------------------------------------------ commit
 
@@ -262,7 +267,7 @@ class WorkspaceViewModel(QObject):
         self.busy_changed.emit(False, "", "")
 
     def _parse_session_slots(self, session: ProjectSession, *, active_first: bool = True) -> bool:
-        """Parse dos slots. Com vários PDFs: só o ativo na abertura; demais em idle."""
+        """Parse dos slots. Com vários PDFs: ativo na UI; demais no QThreadPool."""
         total = len(session.documents)
         if total == 0:
             return True
@@ -280,8 +285,10 @@ class WorkspaceViewModel(QObject):
             self._update_busy_progress(1, total, label)
             if not self._parse_slot(session, active):
                 return False
-            self._pending_parse_indices = [i for i in range(total) if i != active]
-            self._schedule_deferred_parse(session)
+            pending = [i for i in range(total) if i != active]
+            self._bg_parse_session = session
+            self._bg_parse_total = total
+            self._bg_parse.enqueue(session, pending)
             return True
 
         for index in range(total):
@@ -297,55 +304,79 @@ class WorkspaceViewModel(QObject):
         return True
 
     def _cancel_deferred_parse(self) -> None:
-        self._pending_parse_indices.clear()
-        self._deferred_parse_generation += 1
+        self._bg_parse.cancel()
+        self._bg_parse_session = None
+        self._bg_parse_total = 0
 
-    def _schedule_deferred_parse(self, session: ProjectSession) -> None:
-        if not self._pending_parse_indices:
+    def _on_background_slot_ready(
+        self,
+        generation: int,
+        index: int,
+        document: object,
+        notice: str,
+    ) -> None:
+        session = self._app_state.project_session
+        if session is None or session is not self._bg_parse_session:
             return
-        generation = self._deferred_parse_generation
-        QTimer.singleShot(0, lambda: self._parse_next_deferred(session, generation))
-
-    def _parse_next_deferred(self, session: ProjectSession, generation: int) -> None:
-        if generation != self._deferred_parse_generation:
+        if generation != self._bg_parse.generation:
             return
-        if self._app_state.project_session is not session:
+        if not (0 <= index < len(session.documents)):
             return
-        if not self._pending_parse_indices:
+        if session.documents[index].document is not None:
             return
-        index = self._pending_parse_indices.pop(0)
-        slot = session.documents[index]
-        if slot.document is not None:
-            self._schedule_deferred_parse(session)
+        if not isinstance(document, ReportDocument):
             return
+        self._doc_service.attach_document_to_slot(session, index, document)
+        ProjectCommands.finalize_parsed_slot(self._session_repo, session, index)
+        if notice:
+            self.import_notice.emit("Imagens Bosello", notice)
+        done = sum(1 for slot in session.documents if slot.document is not None)
+        total = self._bg_parse_total or len(session.documents)
         label = (
-            slot.source_pdf_path.name
-            if slot.source_pdf_path and slot.source_pdf_path.name
-            else slot.evaluated_component or f"arquivo {index + 1}"
+            session.documents[index].source_pdf_path.name
+            if session.documents[index].source_pdf_path
+            else f"arquivo {index + 1}"
         )
-        remaining = len(self._pending_parse_indices) + 1
-        total = len(session.documents)
-        done = total - remaining + 1
-        self.busy_changed.emit(True, f"Lendo PDFs em segundo plano… ({done}/{total})", label)
-        ok = self._parse_slot(session, index)
-        if not ok:
-            self._cancel_deferred_parse()
-            self._end_busy()
+        # Progresso sem bloquear o cursor (overlay só se já estiver busy).
+        self.busy_progress.emit(done, total, label)
+
+    def _on_background_slot_failed(self, generation: int, index: int, error: str) -> None:
+        session = self._app_state.project_session
+        if generation != self._bg_parse.generation:
             return
-        if self._pending_parse_indices:
-            self._schedule_deferred_parse(session)
-        else:
-            self._end_busy()
-            ProjectCommands.ensure_project_attachment_paths(session)
-            self._persist_project()
+        label = f"arquivo {index + 1}"
+        if session is not None and 0 <= index < len(session.documents):
+            slot = session.documents[index]
+            label = (
+                slot.source_pdf_path.name
+                if slot.source_pdf_path and slot.source_pdf_path.name
+                else slot.evaluated_component or label
+            )
+        self._cancel_deferred_parse()
+        self.error_occurred.emit(
+            "Não foi possível ler o PDF",
+            f"Erro ao processar {label}.",
+            error,
+        )
+
+    def _on_background_parse_idle(self, generation: int) -> None:
+        if generation != self._bg_parse.generation:
+            return
+        session = self._bg_parse_session
+        self._bg_parse_session = None
+        if session is None or self._app_state.project_session is not session:
+            return
+        if any(slot.document is None for slot in session.documents):
+            return
+        ProjectCommands.ensure_project_attachment_paths(session)
+        self._persist_project()
 
     def _ensure_slot_parsed(self, session: ProjectSession, index: int) -> bool:
         if not (0 <= index < len(session.documents)):
             return False
         if session.documents[index].document is not None:
             return True
-        if index in self._pending_parse_indices:
-            self._pending_parse_indices = [i for i in self._pending_parse_indices if i != index]
+        self._bg_parse.claim_for_sync(index)
         slot = session.documents[index]
         label = (
             slot.source_pdf_path.name
@@ -354,15 +385,15 @@ class WorkspaceViewModel(QObject):
         )
         self._begin_busy("Lendo PDF…", label)
         try:
-            return self._parse_slot(session, index)
+            ok = self._parse_slot(session, index)
+            return ok
         finally:
+            self._bg_parse.unclaim(index)
             self._end_busy()
-            if self._pending_parse_indices:
-                self._schedule_deferred_parse(session)
+            self._bg_parse.resume_if_needed()
 
     def _ensure_all_slots_parsed(self, session: ProjectSession) -> bool:
         self._cancel_deferred_parse()
-        total = len(session.documents)
         pending = [i for i, slot in enumerate(session.documents) if slot.document is None]
         if not pending:
             return True
