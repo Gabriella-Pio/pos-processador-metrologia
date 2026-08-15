@@ -21,7 +21,7 @@ from src.core.application.template_apply import apply_template_content_defaults,
 from src.core.domain.pdf_source import is_usable_source_pdf
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.ports import ReportDocument, ReportParser, TemplateRepository, VersionHistoryRepository
-from src.core.parser.source_kind import detect_source_kind
+from src.core.application.pdf_source_kind import detect_source_kind
 
 logger = logging.getLogger(__name__)
 

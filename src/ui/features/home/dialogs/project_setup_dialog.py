@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 from src.core.application.batch_processing import infer_report_mode
 from src.core.domain.ports import ReportParser, TemplateRepository
-from src.core.parser.source_kind import detect_source_kind
+from src.core.application.pdf_source_kind import detect_source_kind
 from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.components.inputs import LabeledLineEdit, ThemedComboBox
