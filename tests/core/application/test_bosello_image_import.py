@@ -8,6 +8,7 @@ from PIL import Image
 
 from src.core.application.bosello_image_import import (
     attach_bosello_captures,
+    bosello_images_storage_dir,
     build_bosello_image_document,
     build_manual_tomography_document,
     ensure_bosello_capture_library,
@@ -220,3 +221,40 @@ def test_ensure_bosello_capture_library_reuses_existing(tmp_path: Path) -> None:
         second = ensure_bosello_capture_library(document, pdf)
     assert first == second
     extract_mock.assert_called_once()
+
+
+def test_render_reuses_disk_cache_without_pdf_extract(tmp_path: Path) -> None:
+    pdf = tmp_path / "relatorio.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    cache_dir = bosello_images_storage_dir(pdf)
+    cache_dir.mkdir(parents=True)
+    cached = cache_dir / "img_01.png"
+    Image.new("RGB", (800, 600), (30, 30, 30)).save(cached)
+
+    with patch(
+        "src.core.application.bosello_image_import.InspEctParser.extract_graphic_images_from_pdf",
+    ) as extract_mock:
+        library = render_bosello_capture_paths(pdf, replace_library=False)
+
+    assert library == [cached]
+    extract_mock.assert_not_called()
+
+
+def test_build_bosello_image_document_reuses_disk_cache_on_reopen(tmp_path: Path) -> None:
+    pdf = tmp_path / "bosello.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    cache_dir = bosello_images_storage_dir(pdf)
+    cache_dir.mkdir(parents=True)
+    cached = cache_dir / "img_01.png"
+    Image.new("RGB", (800, 600), (40, 40, 40)).save(cached)
+
+    with patch(
+        "src.core.application.bosello_image_import.InspEctParser.extract_graphic_images_from_pdf",
+    ) as extract_mock:
+        document = build_bosello_image_document(pdf)
+
+    extract_mock.assert_not_called()
+    assert document.bosello_captured_paths == [cached]
+    assert len(document.images) == 1
+    assert document.images[0].image_path == cached
+    assert document.images[0].bosello_import is True

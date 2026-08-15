@@ -85,10 +85,25 @@ def filter_importable_image_paths(paths: list[Path]) -> list[Path]:
     ]
 
 
+_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+
+
 def bosello_images_storage_dir(source_pdf: Path) -> Path:
     """Diretório persistente ao lado do PDF de origem."""
     stem = source_pdf.stem or "bosello"
     return source_pdf.parent / ".pos-metrologia" / "bosello-rendered" / stem
+
+
+def list_cached_bosello_captures(source_pdf: Path) -> list[Path]:
+    """Lista capturas já renderizadas em disco (sem reextrair do PDF)."""
+    dest_dir = bosello_images_storage_dir(source_pdf)
+    if not dest_dir.is_dir():
+        return []
+    return sorted(
+        path
+        for path in dest_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in _IMAGE_SUFFIXES
+    )
 
 
 def minimal_insp_ect_dto(source_pdf: Path) -> RelatorioInspEctDto:
@@ -102,9 +117,18 @@ def render_bosello_capture_paths(
     *,
     replace_library: bool = False,
 ) -> list[Path]:
-    """Renderiza capturas do PDF e copia para armazenamento persistente."""
+    """Renderiza capturas do PDF e copia para armazenamento persistente.
+
+    Com ``replace_library=False``, reutiliza o diretório em disco se já existir
+    (reabertura de projeto sem reextrair imagens do PDF).
+    """
     if not is_usable_source_pdf(source_pdf):
         return []
+
+    if not replace_library:
+        cached = list_cached_bosello_captures(source_pdf)
+        if cached:
+            return cached
 
     raw_paths = InspEctParser.extract_graphic_images_from_pdf(str(source_pdf))
     if not raw_paths:
@@ -143,6 +167,12 @@ def ensure_bosello_capture_library(
         if existing:
             document.bosello_captured_paths = existing
             return existing
+
+    if not replace_library:
+        cached = list_cached_bosello_captures(source_pdf)
+        if cached:
+            document.bosello_captured_paths = cached
+            return cached
 
     library = render_bosello_capture_paths(source_pdf, replace_library=replace_library)
     document.bosello_captured_paths = library
@@ -253,7 +283,8 @@ def build_bosello_image_document(pdf_path: Path) -> ReportDocument:
         source_kind="insp_ect",
         template_id="tomografia",
     )
-    merge_bosello_images(document, pdf_path, replace_auto_imported=True)
+    # Reutiliza cache em disco na reabertura; só reextrai se não houver capturas.
+    merge_bosello_images(document, pdf_path, replace_auto_imported=False)
     return document
 
 
