@@ -44,6 +44,7 @@ class JSONTemplateRepository(TemplateRepository):
         from src.core.domain.falha_template_defaults import FALHA_PROSE_DEFAULTS
 
         estado = self._carregar_estado()
+        dirty = False
         templates = estado.setdefault("templates", [])
         if not any(t.get("id") == "tomografia" for t in templates):
             templates.append({
@@ -51,24 +52,35 @@ class JSONTemplateRepository(TemplateRepository):
                 "name": "Template Tomografia SENAI/Bosello",
                 "is_default": False,
             })
+            dirty = True
         if not any(t.get("id") == "analise_falha" for t in templates):
             templates.append({
                 "id": "analise_falha",
                 "name": "Template Análise de Falha (óptico + tomografia)",
                 "is_default": False,
             })
+            dirty = True
         configs = estado.setdefault("configs", {})
         # Builtins: código é fonte da verdade (ordem/enabled). Evita JSON antigo travar layout.
-        configs["tomografia"] = dict(TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG)
-        configs["analise_falha"] = dict(TEMPLATE_FALHA_SECTIONS_CONFIG)
+        tomo_cfg = dict(TEMPLATE_TOMOGRAFIA_SECTIONS_CONFIG)
+        falha_cfg = dict(TEMPLATE_FALHA_SECTIONS_CONFIG)
+        if configs.get("tomografia") != tomo_cfg:
+            configs["tomografia"] = tomo_cfg
+            dirty = True
+        if configs.get("analise_falha") != falha_cfg:
+            configs["analise_falha"] = falha_cfg
+            dirty = True
         content = estado.setdefault("content_defaults", {})
         if not content.get("tomografia"):
             content["tomografia"] = {sid: dict(vals) for sid, vals in TOMO_PROSE_DEFAULTS.items()}
+            dirty = True
         if not content.get("analise_falha"):
             content["analise_falha"] = {
                 sid: dict(vals) for sid, vals in FALHA_PROSE_DEFAULTS.items()
             }
-        self._salvar_estado(estado)
+            dirty = True
+        if dirty:
+            self._salvar_estado(estado)
 
     def list_templates(self) -> list[dict]:
         estado = self._carregar_estado()

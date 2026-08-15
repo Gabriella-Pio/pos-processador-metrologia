@@ -17,11 +17,7 @@ from src.core.application.template_block_resolver import (
 )
 from src.core.domain.section_numbering import build_section_number_map
 from src.core.domain.section_schema import is_navigable_section
-from src.core.domain.ports import ReportDocument, TechnicalControlInfo
-from src.core.generator.constants import SECTION_TITLES
-from src.core.generator.engine import ReportGenerator
-from src.core.infrastructure.template_repository import JSONTemplateRepository
-from src.core.parser.parser import PDFParserService
+from src.core.domain.ports import ReportDocument, TechnicalControlInfo, TemplateRepository
 from src.core.parser.source_kind import detect_source_kind
 
 
@@ -29,13 +25,15 @@ class RealReportParserAdapter:
     """Adaptador real que traduz o Parser da ZEISS para o contrato da UI."""
 
     def parse(self, pdf_path: Path) -> ReportDocument:
+        # Import pesado (fitz/CALYPSO) só no 1º parse — acelera o boot da UI.
+        from src.core.parser.parser import PDFParserService
+
         kind = detect_source_kind(pdf_path)
         if kind == "insp_ect":
             return self._parse_bosello_image_source(pdf_path)
 
         dto_resultado = PDFParserService.extrair_dados_avancados(str(pdf_path))
         source_kind = getattr(dto_resultado, "source_kind", "calypso") or "calypso"
-        maquina = getattr(dto_resultado, "maquina_mmc", "Não identificada")
 
         return ReportDocument(
             source_pdf_path=pdf_path,
@@ -60,12 +58,14 @@ class RealReportParserAdapter:
 class RealReportExporterAdapter:
     """Adaptador real que traduz as ações da UI para a Engine ReportLab real."""
 
-    def __init__(self, template_repository: Optional[JSONTemplateRepository] = None) -> None:
+    def __init__(self, template_repository: Optional[TemplateRepository] = None) -> None:
         self._template_repository = template_repository
         self._last_section_anchor_map: dict[str, dict] = {}
         self._last_photo_anchors: list[dict] = []
 
     def export(self, document: ReportDocument, output_path: Path) -> Path:
+        from src.core.generator.engine import ReportGenerator
+
         section_anchor_map: dict[str, dict] = {}
         photo_anchors: list[dict] = []
         ctx = build_export_context(document)
@@ -103,6 +103,8 @@ class RealReportExporterAdapter:
         traduzida para ``{"id", "title"}`` — garante que o que aparece no
         Workspace é sempre fiel ao que vai sair no PDF final.
         """
+        from src.core.generator.constants import SECTION_TITLES
+
         blocos = resolve_template_blocks(document, self._template_repository)
         number_map = build_section_number_map(blocos)
         fotos_por_secao: dict[str, int] = {}

@@ -1,7 +1,6 @@
 """Composition root — wiring de dependências da aplicação."""
 from __future__ import annotations
 
-from src.core.infrastructure.adapters import RealReportExporterAdapter, RealReportParserAdapter
 from src.core.infrastructure.database import DatabaseManager
 from src.core.infrastructure.project_repository import SQLiteProjectRepository
 from src.core.infrastructure.recent_files_repository import SQLiteRecentFilesAdapter
@@ -14,6 +13,10 @@ from src.ui.main_window import MainWindow
 
 
 def create_main_window() -> MainWindow:
+    # Adapters (parser/ReportLab) importados aqui — não no topo — para o módulo
+    # bootstrap não puxar fitz/ReportLab antes da MainWindow existir.
+    from src.core.infrastructure.adapters import RealReportExporterAdapter, RealReportParserAdapter
+
     db_manager = DatabaseManager()
     recent_files_repo = SQLiteRecentFilesAdapter(db_manager)
     version_history_repo = SQLiteVersionHistoryAdapter(db_manager)
