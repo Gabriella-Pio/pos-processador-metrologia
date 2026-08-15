@@ -1,8 +1,6 @@
 """Resolução de blocos de template para exportação e sumário."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from src.core.domain.section_catalog import fixed_position_start_ids
 from src.core.domain.section_schema import (
     PROTECTED_SECTION_IDS,
@@ -12,16 +10,13 @@ from src.core.domain.section_schema import (
     is_tomography_template,
     sections_config_to_blocks,
 )
-from src.core.domain.ports import ReportDocument
+from src.core.domain.ports import ReportDocument, TemplateRepository
 from src.core.generator.constants import TEMPLATE_PADRAO_OFICIAL
-
-if TYPE_CHECKING:
-    from src.core.infrastructure.template_repository import JSONTemplateRepository
 
 
 def resolve_template_blocks(
     document: ReportDocument,
-    template_repository: JSONTemplateRepository | None = None,
+    template_repository: TemplateRepository | None = None,
 ) -> list[dict]:
     """Mesma lógica usada em ``export()`` e ``list_sections()``."""
     if document.template_layout_override:
@@ -63,7 +58,7 @@ def resolve_template_blocks(
 
 def resolve_active_template_blocks(
     document: ReportDocument,
-    template_repository: JSONTemplateRepository | None = None,
+    template_repository: TemplateRepository | None = None,
 ) -> list[dict]:
     """Blocos que entram no PDF — omite seções desativadas no workspace."""
     return apply_deleted_sections(
