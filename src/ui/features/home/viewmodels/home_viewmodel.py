@@ -9,7 +9,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from src.core.application.project_service import ProjectService
 from src.core.domain.ports import RecentFilesRepository, TemplateRepository
-from src.core.infrastructure.template_repository import is_builtin_template_id
+from src.core.domain.template_ids import is_builtin_template_id
 from src.ui.features.home.models.dashboard import (
     ProjectSummary,
     RecentFileSummary,

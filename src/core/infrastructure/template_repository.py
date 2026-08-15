@@ -8,12 +8,10 @@ import json
 from pathlib import Path
 
 from src.core.domain.ports import TemplateRepository
+from src.core.domain.template_ids import is_builtin_template_id
 
-_BUILTIN_TEMPLATE_IDS = frozenset({"default", "tomografia", "analise_falha"})
-
-
-def is_builtin_template_id(template_id: str) -> bool:
-    return template_id in _BUILTIN_TEMPLATE_IDS
+# Reexport para compatibilidade com imports antigos do infrastructure.
+__all__ = ["JSONTemplateRepository", "is_builtin_template_id"]
 
 _TEMPLATE_PADRAO = {
     "id": "default",
