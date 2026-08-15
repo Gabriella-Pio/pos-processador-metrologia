@@ -4,11 +4,15 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from src.core.application.slot_meta_codec import (
+    document_slot_to_meta,
+    snapshot_slot_from_meta,
+    snapshot_slot_to_meta,
+)
 from src.core.domain.image_workspace import deserialize_report_image, serialize_report_image
 from src.core.domain.pdf_source import (
     has_source_pdf_reference,
     source_pdf_path_from_storage,
-    source_pdf_path_to_storage,
 )
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
 from src.core.domain.project_workspace import ProjectSlotSnapshot, ProjectWorkspace
@@ -67,15 +71,17 @@ def apply_draft_to_session(session: ProjectSession, draft: dict[str, Any] | None
 
 def session_to_workspace(session: ProjectSession) -> ProjectWorkspace:
     project_id = session.project_id or str(uuid.uuid4())
-    slots = [
-        ProjectSlotSnapshot(
-            source_pdf_path=source_pdf_path_to_storage(slot.source_pdf_path),
-            evaluated_component=slot.evaluated_component,
-            source_kind=slot.source_kind,
-            template_id=slot.template_id,
+    slots: list[ProjectSlotSnapshot] = []
+    for slot in session.documents:
+        meta = document_slot_to_meta(slot, storage_path=True)
+        slots.append(
+            ProjectSlotSnapshot(
+                source_pdf_path=meta["source_pdf_path"],
+                evaluated_component=meta["evaluated_component"],
+                source_kind=meta["source_kind"],
+                template_id=meta["template_id"],
+            )
         )
-        for slot in session.documents
-    ]
     return ProjectWorkspace(
         id=project_id,
         client_project=session.client_project,
@@ -117,29 +123,13 @@ def workspace_to_session(workspace: ProjectWorkspace) -> ProjectSession:
 
 
 def slots_to_json(slots: list[ProjectSlotSnapshot]) -> list[dict]:
-    return [
-        {
-            "source_pdf_path": source_pdf_path_to_storage(slot.source_pdf_path),
-            "evaluated_component": slot.evaluated_component,
-            "source_kind": slot.source_kind,
-            "template_id": slot.template_id,
-        }
-        for slot in slots
-    ]
+    return [snapshot_slot_to_meta(slot) for slot in slots]
 
 
 def slots_from_json(raw: list) -> list[ProjectSlotSnapshot]:
     slots: list[ProjectSlotSnapshot] = []
     for item in raw:
-        if not isinstance(item, dict):
-            continue
-        path = str(item.get("source_pdf_path") or "").strip()
-        slots.append(
-            ProjectSlotSnapshot(
-                source_pdf_path=path,
-                evaluated_component=str(item.get("evaluated_component") or "Componente"),
-                source_kind=str(item.get("source_kind") or "calypso"),
-                template_id=item.get("template_id"),
-            )
-        )
+        slot = snapshot_slot_from_meta(item)
+        if slot is not None:
+            slots.append(slot)
     return slots

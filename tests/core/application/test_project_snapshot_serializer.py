@@ -67,6 +67,19 @@ def test_serialize_project_snapshot_roundtrip() -> None:
     assert histories["/data/a.pdf"][0].responsible_name == "Ana"
 
 
+def test_snapshot_preserves_unified_custom_and_extra_sections() -> None:
+    session = _sample_session()
+    session.unified_custom_sections = [{"id": "custom_1", "title": "Extra"}]
+    session.unified_extra_section_ids = ["estat_resumo_diametros"]
+    session.unified_deleted_section_ids = ["anexos"]
+    restored, _workspaces, _histories = deserialize_project_snapshot(
+        serialize_project_snapshot(session)
+    )
+    assert restored.unified_custom_sections == [{"id": "custom_1", "title": "Extra"}]
+    assert restored.unified_extra_section_ids == ["estat_resumo_diametros"]
+    assert restored.unified_deleted_section_ids == ["anexos"]
+
+
 def test_apply_workspace_to_document() -> None:
     document = ReportDocument(
         source_pdf_path=Path("/data/a.pdf"),
