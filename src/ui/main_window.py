@@ -30,11 +30,8 @@ from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog, He
 from src.ui.features.home.components.home_view import HomeView
 from src.ui.features.home.dialogs.project_setup_dialog import ProjectSetupDialog
 from src.ui.features.home.viewmodels.home_viewmodel import HomeViewModel
-from src.ui.features.templates.components.template_editor_view import TemplateEditorView
 from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
-from src.ui.features.workspace.components.workspace_view import WorkspaceView
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
-from src.ui.styles import base_stylesheet
 
 
 class MainWindow(QMainWindow):
@@ -52,7 +49,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Pós-processamento de Relatórios de Metrologia — SENAI × ZEISS")
         self.setMinimumSize(960, 600)
-        self.setStyleSheet(base_stylesheet())
+        # QSS vem do AppearanceManager (app-wide); refresh_appearance atualiza a janela.
 
         self._parser = report_parser
         self._template_repo = template_repo
@@ -89,11 +86,14 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.setObjectName("MainViewStack")
         self._home_view = HomeView(self._home_vm)
-        self._workspace_view = WorkspaceView(self._app_state, self._workspace_vm)
-        self._template_editor_view = TemplateEditorView(self._template_editor_vm)
+        # Workspace / Template Editor: placeholders — criados no 1º navigate (startup mais leve).
+        self._workspace_view = None
+        self._template_editor_view = None
+        self._workspace_placeholder = QWidget()
+        self._template_placeholder = QWidget()
         self._stack.addWidget(self._home_view)
-        self._stack.addWidget(self._workspace_view)
-        self._stack.addWidget(self._template_editor_view)
+        self._stack.addWidget(self._workspace_placeholder)
+        self._stack.addWidget(self._template_placeholder)
         main_layout.addWidget(self._stack)
         self.setCentralWidget(central_widget)
 
@@ -103,6 +103,31 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
         AppearanceManager.instance().register_refresh(self._refresh_appearance)
         self._nav_controller.navigate_to(0)
+
+    def _ensure_workspace_view(self):
+        if self._workspace_view is not None:
+            return self._workspace_view
+        from src.ui.features.workspace.components.workspace_view import WorkspaceView
+
+        view = WorkspaceView(self._app_state, self._workspace_vm)
+        self._workspace_view = view
+        self._stack.removeWidget(self._workspace_placeholder)
+        self._workspace_placeholder.deleteLater()
+        self._stack.insertWidget(1, view)
+        return view
+
+    def _ensure_template_editor_view(self):
+        if self._template_editor_view is not None:
+            return self._template_editor_view
+        from src.ui.features.templates.components.template_editor_view import TemplateEditorView
+
+        view = TemplateEditorView(self._template_editor_vm)
+        view.saved.connect(lambda _tid: self._home_vm.load_dashboard())
+        self._template_editor_view = view
+        self._stack.removeWidget(self._template_placeholder)
+        self._template_placeholder.deleteLater()
+        self._stack.insertWidget(2, view)
+        return view
 
     def _connect_signals(self) -> None:
         self._header.back_requested.connect(self._nav_controller.back)
@@ -116,7 +141,6 @@ class MainWindow(QMainWindow):
         self._home_view.template_editor_requested.connect(self._open_template_editor)
         self._home_view.project_opened.connect(self._open_project)
         self._home_view.recent_file_opened.connect(self._open_recent_file)
-        self._template_editor_view.saved.connect(lambda _tid: self._home_vm.load_dashboard())
         self._template_editor_vm.template_name_changed.connect(self._on_template_name_changed)
         self._workspace_vm.project_display_name_changed.connect(self._on_project_display_name_changed)
         self._workspace_vm.busy_changed.connect(self._on_busy_changed)
@@ -174,11 +198,15 @@ class MainWindow(QMainWindow):
         present_modal_dialog(self, dialog)
 
     def _refresh_appearance(self) -> None:
+        from src.ui.styles import base_stylesheet
+
         self.setStyleSheet(base_stylesheet())
         self._header.refresh_appearance()
         self._home_view.refresh_appearance()
-        self._workspace_view.refresh_appearance()
-        self._template_editor_view.refresh_appearance()
+        if self._workspace_view is not None:
+            self._workspace_view.refresh_appearance()
+        if self._template_editor_view is not None:
+            self._template_editor_view.refresh_appearance()
 
     def _toggle_fullscreen(self) -> None:
         if self.isFullScreen():
@@ -197,6 +225,11 @@ class MainWindow(QMainWindow):
         self._nav_controller.navigate_to(0)
 
     def _on_navigation_changed(self, index: int, can_back: bool, can_forward: bool) -> None:
+        if index == 1:
+            self._ensure_workspace_view()
+        elif index == 2:
+            self._ensure_template_editor_view()
+
         self._stack.setCurrentIndex(index)
         self._header.set_navigation_state(can_back, can_forward)
 
@@ -270,6 +303,7 @@ class MainWindow(QMainWindow):
         report_mode = data.get("report_mode", "auto")
         if not entries and report_mode not in {"tomo_only", "falha"}:
             return
+        self._ensure_workspace_view()
         self._workspace_vm.load_project(
             data["client_project"],
             entries,
@@ -287,15 +321,18 @@ class MainWindow(QMainWindow):
                 "Há alterações não salvas no template atual.",
             ):
                 return
-        self._template_editor_view.load_template(template_id)
+        view = self._ensure_template_editor_view()
+        view.load_template(template_id)
         self._nav_controller.navigate_to(2)
 
     def _open_project(self, project_id: str) -> None:
+        self._ensure_workspace_view()
         if self._workspace_vm.load_project_by_id(project_id):
             self._nav_controller.navigate_to(1)
 
     def _open_recent_file(self, file_id: str) -> None:
         try:
+            self._ensure_workspace_view()
             self._workspace_vm.load_from_recent(file_id)
             self._nav_controller.navigate_to(1)
         except Exception as exc:

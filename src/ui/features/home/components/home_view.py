@@ -124,7 +124,7 @@ class HomeView(QWidget):
         self._templates: list[TemplateSummary] = []
         self._build_ui()
         self._connect_view_model()
-        self._vm.load_dashboard()
+        # Dashboard: carregado em MainWindow ao navegar para Home (evita load 2× no boot).
 
     def focus_search(self) -> None:
         self._hero.focus_search()
