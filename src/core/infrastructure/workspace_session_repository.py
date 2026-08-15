@@ -1,11 +1,14 @@
-"""Persistência de sessão de edição do workspace."""
+"""Persistência SQLite do estado de edição via ``document_workspace_codec``."""
 from __future__ import annotations
 
 import json
 import sqlite3
 from pathlib import Path
 
-from src.core.domain.image_workspace import deserialize_report_image, serialize_report_image
+from src.core.application.document_workspace_codec import (
+    apply_workspace_to_document,
+    serialize_document_workspace,
+)
 from src.core.domain.ports import ReportDocument, WorkspaceSessionPort
 
 
@@ -55,14 +58,12 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                 )
 
     def save(self, document: ReportDocument) -> None:
+        payload = serialize_document_workspace(document)
         key = (
             str(document.source_pdf_path),
             document.client_project,
             document.evaluated_component,
         )
-        images = [serialize_report_image(img) for img in document.images]
-        attachment_paths = [str(path) for path in document.attachment_pdf_paths]
-        bosello_paths = [str(path) for path in document.bosello_captured_paths]
         with self._connect() as conn:
             conn.execute(
                 """
@@ -87,17 +88,23 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
                     updated_at=datetime('now')
                 """,
                 (
-                    key[0], key[1], key[2],
-                    document.template_id,
-                    json.dumps(document.section_overrides, ensure_ascii=False),
-                    json.dumps(document.parsed_overrides, ensure_ascii=False),
-                    json.dumps(document.section_order) if document.section_order else None,
-                    json.dumps(images, ensure_ascii=False),
-                    json.dumps(document.custom_sections, ensure_ascii=False),
-                    json.dumps(document.deleted_section_ids, ensure_ascii=False),
-                    json.dumps(list(getattr(document, "extra_section_ids", None) or []), ensure_ascii=False),
-                    json.dumps(attachment_paths, ensure_ascii=False),
-                    json.dumps(bosello_paths, ensure_ascii=False),
+                    key[0],
+                    key[1],
+                    key[2],
+                    payload.get("template_id") or "default",
+                    json.dumps(payload.get("section_overrides") or {}, ensure_ascii=False),
+                    json.dumps(payload.get("parsed_overrides") or {}, ensure_ascii=False),
+                    (
+                        json.dumps(payload["section_order"])
+                        if payload.get("section_order")
+                        else None
+                    ),
+                    json.dumps(payload.get("images") or [], ensure_ascii=False),
+                    json.dumps(payload.get("custom_sections") or [], ensure_ascii=False),
+                    json.dumps(payload.get("deleted_section_ids") or [], ensure_ascii=False),
+                    json.dumps(payload.get("extra_section_ids") or [], ensure_ascii=False),
+                    json.dumps(payload.get("attachment_pdf_paths") or [], ensure_ascii=False),
+                    json.dumps(payload.get("bosello_captured_paths") or [], ensure_ascii=False),
                 ),
             )
             conn.commit()
@@ -120,23 +127,18 @@ class SQLiteWorkspaceSessionRepository(WorkspaceSessionPort):
             ).fetchone()
         if row is None:
             return False
-        document.template_id = row[0]
-        document.section_overrides = json.loads(row[1] or "{}")
-        document.parsed_overrides = json.loads(row[2] or "{}")
         order_raw = row[3]
-        document.section_order = json.loads(order_raw) if order_raw else None
-        images_raw = json.loads(row[4] or "[]")
-        document.images = [
-            image
-            for item in images_raw
-            if (image := deserialize_report_image(item)) is not None
-        ]
-        document.custom_sections = json.loads(row[5] or "[]")
-        document.deleted_section_ids = json.loads(row[6] or "[]")
-        attachment_raw = json.loads(row[7] or "[]")
-        document.attachment_pdf_paths = [Path(path) for path in attachment_raw if path]
-        bosello_raw = json.loads(row[8] or "[]") if len(row) > 8 else []
-        document.bosello_captured_paths = [Path(path) for path in bosello_raw if path]
-        extras_raw = json.loads(row[9] or "[]") if len(row) > 9 else []
-        document.extra_section_ids = list(extras_raw or [])
+        workspace = {
+            "template_id": row[0],
+            "section_overrides": json.loads(row[1] or "{}"),
+            "parsed_overrides": json.loads(row[2] or "{}"),
+            "section_order": json.loads(order_raw) if order_raw else None,
+            "images": json.loads(row[4] or "[]"),
+            "custom_sections": json.loads(row[5] or "[]"),
+            "deleted_section_ids": json.loads(row[6] or "[]"),
+            "attachment_pdf_paths": json.loads(row[7] or "[]"),
+            "bosello_captured_paths": json.loads(row[8] or "[]") if len(row) > 8 else [],
+            "extra_section_ids": json.loads(row[9] or "[]") if len(row) > 9 else [],
+        }
+        apply_workspace_to_document(document, workspace)
         return True

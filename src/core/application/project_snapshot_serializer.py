@@ -3,51 +3,29 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
+from src.core.application.document_workspace_codec import (
+    apply_workspace_to_document,
+    serialize_document_workspace,
+)
+from src.core.application.project_serializer import apply_draft_to_session, serialize_session_draft
+from src.core.application.slot_meta_codec import document_slot_from_meta, document_slot_to_meta
 from src.core.domain.project_session import ProjectDocumentSlot, ProjectSession
-from src.core.domain.image_workspace import deserialize_report_image, serialize_report_image
 from src.core.domain.ports import ReportDocument, VersionEntry
 
 SCHEMA_VERSION = 1
 
-
-def serialize_document_workspace(document: ReportDocument) -> dict[str, Any]:
-    images = [serialize_report_image(img) for img in document.images]
-    return {
-        "template_id": document.template_id,
-        "section_overrides": document.section_overrides,
-        "parsed_overrides": document.parsed_overrides,
-        "section_order": document.section_order,
-        "images": images,
-        "bosello_captured_paths": [str(path) for path in document.bosello_captured_paths],
-        "custom_sections": document.custom_sections,
-        "deleted_section_ids": document.deleted_section_ids,
-        "extra_section_ids": list(getattr(document, "extra_section_ids", None) or []),
-        "attachment_pdf_paths": [str(path) for path in document.attachment_pdf_paths],
-    }
-
-
-def apply_workspace_to_document(document: ReportDocument, workspace: dict[str, Any]) -> None:
-    document.template_id = workspace.get("template_id") or document.template_id
-    document.section_overrides = dict(workspace.get("section_overrides") or {})
-    document.parsed_overrides = dict(workspace.get("parsed_overrides") or {})
-    order_raw = workspace.get("section_order")
-    document.section_order = list(order_raw) if order_raw else None
-    images_raw = workspace.get("images") or []
-    document.images = [
-        image
-        for item in images_raw
-        if (image := deserialize_report_image(item)) is not None
-    ]
-    document.custom_sections = list(workspace.get("custom_sections") or [])
-    document.deleted_section_ids = list(workspace.get("deleted_section_ids") or [])
-    document.extra_section_ids = list(workspace.get("extra_section_ids") or [])
-    attachment_raw = workspace.get("attachment_pdf_paths") or []
-    document.attachment_pdf_paths = [Path(path) for path in attachment_raw if path]
-    bosello_raw = workspace.get("bosello_captured_paths") or []
-    document.bosello_captured_paths = [Path(path) for path in bosello_raw if path]
+# Reexport — call sites e testes importam daqui.
+__all__ = [
+    "SCHEMA_VERSION",
+    "apply_workspace_to_document",
+    "deserialize_project_snapshot",
+    "deserialize_version_history",
+    "serialize_document_workspace",
+    "serialize_project_snapshot",
+    "serialize_version_history",
+]
 
 
 def serialize_version_history(entries: list[VersionEntry]) -> list[dict[str, Any]]:
@@ -87,29 +65,21 @@ def deserialize_version_history(raw: list[Any]) -> list[VersionEntry]:
 
 
 def serialize_project_snapshot(session: ProjectSession) -> str:
+    draft = serialize_session_draft(session)
+    session_payload: dict[str, Any] = {
+        "project_id": session.project_id,
+        "display_name": session.display_name,
+        "client_project": session.client_project,
+        "template_id": session.template_id,
+        "report_mode": session.report_mode,
+        "active_index": session.active_index,
+        **draft,
+        # Chaves de workspace usam str(Path) — não storage — para casar com restore.
+        "slots": [document_slot_to_meta(slot, storage_path=False) for slot in session.documents],
+    }
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
-        "session": {
-            "project_id": session.project_id,
-            "display_name": session.display_name,
-            "client_project": session.client_project,
-            "template_id": session.template_id,
-            "report_mode": session.report_mode,
-            "active_index": session.active_index,
-            "unified_deleted_section_ids": list(session.unified_deleted_section_ids),
-            "unified_section_overrides": dict(session.unified_section_overrides),
-            "unified_images": [serialize_report_image(img) for img in session.unified_images],
-            "unified_images_ready": bool(session.unified_images_ready),
-            "slots": [
-                {
-                    "source_pdf_path": str(slot.source_pdf_path),
-                    "evaluated_component": slot.evaluated_component,
-                    "source_kind": slot.source_kind,
-                    "template_id": slot.template_id,
-                }
-                for slot in session.documents
-            ],
-        },
+        "session": session_payload,
         "slots": [],
     }
     for slot in session.documents:
@@ -133,22 +103,11 @@ def deserialize_project_snapshot(
         raise ValueError("snapshot payload must be a JSON object")
 
     session_raw = payload.get("session") or {}
-    slots_raw = session_raw.get("slots") or []
     documents: list[ProjectDocumentSlot] = []
-    for item in slots_raw:
-        if not isinstance(item, dict):
-            continue
-        path = str(item.get("source_pdf_path") or "").strip()
-        if not path:
-            continue
-        documents.append(
-            ProjectDocumentSlot(
-                source_pdf_path=Path(path),
-                evaluated_component=str(item.get("evaluated_component") or "Componente"),
-                source_kind=str(item.get("source_kind") or "calypso"),
-                template_id=item.get("template_id"),
-            )
-        )
+    for item in session_raw.get("slots") or []:
+        slot = document_slot_from_meta(item, storage_path=False)
+        if slot is not None:
+            documents.append(slot)
 
     session = ProjectSession(
         client_project=str(session_raw.get("client_project") or "Projeto"),
@@ -158,23 +117,8 @@ def deserialize_project_snapshot(
         active_index=int(session_raw.get("active_index") or 0),
         project_id=session_raw.get("project_id"),
         display_name=str(session_raw.get("display_name") or ""),
-        unified_deleted_section_ids=list(
-            session_raw.get("unified_deleted_section_ids") or []
-        ),
-        unified_section_overrides=dict(
-            session_raw.get("unified_section_overrides") or {}
-        ),
     )
-    images_raw = session_raw.get("unified_images") or []
-    session.unified_images = [
-        image
-        for item in images_raw
-        if isinstance(item, dict) and (image := deserialize_report_image(item)) is not None
-    ]
-    if "unified_images_ready" in session_raw:
-        session.unified_images_ready = bool(session_raw.get("unified_images_ready"))
-    else:
-        session.unified_images_ready = bool(session.unified_images)
+    apply_draft_to_session(session, session_raw)
 
     workspaces: dict[str, dict[str, Any]] = {}
     histories: dict[str, list[VersionEntry]] = {}
