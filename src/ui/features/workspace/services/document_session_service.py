@@ -15,7 +15,7 @@ from src.core.application.bosello_image_import import (
     build_manual_falha_document,
     build_manual_tomography_document,
 )
-from src.core.application.piece_ordering import sort_pdf_entries, sort_paths
+from src.core.application.piece_ordering import sort_pdf_entries
 from src.core.application.project_serializer import default_display_name
 from src.core.application.template_apply import apply_template_content_defaults, apply_template_layout
 from src.core.domain.pdf_source import is_usable_source_pdf
@@ -37,8 +37,12 @@ class DocumentSessionService:
         self._template_repo = template_repo
         self._version_history_repo = version_history_repo
 
-    def parse_slot(self, session: ProjectSession, index: int) -> tuple[bool, str]:
-        slot = session.documents[index]
+    def create_document_for_slot(
+        self,
+        session: ProjectSession,
+        slot: ProjectDocumentSlot,
+    ) -> tuple[ReportDocument | None, str, str]:
+        """Trabalho pesado (fitz/Bosello). Não muta session/slot — seguro em worker."""
         notice = ""
         try:
             if not is_usable_source_pdf(slot.source_pdf_path):
@@ -70,10 +74,20 @@ class DocumentSessionService:
                 document = self._parser.parse(slot.source_pdf_path)
         except Exception:
             logger.exception("Falha ao ler o PDF: %s", slot.source_pdf_path)
-            return False, traceback.format_exc()
+            return None, "", traceback.format_exc()
 
         document.client_project = session.client_project
         document.evaluated_component = slot.evaluated_component
+        return document, notice, ""
+
+    def attach_document_to_slot(
+        self,
+        session: ProjectSession,
+        index: int,
+        document: ReportDocument,
+    ) -> str:
+        """Aplica kind/template/defaults e grava no slot — só na UI thread."""
+        slot = session.documents[index]
         kind = (
             document.source_kind
             or slot.source_kind
@@ -89,7 +103,6 @@ class DocumentSessionService:
             kind = document.source_kind or kind or "insp_ect"
         document.source_kind = kind
         slot.source_kind = kind
-        # Bosello/INSPECT sempre no template de tomografia (corrige auto/combo em MMC).
         if session.report_mode == "falha":
             template_id = "analise_falha"
         elif kind == "insp_ect" or session.report_mode == "tomo_only":
@@ -108,6 +121,14 @@ class DocumentSessionService:
                 session.report_mode = "tomo_only"
         self.apply_template_defaults(document)
         slot.document = document
+        return ""
+
+    def parse_slot(self, session: ProjectSession, index: int) -> tuple[bool, str]:
+        slot = session.documents[index]
+        document, notice, error = self.create_document_for_slot(session, slot)
+        if document is None:
+            return False, error
+        self.attach_document_to_slot(session, index, document)
         return True, notice
 
     @staticmethod

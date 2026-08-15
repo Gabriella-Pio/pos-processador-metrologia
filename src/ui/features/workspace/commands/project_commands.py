@@ -146,6 +146,19 @@ class ProjectCommands:
         ]
 
     @staticmethod
+    def finalize_parsed_slot(
+        session_repo: WorkspaceSessionPort | None,
+        session: ProjectSession,
+        index: int,
+    ) -> None:
+        slot_doc = session.documents[index].document
+        if slot_doc is not None and session_repo is not None:
+            load_workspace_session(session_repo, slot_doc)
+            ProjectCommands.sync_attachment_paths(slot_doc, session)
+        if slot_doc is not None:
+            SectionEditCommands.ensure_fixed_sections_enabled(slot_doc)
+
+    @staticmethod
     def parse_slot(
         doc_service: DocumentSessionService,
         session_repo: WorkspaceSessionPort | None,
@@ -155,13 +168,8 @@ class ProjectCommands:
         ok, details = doc_service.parse_slot(session, index)
         if not ok:
             return False, details
-        slot_doc = session.documents[index].document
-        if slot_doc is not None and session_repo is not None:
-            load_workspace_session(session_repo, slot_doc)
-            ProjectCommands.sync_attachment_paths(slot_doc, session)
-        if slot_doc is not None:
-            SectionEditCommands.ensure_fixed_sections_enabled(slot_doc)
-        return True, ""
+        ProjectCommands.finalize_parsed_slot(session_repo, session, index)
+        return True, details
 
     @staticmethod
     def activate_document(
