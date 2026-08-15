@@ -14,6 +14,24 @@ def test_detect_calypso_marker() -> None:
     assert detect_source_kind_from_text("ZEISS CALYPSO Protocolo de medição") == "calypso"
 
 
+def test_detect_source_kind_cache(tmp_path) -> None:
+    from src.core.parser.source_kind import clear_source_kind_cache, detect_source_kind
+    import fitz
+
+    clear_source_kind_cache()
+    pdf = tmp_path / "sample.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "ZEISS CALYPSO Protocolo de medição")
+    doc.save(pdf)
+    doc.close()
+
+    assert detect_source_kind(pdf) == "calypso"
+    # Segunda chamada deve bater no cache (mesmo path/mtime/size)
+    assert detect_source_kind(pdf) == "calypso"
+    clear_source_kind_cache()
+
+
 def test_infer_mode_and_template_for_bosello() -> None:
     assert infer_report_mode(["insp_ect"]) == "tomo_only"
     assert template_id_for_kind("insp_ect") == "tomografia"
