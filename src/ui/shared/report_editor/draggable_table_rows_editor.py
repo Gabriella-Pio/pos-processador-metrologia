@@ -71,7 +71,8 @@ class _TableRowWidget(QFrame):
         self._drag_handle.setFixedWidth(18)
         self._drag_handle.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
         self._drag_handle.setStyleSheet(
-            f"color: {PALETTE.text_muted}; font-size: 16px; background: transparent; padding-top: 4px;"
+            f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_h3}px; "
+            f"background: transparent; padding-top: 4px;"
         )
         self._drag_handle.setCursor(Qt.CursorShape.SizeAllCursor)
 

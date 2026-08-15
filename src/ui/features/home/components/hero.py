@@ -25,7 +25,7 @@ from src.ui.components.icons import icon_file_upload, icon_layers, icon_plus
 from src.ui.components.inputs import SearchBar
 from src.ui.features.home.models.dashboard import ProjectSummary, RecentFileSummary
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
-from src.ui.accessibility.themes import _is_light_palette
+from src.ui.accessibility.themes import is_light_palette
 from src.ui.features.home.components.files_filter_bar import FilesFilterBar
 
 AccentKind = Literal["orange", "blue"]
@@ -33,7 +33,7 @@ AccentKind = Literal["orange", "blue"]
 
 def _hero_gradient() -> str:
     p = PALETTE
-    if _is_light_palette(p):
+    if is_light_palette(p):
         return (
             f"qlineargradient(x1:0, y1:0, x2:0, y2:1, "
             f"stop:0 #C8D0DA, stop:0.55 {p.bg_surface}, stop:1 {p.bg_base})"
@@ -62,8 +62,8 @@ class _SpotlightCard(QFrame):
         super().__init__(parent)
         self._accent = accent
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(80)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMinimumHeight(max(72, round(80 * TYPOGRAPHY.size_body / 13)))
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.sm)
@@ -118,11 +118,11 @@ class _SpotlightCard(QFrame):
             }}
         """
         self._title_label.setStyleSheet(
-            f"color: {p.text_primary}; font-size: 16px; "
+            f"color: {p.text_primary}; font-size: {TYPOGRAPHY.size_h3}px; "
             f"font-weight: {TYPOGRAPHY.weight_bold}; background: transparent; border: none;"
         )
         self._subtitle_label.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: 12px; "
+            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_caption}px; "
             f"background: transparent; border: none;"
         )
         self._icon_label.setStyleSheet(
@@ -130,11 +130,12 @@ class _SpotlightCard(QFrame):
         )
         if self._hint_label is not None:
             self._hint_label.setStyleSheet(
-                f"color: {p.text_muted}; font-size: 11px; letter-spacing: 0.5px; "
+                f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; letter-spacing: 0.5px; "
                 f"background: transparent; border: none;"
             )
 
     def refresh_appearance(self) -> None:
+        self.setMinimumHeight(max(72, round(80 * TYPOGRAPHY.size_body / 13)))
         self._rebuild_styles()
         self.setStyleSheet(self._idle)
 
@@ -162,7 +163,7 @@ class _InlineMetrics(QLabel):
     def refresh_appearance(self) -> None:
         p = PALETTE
         self.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 13px; "
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_body}px; "
             f"background: transparent; border: none; padding: 0;"
         )
 
@@ -221,10 +222,13 @@ class HeroCommandBar(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        p = PALETTE
         self._last_project: Optional[ProjectSummary] = None
         self._last_export: Optional[RecentFileSummary] = None
+        self._greeting_labels: list[tuple[QLabel, str]] = []
+        self._date_label: QLabel | None = None
+        self._prompt_label: QLabel | None = None
 
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"background: {_hero_gradient()};")
 
         base, accent, date_str = _greeting_and_date()
@@ -232,28 +236,20 @@ class HeroCommandBar(QWidget):
 
         greeting_row = QHBoxLayout()
         greeting_row.setSpacing(0)
-        for text, color in ((base, p.text_primary), (accent, p.senai_orange)):
+        for text, role in ((base, "primary"), (accent, "accent")):
             if not text:
                 continue
             part = QLabel(text)
-            part.setStyleSheet(
-                f"color: {color}; font-size: 26px; font-weight: {TYPOGRAPHY.weight_bold}; "
-                f"background: transparent; border: none; letter-spacing: -0.5px;"
-            )
+            self._greeting_labels.append((part, role))
             greeting_row.addWidget(part)
         greeting_row.addStretch(1)
         date_label = QLabel(date_str)
         date_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        date_label.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 13px; background: transparent; border: none;"
-        )
+        self._date_label = date_label
         greeting_row.addWidget(date_label)
 
         prompt = QLabel("O que você quer fazer?")
-        prompt.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: 14px; font-weight: {TYPOGRAPHY.weight_medium}; "
-            f"background: transparent; border: none;"
-        )
+        self._prompt_label = prompt
 
         actions_row = QHBoxLayout()
         actions_row.setSpacing(SPACING.md)
@@ -338,6 +334,7 @@ class HeroCommandBar(QWidget):
         outer.addWidget(centered_outer)
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._apply_greeting_styles()
 
     def _on_continue_clicked(self) -> None:
         if self._last_project is not None:
@@ -369,16 +366,39 @@ class HeroCommandBar(QWidget):
     @staticmethod
     def _apply_discovery_panel_style(panel: QFrame) -> None:
         p = PALETTE
+        fill = p.bg_surface if is_light_palette(p) else "rgba(255, 255, 255, 0.02)"
         panel.setStyleSheet(f"""
             QFrame#heroDiscoveryPanel {{
-                background: rgba(255, 255, 255, 0.02);
+                background: {fill};
                 border: 1px solid {p.border_subtle};
                 border-radius: {SPACING.radius_lg}px;
             }}
         """)
 
+    def _apply_greeting_styles(self) -> None:
+        p = PALETTE
+        for label, role in self._greeting_labels:
+            color = p.senai_orange if role == "accent" else p.text_primary
+            label.setStyleSheet(
+                f"color: {color}; font-size: {TYPOGRAPHY.size_display}px; "
+                f"font-weight: {TYPOGRAPHY.weight_bold}; "
+                f"background: transparent; border: none; letter-spacing: -0.5px;"
+            )
+        if self._date_label is not None:
+            self._date_label.setStyleSheet(
+                f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_body}px; "
+                f"background: transparent; border: none;"
+            )
+        if self._prompt_label is not None:
+            self._prompt_label.setStyleSheet(
+                f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_h3}px; "
+                f"font-weight: {TYPOGRAPHY.weight_medium}; "
+                f"background: transparent; border: none;"
+            )
+
     def refresh_appearance(self) -> None:
         self.setStyleSheet(f"background: {_hero_gradient()};")
+        self._apply_greeting_styles()
         if hasattr(self, "_discovery_panel"):
             self._apply_discovery_panel_style(self._discovery_panel)
         self._continue_card.refresh_appearance()

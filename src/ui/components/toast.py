@@ -58,7 +58,7 @@ class Toast(QWidget):
         icon_lbl.setFixedSize(28, 28)
         icon_lbl.setStyleSheet(
             f"color:{color}; background:{bg}; border-radius:14px; "
-            f"font-size:14px; font-weight:{TYPOGRAPHY.weight_bold}; border:none;"
+            f"font-size:{TYPOGRAPHY.size_h3}px; font-weight:{TYPOGRAPHY.weight_bold}; border:none;"
         )
 
         msg_lbl = QLabel(message)

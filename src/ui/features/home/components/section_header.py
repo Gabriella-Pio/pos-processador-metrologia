@@ -43,4 +43,8 @@ class TabSectionHeader(QWidget):
             self._subtitle_label.setText(text)
 
     def refresh_appearance(self) -> None:
-        pass
+        style = self.style()
+        for label in (self._title_label, self._subtitle_label):
+            style.unpolish(label)
+            style.polish(label)
+            label.update()

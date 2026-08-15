@@ -196,7 +196,7 @@ class HelpAccessibilityDialog(AppDialog):
     def _group_title(self, text: str) -> QLabel:
         label = QLabel(text.upper())
         label.setStyleSheet(
-            f"color: {PALETTE.text_muted}; font-size: 11px; "
+            f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
             f"font-weight: {TYPOGRAPHY.weight_semibold}; letter-spacing: 0.8px; "
             f"background: transparent; border: none; margin-bottom: 2px;"
         )
@@ -221,7 +221,7 @@ class HelpAccessibilityDialog(AppDialog):
             key_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             key_label.setMinimumWidth(76)
             key_label.setStyleSheet(
-                f"color: {p.senai_orange}; font-family: monospace; font-size: 12px; "
+                f"color: {p.senai_orange}; font-family: monospace; font-size: {TYPOGRAPHY.size_caption}px; "
                 f"font-weight: {TYPOGRAPHY.weight_bold}; background: rgba(240,67,30,0.12); "
                 f"border: 1px solid rgba(240,67,30,0.25); border-radius: {SPACING.radius_sm}px; "
                 f"padding: 6px 8px;"
@@ -237,7 +237,7 @@ class HelpAccessibilityDialog(AppDialog):
             desc_label = QLabel(description)
             desc_label.setWordWrap(True)
             desc_label.setStyleSheet(
-                f"color: {p.text_muted}; font-size: 12px; background: transparent; border: none;"
+                f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent; border: none;"
             )
             text_col.addWidget(action_label)
             text_col.addWidget(desc_label)
@@ -308,7 +308,7 @@ class HelpAccessibilityDialog(AppDialog):
         )
         hint.setWordWrap(True)
         hint.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 12px; background: transparent; border: none;"
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent; border: none;"
         )
         outer.addWidget(hint)
 
@@ -322,7 +322,7 @@ class HelpAccessibilityDialog(AppDialog):
         preview_layout.setSpacing(SPACING.xs)
         preview_caption = QLabel("PRÉ-VISUALIZAÇÃO")
         preview_caption.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 10px; font-weight: {TYPOGRAPHY.weight_semibold}; "
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_micro}px; font-weight: {TYPOGRAPHY.weight_semibold}; "
             f"letter-spacing: 0.6px; background: transparent; border: none;"
         )
         self._preview_title = QLabel("Relatório de Metrologia")
@@ -474,7 +474,7 @@ class HelpAccessibilityDialog(AppDialog):
             detail = QLabel(category.description)
             detail.setWordWrap(True)
             detail.setStyleSheet(
-                f"color: {PALETTE.text_muted}; font-size: 12px; "
+                f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
                 f"background: transparent; border: none; margin-bottom: 4px;"
             )
             self._storage_summary_host.addWidget(detail)
@@ -560,14 +560,14 @@ class HelpAccessibilityDialog(AppDialog):
         layout.setSpacing(3)
         title_label = QLabel(title.upper())
         title_label.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 11px; "
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
             f"font-weight: {TYPOGRAPHY.weight_semibold}; letter-spacing: 0.8px; "
             f"background: transparent; border: none;"
         )
         desc_label = QLabel(description)
         desc_label.setWordWrap(True)
         desc_label.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: 12px; background: transparent; border: none;"
+            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent; border: none;"
         )
         layout.addWidget(title_label)
         layout.addWidget(desc_label)

@@ -278,7 +278,8 @@ class AppMessageDialog(AppDialog):
         icon.setFixedSize(40, 40)
         icon.setStyleSheet(
             f"color: {accent}; background-color: {accent_bg}; "
-            f"border-radius: 20px; font-size: 18px; font-weight: {TYPOGRAPHY.weight_bold};"
+            f"border-radius: 20px; font-size: {TYPOGRAPHY.size_h2}px; "
+            f"font-weight: {TYPOGRAPHY.weight_bold};"
         )
 
         title_label = QLabel(title)

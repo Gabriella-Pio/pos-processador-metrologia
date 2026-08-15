@@ -80,7 +80,7 @@ class InlineBanner(QWidget):
         self._icon_label.setStyleSheet(f"""
             color: {color};
             background-color: transparent;
-            font-size: 13px;
+            font-size: {TYPOGRAPHY.size_body}px;
             font-weight: {TYPOGRAPHY.weight_bold};
         """)
         self._message_label.setStyleSheet(

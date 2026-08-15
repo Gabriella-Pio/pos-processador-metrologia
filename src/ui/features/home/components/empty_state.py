@@ -26,12 +26,15 @@ class EmptyState(QWidget):
         parent=None,
     ) -> None:
         super().__init__(parent)
-        p = PALETTE
         layout = QVBoxLayout(self)
         layout.setAlignment(
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop
         )
         layout.setSpacing(0)
+
+        self._title_label: QLabel | None = None
+        self._subtitle_label: QLabel | None = None
+        self._cta_button: QPushButton | None = None
 
         if icon is not None:
             icon_label = QLabel()
@@ -44,38 +47,46 @@ class EmptyState(QWidget):
             layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignHCenter)
             layout.addSpacing(14)
 
-        title_label = QLabel(title)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet(
-            f"color:{p.text_secondary}; font-size:16px; "
-            f"font-weight:{TYPOGRAPHY.weight_semibold}; "
-            f"background:transparent; border:none;"
-        )
-        layout.addWidget(title_label)
+        self._title_label = QLabel(title)
+        self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._title_label)
 
         if subtitle:
-            subtitle_label = QLabel(subtitle)
-            subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            subtitle_label.setWordWrap(True)
-            subtitle_label.setMaximumWidth(380)
-            subtitle_label.setStyleSheet(
-                f"color:{p.text_muted}; font-size:13px; "
-                f"background:transparent; border:none;"
-            )
+            self._subtitle_label = QLabel(subtitle)
+            self._subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._subtitle_label.setWordWrap(True)
+            self._subtitle_label.setMaximumWidth(380)
             layout.addSpacing(6)
-            layout.addWidget(subtitle_label, 0, Qt.AlignmentFlag.AlignHCenter)
+            layout.addWidget(self._subtitle_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
         if cta:
             layout.addSpacing(24)
-            button = QPushButton(cta)
-            button.setFixedHeight(36)
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.setStyleSheet(empty_state_cta_style())
-            button.clicked.connect(self.action_requested.emit)
-            layout.addWidget(button, 0, Qt.AlignmentFlag.AlignHCenter)
+            self._cta_button = QPushButton(cta)
+            self._cta_button.setFixedHeight(36)
+            self._cta_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._cta_button.clicked.connect(self.action_requested.emit)
+            layout.addWidget(self._cta_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
         layout.setContentsMargins(0, SPACING.md, 0, SPACING.md)
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Minimum,
         )
+        self.refresh_appearance()
+
+    def refresh_appearance(self) -> None:
+        p = PALETTE
+        t = TYPOGRAPHY
+        if self._title_label is not None:
+            self._title_label.setStyleSheet(
+                f"color:{p.text_secondary}; font-size:{t.size_h3}px; "
+                f"font-weight:{t.weight_semibold}; "
+                f"background:transparent; border:none;"
+            )
+        if self._subtitle_label is not None:
+            self._subtitle_label.setStyleSheet(
+                f"color:{p.text_muted}; font-size:{t.size_body}px; "
+                f"background:transparent; border:none;"
+            )
+        if self._cta_button is not None:
+            self._cta_button.setStyleSheet(empty_state_cta_style())

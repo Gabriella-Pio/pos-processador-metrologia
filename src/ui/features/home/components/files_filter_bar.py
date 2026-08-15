@@ -63,7 +63,8 @@ class FilesFilterBar(QWidget):
         section_title = QLabel("Refinar resultados")
         self._section_title = section_title
         section_title.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 11px; font-weight: {TYPOGRAPHY.weight_semibold}; "
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
+            f"font-weight: {TYPOGRAPHY.weight_semibold}; "
             f"letter-spacing: 0.8px; background: transparent; border: none;"
         )
 
@@ -106,7 +107,7 @@ class FilesFilterBar(QWidget):
                 border: 1px solid {p.border};
                 border-radius: {SPACING.radius_sm}px;
                 padding: 6px 12px;
-                font-size: 12px;
+                font-size: {TYPOGRAPHY.size_caption}px;
             }}
             QPushButton:hover {{
                 color: {p.senai_orange};
@@ -121,7 +122,7 @@ class FilesFilterBar(QWidget):
         self._chips.setWordWrap(True)
         self._chips.hide()
         self._chips.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: 12px; "
+            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_caption}px; "
             f"background: transparent; border: none; padding-top: 2px;"
         )
 
@@ -151,7 +152,8 @@ class FilesFilterBar(QWidget):
         layout.setSpacing(6)
         label = QLabel(text.upper())
         label.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 10px; font-weight: {TYPOGRAPHY.weight_semibold}; "
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_micro}px; "
+            f"font-weight: {TYPOGRAPHY.weight_semibold}; "
             f"letter-spacing: 0.5px; background: transparent; border: none;"
         )
         layout.addWidget(label)
@@ -240,7 +242,8 @@ class FilesFilterBar(QWidget):
     def refresh_appearance(self) -> None:
         p = PALETTE
         self._section_title.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 11px; font-weight: {TYPOGRAPHY.weight_semibold}; "
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
+            f"font-weight: {TYPOGRAPHY.weight_semibold}; "
             f"letter-spacing: 0.8px; background: transparent; border: none;"
         )
         for combo in (self._period, self._project, self._component, self._sort):
@@ -252,7 +255,7 @@ class FilesFilterBar(QWidget):
                 border: 1px solid {p.border};
                 border-radius: {SPACING.radius_sm}px;
                 padding: 6px 12px;
-                font-size: 12px;
+                font-size: {TYPOGRAPHY.size_caption}px;
             }}
             QPushButton:hover {{
                 color: {p.senai_orange};
@@ -261,7 +264,7 @@ class FilesFilterBar(QWidget):
             }}
         """)
         self._chips.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: 12px; "
+            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_caption}px; "
             f"background: transparent; border: none; padding-top: 2px;"
         )
         for label in self.findChildren(QLabel):
@@ -269,7 +272,7 @@ class FilesFilterBar(QWidget):
                 continue
             if label.text().isupper() and len(label.text()) < 20:
                 label.setStyleSheet(
-                    f"color: {p.text_muted}; font-size: 10px; "
+                    f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_micro}px; "
                     f"font-weight: {TYPOGRAPHY.weight_semibold}; "
                     f"letter-spacing: 0.5px; background: transparent; border: none;"
                 )

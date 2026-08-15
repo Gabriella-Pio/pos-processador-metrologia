@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 
 from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
-from src.ui.styles import PALETTE, SPACING, caption_style, heading_style
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, caption_style, heading_style
 
 
 class _CaptureTile(QFrame):
@@ -57,7 +57,9 @@ class _CaptureTile(QFrame):
         name = QLabel(path.name)
         name.setWordWrap(True)
         name.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        name.setStyleSheet(f"color: {PALETTE.text_secondary}; font-size: 11px;")
+        name.setStyleSheet(
+            f"color: {PALETTE.text_secondary}; font-size: {TYPOGRAPHY.size_caption}px;"
+        )
         layout.addWidget(name)
 
         self._status = QLabel()
@@ -86,12 +88,16 @@ class _CaptureTile(QFrame):
     def _apply_style(self) -> None:
         if self._in_section:
             self._status.setText("Já nesta seção")
-            self._status.setStyleSheet(f"color: {PALETTE.text_muted}; font-size: 10px;")
+            self._status.setStyleSheet(
+                f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_micro}px;"
+            )
             border = PALETTE.border_subtle
             bg = PALETTE.bg_surface
         elif self._selected:
             self._status.setText("Selecionada")
-            self._status.setStyleSheet(f"color: {PALETTE.senai_blue_light}; font-size: 10px;")
+            self._status.setStyleSheet(
+                f"color: {PALETTE.senai_blue_light}; font-size: {TYPOGRAPHY.size_micro}px;"
+            )
             border = PALETTE.senai_blue_light
             bg = "rgba(74, 111, 212, 0.14)"
         else:
