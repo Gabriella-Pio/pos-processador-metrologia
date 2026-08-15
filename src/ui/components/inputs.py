@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QGuiApplication, QPalette
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -175,6 +176,7 @@ class SearchBar(QWidget):
         self._field.setPlaceholderText(placeholder)
         self._field.setMinimumHeight(44)
         self._field.setStyleSheet(search_field_inner_style())
+        self._sync_placeholder_palette()
 
         self._filter_divider = QFrame()
         self._filter_divider.setObjectName("SearchBarDivider")
@@ -197,7 +199,7 @@ class SearchBar(QWidget):
                 color: {p.text_muted};
                 background: transparent;
                 border: none;
-                font-size: 16px;
+                font-size: {TYPOGRAPHY.size_h3}px;
                 font-weight: {TYPOGRAPHY.weight_bold};
                 border-radius: {SPACING.radius_sm}px;
             }}
@@ -221,7 +223,7 @@ class SearchBar(QWidget):
         self._hint_label = QLabel()
         self._hint_label.hide()
         self._hint_label.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 12px; "
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
             f"background: transparent; border: none; padding-left: 4px;"
         )
 
@@ -263,12 +265,14 @@ class SearchBar(QWidget):
 
     def refresh_appearance(self) -> None:
         p = PALETTE
+        self._field.setStyleSheet(search_field_inner_style())
+        self._sync_placeholder_palette()
         self._clear_btn.setStyleSheet(f"""
             QPushButton {{
                 color: {p.text_muted};
                 background: transparent;
                 border: none;
-                font-size: 16px;
+                font-size: {TYPOGRAPHY.size_h3}px;
                 font-weight: {TYPOGRAPHY.weight_bold};
                 border-radius: {SPACING.radius_sm}px;
             }}
@@ -278,7 +282,7 @@ class SearchBar(QWidget):
             }}
         """)
         self._hint_label.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 12px; "
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
             f"background: transparent; border: none; padding-left: 4px;"
         )
         if self._field.hasFocus():
@@ -290,6 +294,17 @@ class SearchBar(QWidget):
             self._filter_has_active and self._filter_wrap.isVisible()
         )
         self._update_hint_display()
+
+    def _sync_placeholder_palette(self) -> None:
+        palette = self._field.palette()
+        color = QColor(PALETTE.text_secondary)
+        for group in (
+            QPalette.ColorGroup.Active,
+            QPalette.ColorGroup.Inactive,
+            QPalette.ColorGroup.Disabled,
+        ):
+            palette.setColor(group, QPalette.ColorRole.PlaceholderText, color)
+        self._field.setPalette(palette)
 
     def _on_text_changed(self, text: str) -> None:
         self._clear_btn.setVisible(bool(text))
@@ -329,14 +344,14 @@ class SearchBar(QWidget):
         p = PALETTE
         if self._result_hint:
             self._hint_label.setStyleSheet(
-                f"color: {p.text_muted}; font-size: 12px; "
+                f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
                 f"background: transparent; border: none; padding-left: 4px;"
             )
             self._hint_label.setText(self._result_hint)
             self._hint_label.show()
         elif self._filter_summary:
             self._hint_label.setStyleSheet(
-                f"color: {p.senai_orange}; font-size: 12px; "
+                f"color: {p.senai_orange}; font-size: {TYPOGRAPHY.size_caption}px; "
                 f"font-weight: {TYPOGRAPHY.weight_medium}; "
                 f"background: transparent; border: none; padding-left: 4px;"
             )
@@ -394,11 +409,49 @@ _POPUP_MAX_ROWS = 8
 _POPUP_ITEM_HEIGHT = 36
 
 
+def _filter_combo_popup_stylesheet() -> str:
+    """Estilo aplicado direto no view/popup — o QSS global nem sempre pinta a janela flutuante."""
+    from src.ui.styles import PALETTE, SPACING
+
+    p, s = PALETTE, SPACING
+    return f"""
+        QListView#FilterComboPopup {{
+            background-color: {p.bg_elevated};
+            color: {p.text_primary};
+            border: 1px solid {p.border_strong};
+            border-radius: {s.radius_sm}px;
+            padding: 4px;
+            outline: none;
+        }}
+        QListView#FilterComboPopup::item {{
+            padding: 8px 20px;
+            border-radius: 4px;
+            min-height: 24px;
+            color: {p.text_primary};
+        }}
+        QListView#FilterComboPopup::item:hover {{
+            background-color: rgba(240, 67, 30, 0.22);
+        }}
+        QListView#FilterComboPopup::item:selected {{
+            background-color: rgba(240, 67, 30, 0.22);
+            color: {p.text_primary};
+        }}
+        QFrame#FilterComboPopupWindow,
+        QWidget#FilterComboPopupWindow {{
+            background-color: {p.bg_elevated};
+            border: 1px solid {p.border_strong};
+            border-radius: {s.radius_sm}px;
+        }}
+    """
+
+
 def configure_themed_combo(combo: QComboBox) -> None:
     """Aplica o mesmo visual dos filtros refinados e do menu ⋯."""
     combo.setObjectName("FilterCombo")
     view = combo.view()
     view.setObjectName("FilterComboPopup")
+    view.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    view.setStyleSheet(_filter_combo_popup_stylesheet())
     combo.setMaxVisibleItems(_POPUP_MAX_ROWS)
     view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
     view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -416,16 +469,63 @@ class ThemedComboBox(QComboBox):
     def showPopup(self) -> None:
         view = self.view()
         view.setMinimumWidth(self.width())
-        super().showPopup()
-        popup = view.window()
-        if popup is None or popup is self:
-            return
-        popup.setObjectName("FilterComboPopupWindow")
-        popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # Tokens + altura ANTES do show — mutar depois deslocava o popup pro topo.
+        view.setStyleSheet(_filter_combo_popup_stylesheet())
         rows = min(max(self.count(), 1), self.maxVisibleItems())
         row_height = (
             max(view.sizeHintForRow(0), _POPUP_ITEM_HEIGHT)
             if self.count() > 0
             else _POPUP_ITEM_HEIGHT
         )
-        popup.setMaximumHeight(rows * row_height + 14)
+        popup_height = rows * row_height + 14
+        view.setMaximumHeight(popup_height)
+
+        super().showPopup()
+
+        popup = view.window()
+        if popup is None or popup is self:
+            return
+        popup.setObjectName("FilterComboPopupWindow")
+        popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        # Só estilo da janela; não mexer de novo na altura do view (já aplicada).
+        from src.ui.styles import PALETTE, SPACING
+
+        p, s = PALETTE, SPACING
+        popup.setStyleSheet(
+            f"QFrame#FilterComboPopupWindow, QWidget#FilterComboPopupWindow {{"
+            f" background-color: {p.bg_elevated};"
+            f" border: 1px solid {p.border_strong};"
+            f" border-radius: {s.radius_sm}px;"
+            f"}}"
+        )
+        self._anchor_popup(popup, popup_height)
+        # Qt às vezes reaplica geometria no próximo tick — ancora de novo.
+        QTimer.singleShot(0, lambda: self._anchor_popup(popup, popup_height))
+
+    def _anchor_popup(self, popup: QWidget, popup_height: int) -> None:
+        """Garante que a lista fique colada ao combo (abaixo ou acima se faltar espaço)."""
+        if popup is None or not popup.isVisible():
+            return
+        width = max(self.width(), popup.width())
+        below = self.mapToGlobal(QPoint(0, self.height()))
+        above = self.mapToGlobal(QPoint(0, 0))
+        x = below.x()
+        y = below.y()
+
+        screen = None
+        window = self.window()
+        if window is not None and window.windowHandle() is not None:
+            screen = window.windowHandle().screen()
+        if screen is None:
+            screen = QGuiApplication.screenAt(below)
+        if screen is not None:
+            geo = screen.availableGeometry()
+            if y + popup_height > geo.bottom() and above.y() - popup_height >= geo.top():
+                y = above.y() - popup_height
+            x = min(max(x, geo.left()), max(geo.left(), geo.right() - width + 1))
+            y = min(max(y, geo.top()), max(geo.top(), geo.bottom() - popup_height + 1))
+
+        popup.setFixedWidth(width)
+        popup.setMaximumHeight(popup_height)
+        popup.move(x, y)

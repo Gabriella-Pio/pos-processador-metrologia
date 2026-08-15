@@ -47,6 +47,7 @@ from src.ui.features.workspace.components.workspace_preview_chrome import (
     build_workspace_action_bar,
     build_workspace_preview_column,
     build_workspace_project_tabs_strip,
+    sync_export_mode_menu_icons,
 )
 from src.ui.shared.report_editor.editor_shell import build_editor_stack, create_three_column_splitter
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
@@ -160,6 +161,11 @@ class WorkspaceView(QWidget):
             self._more_btn.refresh_appearance()
         self._section_editor.refresh_appearance()
         self._preview_panel.refresh_appearance()
+        if hasattr(self, "_export_individual_action") and hasattr(self, "_export_merged_action"):
+            sync_export_mode_menu_icons(
+                self._export_individual_action,
+                self._export_merged_action,
+            )
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
@@ -375,6 +381,10 @@ class WorkspaceView(QWidget):
     def _on_export_mode_toggled(self, checked: bool) -> None:
         if not checked:
             return
+        sync_export_mode_menu_icons(
+            self._export_individual_action,
+            self._export_merged_action,
+        )
         unified = self._export_merged_action.isChecked()
         self._vm.set_export_mode_unified(unified)
         session = self._app_state.project_session

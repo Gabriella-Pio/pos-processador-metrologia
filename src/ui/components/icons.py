@@ -53,11 +53,17 @@ def icon_cog() -> QIcon:
 
 
 def icon_help() -> QIcon:
-    return app_icon("question-circle", color=PALETTE.text_on_primary)
+    from src.ui.accessibility.themes import is_light_palette
+
+    color = PALETTE.text_secondary if is_light_palette() else PALETTE.text_on_primary
+    return app_icon("question-circle", color=color)
 
 
 def icon_universal_access() -> QIcon:
-    return app_icon("universal-access", color=PALETTE.text_on_primary)
+    from src.ui.accessibility.themes import is_light_palette
+
+    color = PALETTE.text_secondary if is_light_palette() else PALETTE.text_on_primary
+    return app_icon("universal-access", color=color)
 
 
 def icon_list() -> QIcon:
@@ -135,3 +141,29 @@ def icon_ellipsis() -> QIcon:
 
 def icon_chevron_up() -> QIcon:
     return app_icon("chevron-up", color=PALETTE.text_muted, scale=0.85)
+
+
+def icon_menu_radio(*, checked: bool, size: int = 16) -> QIcon:
+    """Indicador de opção exclusiva — mesmo visual dos radios das preferências."""
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap
+
+    p = PALETTE
+    pixmap = QPixmap(size, size)
+    pixmap.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    ring = pixmap.rect().adjusted(1, 1, -1, -1)
+    if checked:
+        painter.setPen(QPen(QColor(p.senai_orange), 2))
+        painter.setBrush(QBrush(QColor(p.bg_surface_alt)))
+        painter.drawEllipse(ring)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(p.senai_orange)))
+        painter.drawEllipse(ring.adjusted(4, 4, -4, -4))
+    else:
+        painter.setPen(QPen(QColor(p.border_strong), 1.5))
+        painter.setBrush(QBrush(QColor(p.bg_surface_alt)))
+        painter.drawEllipse(ring)
+    painter.end()
+    return QIcon(pixmap)

@@ -82,9 +82,10 @@ def _drag_handle(section_id: str) -> QWidget:
 
 
 class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
-    """Linha do sumário no modo template — toggle enabled + seleção para editar."""
+    """Linha do sumário no modo template — toggle enabled + navegação/edição como no workspace."""
 
     click_requested = pyqtSignal(str)
+    edit_requested = pyqtSignal(str)
     enabled_changed = pyqtSignal(str, bool)
     delete_requested = pyqtSignal(str)
     protected_toggle_blocked = pyqtSignal()
@@ -169,6 +170,24 @@ class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
 
         body_layout.addWidget(text_col, stretch=1)
 
+        actions = QWidget()
+        actions.setFixedWidth(_ACTIONS_WIDTH)
+        _transparent_panel(actions)
+        actions_layout = QHBoxLayout(actions)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        actions_layout.setSpacing(0)
+        actions_layout.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        self._edit_btn = QToolButton()
+        self._edit_btn.setObjectName("SectionSummaryAction")
+        self._edit_btn.setAutoRaise(True)
+        self._edit_btn.setFixedSize(28, 28)
+        self._edit_btn.setIcon(icon_edit())
+        self._edit_btn.setIconSize(QSize(14, 14))
+        self._edit_btn.setToolTip("Editar defaults da seção")
+        self._edit_btn.clicked.connect(lambda: self.edit_requested.emit(self.section_id))
+        actions_layout.addWidget(self._edit_btn)
+
         if self._is_custom:
             self._delete_btn = QToolButton()
             self._delete_btn.setObjectName("SectionSummaryActionDanger")
@@ -177,8 +196,9 @@ class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
             self._delete_btn.setIcon(icon_trash())
             self._delete_btn.setToolTip("Excluir seção personalizada")
             self._delete_btn.clicked.connect(lambda: self.delete_requested.emit(self.section_id))
-            body_layout.addWidget(self._delete_btn)
+            actions_layout.addWidget(self._delete_btn)
 
+        body_layout.addWidget(actions)
         root.addWidget(self._accent)
         root.addWidget(body, stretch=1)
 
@@ -204,7 +224,7 @@ class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
 
     def _elide_title(self) -> None:
         control_w = 24 if self._protected else 28
-        margins = SPACING.sm * 3 + _ACCENT_WIDTH + control_w + _GRIP_WIDTH
+        margins = SPACING.sm * 3 + _ACCENT_WIDTH + control_w + _GRIP_WIDTH + _ACTIONS_WIDTH
         available = max(48, self.width() - margins)
         metrics = QFontMetrics(self._title_label.font())
         self._title_label.setText(
@@ -219,31 +239,25 @@ class TemplateSectionRow(_SummaryRowChromeMixin, QFrame):
         self._apply_active(active)
 
     def _apply_active(self, active: bool) -> None:
-        state = "true" if active else "false"
-        self.setProperty("active", state)
-        self._accent.setProperty("active", state)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        self._accent.style().unpolish(self._accent)
-        self._accent.style().polish(self._accent)
+        self.setProperty("active", "true" if active else "false")
+        self._accent.setProperty("active", "true" if active else "false")
+        _repolish(self)
+        _repolish(self._accent)
+
+    def sizeHint(self) -> QSize:
+        return QSize(super().sizeHint().width(), _ROW_HEIGHT)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             child = self.childAt(event.position().toPoint())
             widget = child
             while widget is not None and widget is not self:
-                if isinstance(widget, QCheckBox):
-                    super().mousePressEvent(event)
-                    return
-                if isinstance(widget, QToolButton):
+                if isinstance(widget, (QCheckBox, QToolButton)):
                     super().mousePressEvent(event)
                     return
                 widget = widget.parentWidget()
             self.click_requested.emit(self.section_id)
         super().mousePressEvent(event)
-
-    def sizeHint(self) -> QSize:
-        return QSize(super().sizeHint().width(), _ROW_HEIGHT)
 
 
 class SectionSummaryRow(_SummaryRowChromeMixin, QFrame):

@@ -40,7 +40,7 @@ QPushButton {{
     background: rgba(240, 67, 30, 0.12);
     border: 1px solid rgba(240, 67, 30, 0.3);
     border-radius: 6px;
-    font-size: 13px;
+    font-size: {size_body}px;
 }}
 
 /* @fragment view_toggle_inactive */
@@ -49,7 +49,7 @@ QPushButton {{
     background: transparent;
     border: 1px solid {border};
     border-radius: 6px;
-    font-size: 13px;
+    font-size: {size_body}px;
 }}
 QPushButton:hover {{
     color: {text_secondary};
@@ -58,15 +58,15 @@ QPushButton:hover {{
 
 /* @fragment action_card_idle */
 QFrame {{
-    background-color: {bg_surface};
+    background-color: {bg_elevated};
     border: 1px solid {border};
     border-radius: {radius_lg}px;
 }}
 
 /* @fragment action_card_hover */
 QFrame {{
-    background-color: {bg_surface_alt};
-    border: 1.5px solid {accent_color};
+    background-color: {bg_elevated};
+    border: 1px solid {accent_color};
     border-radius: {radius_lg}px;
 }}
 
@@ -79,9 +79,25 @@ border: none;
 
 /* @fragment action_card_subtitle */
 color: {text_muted};
-font-size: 11px;
+font-size: {size_caption}px;
 background: transparent;
 border: none;
+
+/* @fragment dashboard_card_media */
+background-color: rgba(74, 111, 212, 0.10);
+border: none;
+border-top-left-radius: {radius_lg}px;
+border-top-right-radius: {radius_lg}px;
+border-bottom-left-radius: 0px;
+border-bottom-right-radius: 0px;
+
+/* @fragment dashboard_card_media_orange */
+background-color: rgba(240, 67, 30, 0.10);
+border: none;
+border-top-left-radius: {radius_lg}px;
+border-top-right-radius: {radius_lg}px;
+border-bottom-left-radius: 0px;
+border-bottom-right-radius: 0px;
 
 /* @fragment recent_file_row */
 QFrame {{
@@ -98,7 +114,7 @@ QFrame:hover {{
 /* @fragment pdf_icon_pill */
 background-color: rgba(240, 67, 30, 0.15);
 color: {senai_orange};
-font-size: 9px;
+font-size: {size_micro}px;
 font-weight: {weight_bold};
 border-radius: {radius_sm}px;
 letter-spacing: 1px;
@@ -108,7 +124,7 @@ border: none;
 color: {senai_orange};
 background: rgba(240, 67, 30, 0.12);
 border-radius: {radius_pill}px;
-font-size: 9px;
+font-size: {size_micro}px;
 font-weight: {weight_bold};
 letter-spacing: 0.5px;
 padding: 2px 8px;
@@ -147,13 +163,13 @@ QLineEdit {{
     background: transparent;
     border: none;
     color: {text_primary};
-    font-size: 14px;
+    font-size: {size_h3}px;
     padding: 0px;
 }}
 
 /* @fragment search_icon */
 color: {text_muted};
-font-size: 20px;
+font-size: {size_h2}px;
 background: transparent;
 border: none;
 
@@ -189,7 +205,7 @@ QPushButton {{
     background: {senai_orange};
     border: none;
     border-radius: {radius_md}px;
-    font-size: 13px;
+    font-size: {size_body}px;
     font-weight: {weight_semibold};
     padding: 0 24px;
 }}
@@ -201,9 +217,9 @@ QPushButton:hover {{
 QWidget#AppHeader {{
     background: qlineargradient(
         x1:0, y1:0, x2:1, y2:0,
-        stop:0 #1d0c08,
-        stop:0.40 #0D1117,
-        stop:1 #0a0e1a
+        stop:0 {bg_sidebar},
+        stop:0.45 {bg_base},
+        stop:1 {bg_surface}
     );
     border-bottom: 3px solid {senai_orange};
 }}
@@ -211,13 +227,13 @@ QWidget#AppHeader {{
 /* @fragment header_help_btn */
 QPushButton#AppHeaderHelpBtn,
 QPushButton#AppHeaderSettingsBtn {{
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: {bg_elevated};
+    border: 1px solid {border};
     border-radius: {radius_md}px;
 }}
 QPushButton#AppHeaderHelpBtn:hover,
 QPushButton#AppHeaderSettingsBtn:hover {{
-    background: rgba(240, 67, 30, 0.22);
+    background: rgba(240, 67, 30, 0.18);
     border-color: rgba(240, 67, 30, 0.45);
 }}
 
@@ -227,7 +243,7 @@ QLabel#AppHeaderBadge {{
     background-color: rgba(240, 67, 30, 0.15);
     border: 1px solid rgba(240, 67, 30, 0.35);
     border-radius: {radius_pill}px;
-    font-size: 11px;
+    font-size: {size_caption}px;
     font-weight: {weight_bold};
     letter-spacing: 0.6px;
     padding: 6px 14px;
@@ -239,7 +255,7 @@ QPushButton#AppHeaderLogoBtn, QPushButton#AppHeaderTrailingLogoBtn {{
     border: none;
 }}
 QPushButton#AppHeaderLogoBtn:hover, QPushButton#AppHeaderTrailingLogoBtn:hover {{
-    background: rgba(255, 255, 255, 0.08);
+    background: {bg_elevated};
     border-radius: 8px;
 }}
 
@@ -340,7 +356,7 @@ QPushButton {{
     color: {text_primary};
     border: 1px solid {border_strong};
     border-radius: {radius_sm}px;
-    font-size: 12px;
+    font-size: {size_caption}px;
     padding: 4px;
 }}
 QPushButton:hover {{

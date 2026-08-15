@@ -70,7 +70,8 @@ QLineEdit#HomeProjectTitle:hover {{
 QLineEdit#HomeProjectTitle:focus {{
     border-bottom: 1px solid {senai_blue_light};
 }}
-QToolButton#HomeProjectTitleEditBtn {{
+QToolButton#HomeProjectTitleEditBtn,
+QToolButton#HomeProjectMoreBtn {{
     background: transparent;
     border: none;
     padding: 2px;
@@ -78,10 +79,12 @@ QToolButton#HomeProjectTitleEditBtn {{
     min-width: 24px;
     min-height: 24px;
 }}
-QFrame#HomeProjectRow:hover QToolButton#HomeProjectTitleEditBtn {{
+QFrame#HomeProjectRow:hover QToolButton#HomeProjectTitleEditBtn,
+QFrame#HomeProjectRow:hover QToolButton#HomeProjectMoreBtn {{
     background: rgba(74, 111, 212, 0.12);
 }}
-QToolButton#HomeProjectTitleEditBtn:hover {{
+QToolButton#HomeProjectTitleEditBtn:hover,
+QToolButton#HomeProjectMoreBtn:hover {{
     background: rgba(74, 111, 212, 0.18);
 }}
 QWidget#HomeTabBarShell {{
@@ -141,8 +144,9 @@ QListView#FilterComboPopup::item:selected {{
 }}
 QFrame#FilterComboPopupWindow,
 QWidget#FilterComboPopupWindow {{
-    background: transparent;
-    border: none;
+    background-color: {bg_elevated};
+    border: 1px solid {border_strong};
+    border-radius: {radius_sm}px;
 }}
 QListView#FilterComboPopup QScrollBar:vertical {{
     background: transparent;
@@ -166,16 +170,34 @@ QMenu#AppPopupMenu {{
     padding: 4px;
 }}
 QMenu#AppPopupMenu::item {{
-    padding: 8px 20px;
+    color: {text_primary};
+    background-color: transparent;
+    padding: 8px 16px 8px 12px;
     border-radius: 4px;
+    icon-size: 16px;
 }}
 QMenu#AppPopupMenu::item:selected {{
+    color: {text_primary};
     background-color: rgba(240, 67, 30, 0.22);
+}}
+QMenu#AppPopupMenu::item:disabled {{
+    color: {text_disabled};
 }}
 QMenu#AppPopupMenu::separator {{
     height: 1px;
-    background: {border_subtle};
+    background: {border};
     margin: 4px 8px;
+}}
+/* Esconde o ✓ nativo; opções exclusivas usam ícone rádio (icon_menu_radio). */
+QMenu#AppPopupMenu::indicator {{
+    width: 0px;
+    height: 0px;
+}}
+QMenu#AppPopupMenu::indicator:checked,
+QMenu#AppPopupMenu::indicator:unchecked {{
+    image: none;
+    width: 0px;
+    height: 0px;
 }}
 QTabBar#HomeTabBar {{
     background: transparent;
@@ -201,14 +223,14 @@ QTabBar#HomeTabBar::tab:hover {{
 }}
 QLabel#SectionHeaderTitle {{
     color: {text_primary};
-    font-size: 20px;
+    font-size: {size_h1}px;
     font-weight: {weight_bold};
     background: transparent;
     border: none;
 }}
 QLabel#SectionHeaderSubtitle {{
     color: {text_muted};
-    font-size: 13px;
+    font-size: {size_body}px;
     background: transparent;
     border: none;
 }}
@@ -289,8 +311,8 @@ QPushButton#WorkspaceAddPdfTab:pressed {{
     background: {bg_surface_alt};
 }}
 QPushButton#WorkspaceChromeButton {{
-    background-color: {bg_surface};
-    border: 1px solid {border};
+    background-color: {bg_elevated};
+    border: 1px solid {border_strong};
     border-radius: {radius_sm}px;
     min-width: 34px;
     max-width: 34px;
@@ -300,10 +322,10 @@ QPushButton#WorkspaceChromeButton {{
 }}
 QPushButton#WorkspaceChromeButton:hover {{
     border-color: {border_strong};
-    background-color: {bg_surface_alt};
+    background-color: rgba(240, 67, 30, 0.10);
 }}
 QPushButton#WorkspaceChromeButton:pressed {{
-    background-color: {bg_elevated};
+    background-color: {bg_surface_alt};
 }}
 QWidget#WorkspacePreviewContext {{
     background: transparent;
@@ -551,7 +573,7 @@ QLabel#SectionSummaryMeta {{
 }}
 QLabel#SectionSummaryModified {{
     color: {senai_orange};
-    font-size: 9px;
+    font-size: {size_micro}px;
     background: transparent;
 }}
 QLabel#SectionSummaryBadge {{
@@ -643,7 +665,7 @@ QLabel#WorkspaceMetaSeparator {{
     padding: 0 2px;
 }}
 QLabel#WorkspaceLayoutDirty {{
-    font-size: 10px;
+    font-size: {size_micro}px;
     color: {senai_orange};
     background: transparent;
 }}
@@ -765,6 +787,30 @@ QToolTip {{
     padding: 6px 10px;
     border-radius: {radius_sm}px;
     font-size: {size_caption}px;
+    opacity: 255;
+}}
+
+QLineEdit#TemplateNameInput {{
+    background-color: {bg_elevated};
+    border: 1px solid {border};
+    border-radius: {radius_sm}px;
+    padding: 6px 12px;
+    color: {text_primary};
+    font-size: {size_body}px;
+    font-weight: {weight_semibold};
+    min-height: 20px;
+    max-width: 420px;
+}}
+QLineEdit#TemplateNameInput:focus {{
+    border: 1.5px solid {senai_blue_light};
+    background-color: {bg_surface};
+}}
+QWidget#WorkspaceGlobalStrip {{
+    background-color: {bg_base};
+    border-bottom: 1px solid {border};
+}}
+QWidget#TemplateEditorSurface {{
+    background-color: {bg_base};
 }}
 
 /* ── Inputs ── */

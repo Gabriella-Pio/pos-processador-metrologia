@@ -13,6 +13,21 @@ def dark_palette() -> Palette:
     return Palette()
 
 
+def is_light_palette(palette: Palette | None = None) -> bool:
+    """True quando o fundo base é claro o bastante para exigir texto/logos escuros."""
+    target = palette or PALETTE
+    base = target.bg_base.lstrip("#")
+    if len(base) != 6:
+        return False
+    r, g, b = int(base[0:2], 16), int(base[2:4], 16), int(base[4:6], 16)
+    luminance = 0.299 * r + 0.587 * g + 0.114 * b
+    return luminance > 160
+
+
+# Compat: imports antigos
+_is_light_palette = is_light_palette
+
+
 def light_palette() -> Palette:
     """Tema claro suave — evita branco puro para reduzir fadiga visual."""
     return Palette(
@@ -28,10 +43,12 @@ def light_palette() -> Palette:
         border="#A8B2BE",
         border_subtle="#B8C1CC",
         border_strong="#8892A0",
-        text_primary="#141820",
-        text_secondary="#3A4454",
-        text_muted="#5A6472",
-        text_disabled="#8892A0",
+        # Texto um pouco mais escuro que o cinza do tema escuro invertido,
+        # para não “sumir” em superfícies claras.
+        text_primary="#10141C",
+        text_secondary="#2A3344",
+        text_muted="#3F4A5A",
+        text_disabled="#6A7382",
         text_on_primary="#FFFFFF",
     )
 
@@ -39,8 +56,7 @@ def light_palette() -> Palette:
 def apply_high_contrast(palette: Palette) -> Palette:
     """Aumenta contraste de texto e bordas sobre a paleta base."""
     adjusted = deepcopy(palette)
-    is_light = _is_light_palette(adjusted)
-    if is_light:
+    if is_light_palette(adjusted):
         adjusted.text_primary = "#0A0C10"
         adjusted.text_secondary = "#1A2030"
         adjusted.text_muted = "#2A3344"
@@ -58,15 +74,6 @@ def apply_high_contrast(palette: Palette) -> Palette:
         adjusted.bg_base = "#000000"
         adjusted.bg_surface = "#0A0A0A"
     return adjusted
-
-
-def _is_light_palette(palette: Palette) -> bool:
-    base = palette.bg_base.lstrip("#")
-    if len(base) != 6:
-        return False
-    r, g, b = int(base[0:2], 16), int(base[2:4], 16), int(base[4:6], 16)
-    luminance = 0.299 * r + 0.587 * g + 0.114 * b
-    return luminance > 160
 
 
 def copy_palette_into_global(source: Palette) -> None:

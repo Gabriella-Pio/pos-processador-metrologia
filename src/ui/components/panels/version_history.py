@@ -9,7 +9,7 @@ from src.core.domain.ports import VersionEntry
 from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.icons import icon_ellipsis
 from src.ui.components.panels._chrome import section_header
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, sidebar_panel_style
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, configure_app_popup_menu, sidebar_panel_style
 from src.ui.styles.helpers import workspace_version_entry_style
 
 
@@ -70,7 +70,7 @@ class _VersionEntryWidget(QWidget):
 
     def _build_actions_menu(self) -> QMenu:
         menu = QMenu(self)
-        menu.setObjectName("AppPopupMenu")
+        configure_app_popup_menu(menu)
         preview_action = QAction("Visualizar", self)
         restore_action = QAction("Restaurar e editar", self)
         export_action = QAction("Exportar esta versão", self)
@@ -112,7 +112,7 @@ class _VersionEntryWidget(QWidget):
             f"font-weight: {TYPOGRAPHY.weight_medium}; background: transparent;"
         )
         self._meta.setStyleSheet(
-            f"color: {p.text_muted}; font-size: 10px; background: transparent;"
+            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_micro}px; background: transparent;"
         )
         self.setStyleSheet(workspace_version_entry_style(is_latest=self._is_latest))
         if hasattr(self, "_actions_btn"):

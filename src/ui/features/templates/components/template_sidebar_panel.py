@@ -11,6 +11,9 @@ from src.ui.shared.report_editor.sections_list_panel import SectionsListPanel
 
 
 class TemplateSidebarPanel(BaseSidebarPanel):
+    """Mesmo fluxo do workspace: 1 clique navega; lápis/duplo abre edição."""
+
+    section_selected = pyqtSignal(str)
     section_edit_requested = pyqtSignal(str)
     section_enabled_changed = pyqtSignal(str, bool)
     section_delete_requested = pyqtSignal(str)
@@ -23,6 +26,7 @@ class TemplateSidebarPanel(BaseSidebarPanel):
         super().__init__(edit_view=edit_view, parent=parent)
 
         self._sections_panel = SectionsListPanel(mode="template")
+        self._sections_panel.section_navigated.connect(self._on_section_navigated)
         self._sections_panel.section_edit_requested.connect(self._on_section_edit_requested)
         self._sections_panel.section_enabled_changed.connect(self.section_enabled_changed.emit)
         self._sections_panel.sections_reordered.connect(self.sections_reordered.emit)
@@ -36,6 +40,7 @@ class TemplateSidebarPanel(BaseSidebarPanel):
         self._sidebar_tabs.setObjectName("WorkspaceSidebarTabs")
         self._sidebar_tabs.addTab(self._sections_panel, "Sumário")
         self._sidebar_tabs.addTab(self._global_fields, "Dados")
+        self._sidebar_tabs.currentChanged.connect(self._on_sidebar_tab_changed)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -62,11 +67,17 @@ class TemplateSidebarPanel(BaseSidebarPanel):
     def render_global_fields(self, values: dict[str, str], overridden: set[str]) -> None:
         self._global_fields.render_fields(values, overridden, show_restore=False)
 
+    def _on_section_navigated(self, section_id: str) -> None:
+        self._close_edit()
+        self._active_section_id = section_id
+        self._sections_panel.set_active_section(section_id)
+        self.section_selected.emit(section_id)
+
     def _on_section_edit_requested(self, section_id: str) -> None:
         if self._sidebar_tabs.currentIndex() != 0:
             self._sidebar_tabs.setCurrentIndex(0)
         self.open_edit_for_section(section_id)
-        self.section_edit_requested.emit(section_id)
+        self.section_selected.emit(section_id)
 
     def _on_section_field_changed(self, section_id: str, field_key: str, value: str) -> None:
         if self._vm is not None:
@@ -80,3 +91,15 @@ class TemplateSidebarPanel(BaseSidebarPanel):
     ) -> None:
         super().open_edit_for_section(section_id, itens_medicao=itens_medicao)
         self.section_edit_requested.emit(section_id)
+
+    def focus_section_title(self) -> None:
+        if self._edit_open:
+            self._edit_view.focus_section_title()
+
+    def focus_section_tab(self, kind: str) -> None:
+        if self._edit_open:
+            self._edit_view.focus_tab_for_kind(kind)
+
+    def _on_sidebar_tab_changed(self, index: int) -> None:
+        if index != 0:
+            self._close_edit()

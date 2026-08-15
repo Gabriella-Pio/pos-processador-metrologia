@@ -26,11 +26,42 @@ def heading_style(level: int = 1) -> str:
 
 
 def header_gradient_style() -> str:
-    return load_fragment("header_gradient")
+    from src.ui.accessibility.themes import is_light_palette
+
+    if is_light_palette():
+        return load_fragment("header_gradient")
+    # Tema escuro: faixa institucional (não só tokens de superfície).
+    return """
+QWidget#AppHeader {
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #1d0c08,
+        stop:0.40 #0D1117,
+        stop:1 #0a0e1a
+    );
+    border-bottom: 3px solid #f0431e;
+}
+"""
 
 
 def header_help_button_style() -> str:
-    return load_fragment("header_help_btn")
+    from src.ui.accessibility.themes import is_light_palette
+
+    if is_light_palette():
+        return load_fragment("header_help_btn")
+    return """
+QPushButton#AppHeaderHelpBtn,
+QPushButton#AppHeaderSettingsBtn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+}
+QPushButton#AppHeaderHelpBtn:hover,
+QPushButton#AppHeaderSettingsBtn:hover {
+    background: rgba(240, 67, 30, 0.22);
+    border-color: rgba(240, 67, 30, 0.45);
+}
+"""
 
 
 def header_badge_style() -> str:
@@ -38,7 +69,20 @@ def header_badge_style() -> str:
 
 
 def header_logo_button_style() -> str:
-    return load_fragment("header_logo_btn")
+    from src.ui.accessibility.themes import is_light_palette
+
+    if is_light_palette():
+        return load_fragment("header_logo_btn")
+    return """
+QPushButton#AppHeaderLogoBtn, QPushButton#AppHeaderTrailingLogoBtn {
+    background: transparent;
+    border: none;
+}
+QPushButton#AppHeaderLogoBtn:hover, QPushButton#AppHeaderTrailingLogoBtn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+"""
 
 
 def apply_elevation(
@@ -101,6 +145,61 @@ def view_toggle_style(*, active: bool = False) -> str:
     return load_fragment("view_toggle_active" if active else "view_toggle_inactive")
 
 
+def app_popup_menu_style() -> str:
+    """Estilo direto do menu popup — QSS global falha em alguns temas nativos (ex.: light)."""
+    p, s = PALETTE, SPACING
+    return f"""
+        QMenu#AppPopupMenu {{
+            background-color: {p.bg_elevated};
+            color: {p.text_primary};
+            border: 1px solid {p.border_strong};
+            border-radius: {s.radius_sm}px;
+            padding: 4px;
+        }}
+        QMenu#AppPopupMenu::item {{
+            color: {p.text_primary};
+            background-color: transparent;
+            padding: 8px 16px 8px 12px;
+            border-radius: 4px;
+        }}
+        QMenu#AppPopupMenu::item:selected {{
+            color: {p.text_primary};
+            background-color: rgba(240, 67, 30, 0.22);
+        }}
+        QMenu#AppPopupMenu::item:disabled {{
+            color: {p.text_disabled};
+        }}
+        QMenu#AppPopupMenu::separator {{
+            height: 1px;
+            background: {p.border};
+            margin: 4px 8px;
+        }}
+        QMenu#AppPopupMenu::indicator {{
+            width: 0px;
+            height: 0px;
+        }}
+    """
+
+
+def configure_app_popup_menu(menu) -> None:
+    """Aplica objectName, fundo opaco e cores do tema ao QMenu flutuante."""
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QColor, QPalette
+
+    menu.setObjectName("AppPopupMenu")
+    menu.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    menu.setStyleSheet(app_popup_menu_style())
+    palette = menu.palette()
+    palette.setColor(QPalette.ColorRole.Window, QColor(PALETTE.bg_elevated))
+    palette.setColor(QPalette.ColorRole.Base, QColor(PALETTE.bg_elevated))
+    palette.setColor(QPalette.ColorRole.Text, QColor(PALETTE.text_primary))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(PALETTE.text_primary))
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor(PALETTE.text_primary))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(240, 67, 30, 56))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor(PALETTE.text_primary))
+    menu.setPalette(palette)
+
+
 def action_card_idle_style() -> str:
     return load_fragment("action_card_idle")
 
@@ -110,6 +209,12 @@ def action_card_hover_style(accent_color: str | None = None) -> str:
     return load_fragment("action_card_hover", accent_color=accent_color or p.senai_blue_light)
 
 
+def dashboard_card_media_style(*, orange: bool = False) -> str:
+    return load_fragment(
+        "dashboard_card_media_orange" if orange else "dashboard_card_media"
+    )
+
+
 def action_card_icon_style(
     *,
     accent_color: str,
@@ -117,7 +222,7 @@ def action_card_icon_style(
     icon: str,
 ) -> str:
     t = TYPOGRAPHY
-    font_size = "11px" if len(icon) > 1 else "22px"
+    font_size = f"{t.size_caption}px" if len(icon) > 1 else f"{t.size_h2 + 4}px"
     letter_spacing = "1px" if len(icon) > 1 else "0px"
     return (
         f"background-color: {accent_bg}; "
@@ -260,7 +365,7 @@ def primary_button_style() -> str:
         QPushButton:disabled {{
             background-color: {p.text_disabled};
             border-bottom-color: transparent;
-            color: rgba(255,255,255,0.4);
+            color: {p.text_on_primary};
         }}
     """
 
@@ -280,7 +385,7 @@ def secondary_button_style() -> str:
         QPushButton:hover {{
             background-color: rgba(74, 111, 212, 0.15);
             border-color: {p.senai_blue_light};
-            color: {p.text_on_primary};
+            color: {p.text_primary};
         }}
         QPushButton:pressed {{
             background-color: rgba(74, 111, 212, 0.25);

@@ -7,11 +7,18 @@ from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMenu, QSizePolicy, QVB
 from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.inputs import LayoutTemplateSelector
 from src.ui.components.feedback import InlineBanner
-from src.ui.components.icons import icon_ellipsis, icon_export
+from src.ui.components.icons import icon_ellipsis, icon_export, icon_menu_radio
 from src.ui.components.preview_status_chip import PreviewStatusChip
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
-from src.ui.styles import SPACING
+from src.ui.styles import SPACING, configure_app_popup_menu
 
+
+def sync_export_mode_menu_icons(individual_action, merged_action) -> None:
+    """Troca o ✓ nativo por rádio laranja (mesmo visual das preferências)."""
+    individual_action.setIcon(icon_menu_radio(checked=individual_action.isChecked()))
+    merged_action.setIcon(icon_menu_radio(checked=merged_action.isChecked()))
+    individual_action.setIconVisibleInMenu(True)
+    merged_action.setIconVisibleInMenu(True)
 
 def build_workspace_project_tabs_strip(
     project_tabs,
@@ -73,7 +80,7 @@ def build_workspace_project_tabs_strip(
     layout.addWidget(export_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
 
     preview_menu = QMenu(row)
-    preview_menu.setObjectName("AppPopupMenu")
+    configure_app_popup_menu(preview_menu)
     save_layout_action = preview_menu.addAction("Salvar layout…")
     save_layout_action.triggered.connect(on_save_layout)
     change_layout_action = preview_menu.addAction("Alterar layout…")
@@ -96,6 +103,7 @@ def build_workspace_project_tabs_strip(
     )
     export_mode_group.addAction(export_individual_action)
     export_mode_group.addAction(export_merged_action)
+    sync_export_mode_menu_icons(export_individual_action, export_merged_action)
 
     row._preview_menu = preview_menu  # type: ignore[attr-defined]
     row._save_layout_action = save_layout_action  # type: ignore[attr-defined]

@@ -22,7 +22,7 @@ from src.ui.features.templates.components.template_sidebar_panel import Template
 from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
 from src.ui.shared.report_editor.editor_shell import build_editor_column, create_three_column_splitter
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
-from src.ui.styles import SPACING, caption_style
+from src.ui.styles import SPACING, caption_style, configure_app_popup_menu
 
 
 class TemplateEditorView(QWidget):
@@ -62,9 +62,12 @@ class TemplateEditorView(QWidget):
         self._sidebar.refresh_appearance()
         self._preview_panel.refresh_appearance()
         if hasattr(self, "_more_btn"):
+            self._more_btn.setIcon(icon_ellipsis())
             self._more_btn.refresh_appearance()
         if hasattr(self, "_save_btn"):
             self._save_btn.refresh_appearance()
+        if hasattr(self, "_name_icon"):
+            self._name_icon.setPixmap(icon_edit().pixmap(16, 16))
         self._edit_placeholder.setStyleSheet(caption_style())
 
     def load_template(self, template_id: str) -> None:
@@ -103,26 +106,31 @@ class TemplateEditorView(QWidget):
         strip.setObjectName("WorkspaceGlobalStrip")
         layout = QHBoxLayout(strip)
         layout.setContentsMargins(SPACING.lg, SPACING.sm, SPACING.lg, SPACING.sm)
-        layout.setSpacing(SPACING.md)
+        layout.setSpacing(SPACING.sm)
+        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        name_icon = QLabel()
-        name_icon.setPixmap(icon_edit().pixmap(16, 16))
-        layout.addWidget(name_icon)
-        layout.addWidget(self._name_field, stretch=1)
-        layout.addWidget(self._dirty_label)
+        self._name_icon = QLabel()
+        self._name_icon.setPixmap(icon_edit().pixmap(16, 16))
+        layout.addWidget(self._name_icon, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self._name_field, stretch=1, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self._dirty_label, alignment=Qt.AlignmentFlag.AlignVCenter)
         layout.addStretch(1)
 
-        self._more_btn = ChromeIconButton(icon_ellipsis(), "Mais opções")
+        self._more_btn = ChromeIconButton(icon_ellipsis(), "Mais ações do template")
         self._more_btn.clicked.connect(self._show_menu)
         self._save_btn = PrimaryButton("Salvar")
+        self._save_btn.setFixedHeight(34)
+        self._save_btn.setMinimumHeight(34)
+        self._save_btn.setToolTip("Salvar template (Ctrl+S)")
         self._save_btn.clicked.connect(self._on_save)
-        layout.addWidget(self._more_btn)
-        layout.addWidget(self._save_btn)
+        layout.addWidget(self._more_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self._save_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
         self._build_menu()
         return strip
 
     def _build_menu(self) -> None:
         self._menu = QMenu(self)
+        configure_app_popup_menu(self._menu)
         self._discard_action = self._menu.addAction("Descartar alterações")
         self._discard_action.triggered.connect(self._on_discard)
 
@@ -157,7 +165,8 @@ class TemplateEditorView(QWidget):
             lambda: self._vm.set_template_name(self._name_field.text())
         )
         self._sidebar.edit_visibility_changed.connect(self._on_edit_visibility_changed)
-        self._sidebar.section_edit_requested.connect(self._on_section_selected)
+        self._sidebar.section_selected.connect(self._on_section_selected)
+        self._sidebar.section_edit_requested.connect(self._on_section_edit_opened)
         self._sidebar.section_enabled_changed.connect(self._vm.set_section_enabled)
         self._sidebar.add_custom_section_requested.connect(self._on_add_custom_section)
         self._sidebar.section_delete_requested.connect(self._on_delete_custom_section)
@@ -200,11 +209,17 @@ class TemplateEditorView(QWidget):
         self._section_title_label.setText(f"Seção: {title}")
         self._preview_panel.focus_section(section_id)
 
+    def _on_section_edit_opened(self, section_id: str) -> None:
+        # open_edit_for_section já emitiu section_selected via sidebar em alguns fluxos;
+        # garante destaque + rolagem mesmo quando só section_edit_requested chega.
+        self._on_section_selected(section_id)
+
     def _on_add_custom_section(self) -> None:
         section_id = self._vm.add_custom_section("Nova seção")
         if section_id:
             self._sidebar.open_edit_for_section(section_id)
             self._on_section_selected(section_id)
+            self._sidebar.focus_section_title()
 
     def _on_delete_custom_section(self, section_id: str) -> None:
         if not confirm_action(
@@ -227,6 +242,7 @@ class TemplateEditorView(QWidget):
             section = self._section_anchor_map.get(self._active_section_id, {})
             title = section.get("display_title") or section.get("title", self._active_section_id)
             self._section_title_label.setText(f"Seção: {title}")
+            self._preview_panel.focus_section(self._active_section_id)
 
     def _on_dirty_changed(self, dirty: bool) -> None:
         self._dirty_label.setText("● não salvo" if dirty else "")
@@ -257,9 +273,11 @@ class TemplateEditorView(QWidget):
         focus_target: str = "section_title",
         image_path: str = "",
     ) -> None:
+        _ = image_path
         self._active_section_id = section_id
-        self._vm.set_active_section(section_id)
         self._sidebar.open_edit_for_section(section_id)
         self._on_section_selected(section_id)
         if focus_target == "section_title":
-            QTimer.singleShot(0, self._sidebar.edit_view.focus_section_title)
+            QTimer.singleShot(0, self._sidebar.focus_section_title)
+        elif focus_target in {"photos", "graphics", "tables"}:
+            QTimer.singleShot(0, lambda kind=focus_target: self._sidebar.focus_section_tab(kind))

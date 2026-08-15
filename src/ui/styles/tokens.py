@@ -57,11 +57,13 @@ class Palette:
 @dataclass
 class Typography:
     font_family: str = "Inter, Segoe UI, -apple-system, Roboto, sans-serif"
+    size_display: int = 26  # hero / saudação
     size_h1: int = 24
     size_h2: int = 18
     size_h3: int = 15
     size_body: int = 13
     size_caption: int = 11
+    size_micro: int = 10  # labels uppercase / meta compacta
     weight_regular: int = 400
     weight_medium: int = 500
     weight_semibold: int = 600
@@ -86,5 +88,14 @@ PALETTE = Palette()
 TYPOGRAPHY = Typography()
 SPACING = Spacing()
 
-# Largura padrão dos cards do dashboard (usada no cálculo de colunas responsivas)
-DASHBOARD_CARD_WIDTH = 168
+# Largura mínima / altura dos cards da grade (crescem até preencher a coluna)
+DASHBOARD_CARD_WIDTH = 220
+DASHBOARD_CARD_HEIGHT = 188
+
+
+def scaled_dashboard_card_size() -> tuple[int, int]:
+    """Largura mínima e altura dos cards da grade (zoom de fonte)."""
+    scale = TYPOGRAPHY.size_body / 13
+    width = max(200, round(DASHBOARD_CARD_WIDTH * scale))
+    height = max(168, round(DASHBOARD_CARD_HEIGHT * scale))
+    return width, height

@@ -261,7 +261,7 @@ class SectionsListPanel(QFrame):
         self._click_timer.timeout.connect(self._emit_single_click)
 
         self._hint = QLabel(
-            "Marque as seções e clique para editar defaults"
+            "Marque para incluir no template · clique para ver no preview · lápis ou duplo-clique para editar"
             if self._mode == "template"
             else "Marque para incluir no relatório · clique no preview · duplo-clique para editar"
         )
@@ -380,7 +380,8 @@ class SectionsListPanel(QFrame):
             section_id = section["id"]
             if self._mode == "template":
                 row = TemplateSectionRow(section)
-                row.click_requested.connect(self.section_edit_requested.emit)
+                row.click_requested.connect(self._on_row_clicked)
+                row.edit_requested.connect(self._on_row_edit_requested)
                 row.enabled_changed.connect(self.section_enabled_changed.emit)
                 row.delete_requested.connect(self.section_delete_requested.emit)
                 row.protected_toggle_blocked.connect(self._on_protected_toggle_blocked)

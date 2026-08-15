@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Literal
 
 from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QColor, QFont, QPalette
 from PyQt6.QtWidgets import QApplication
 
 from src.ui.accessibility.themes import (
@@ -20,7 +20,7 @@ from src.ui.accessibility.themes import (
 )
 from src.ui.styles.helpers import base_stylesheet
 from src.ui.styles.qss_loader import clear_style_cache
-from src.ui.styles.tokens import TYPOGRAPHY
+from src.ui.styles.tokens import PALETTE, TYPOGRAPHY
 
 ThemeMode = Literal["dark", "light"]
 ContrastMode = Literal["normal", "high"]
@@ -119,6 +119,7 @@ class AppearanceManager(QObject):
             font = QFont(TYPOGRAPHY.font_family.split(",")[0].strip(), TYPOGRAPHY.size_body)
             font.setPointSize(TYPOGRAPHY.size_body)
             app.setFont(font)
+            self._apply_qt_chrome_palette(app)
 
         for callback in self._refresh_callbacks:
             callback()
@@ -126,3 +127,19 @@ class AppearanceManager(QObject):
         self.changed.emit(self.settings)
         if persist:
             self.save()
+
+    @staticmethod
+    def _apply_qt_chrome_palette(app: QApplication) -> None:
+        """Ajusta roles que o QSS não cobre bem (tooltip, placeholder)."""
+        qt_palette = app.palette()
+        qt_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(PALETTE.bg_elevated))
+        qt_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(PALETTE.text_primary))
+        # PlaceholderText costuma herdar do tema do SO — no dark some no campo de busca.
+        placeholder = QColor(PALETTE.text_secondary)
+        for group in (
+            QPalette.ColorGroup.Active,
+            QPalette.ColorGroup.Inactive,
+            QPalette.ColorGroup.Disabled,
+        ):
+            qt_palette.setColor(group, QPalette.ColorRole.PlaceholderText, placeholder)
+        app.setPalette(qt_palette)
