@@ -355,10 +355,10 @@ def test_app_header_breadcrumb() -> None:
 def test_grid_columns_for_width() -> None:
     from src.ui.features.home.components.grid_utils import grid_columns_for_width
 
-    # Margens padrão = 64px (xl * 2); card 168 + gap 16
+    # Margens padrão = 64px (xl * 2); card mín. 220 + gap 16
     assert grid_columns_for_width(400) == 1
-    assert grid_columns_for_width(800) == 4
-    assert grid_columns_for_width(2000) == 6  # capped at MAX_GRID_COLUMNS
+    assert grid_columns_for_width(800) == 3
+    assert grid_columns_for_width(2000) == 5  # capped at MAX_GRID_COLUMNS
 
 
 def test_base_stylesheet_loads_from_qss() -> None:

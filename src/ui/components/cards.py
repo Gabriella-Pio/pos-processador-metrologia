@@ -34,9 +34,11 @@ from src.ui.styles import (
     action_card_title_style,
     badge_style,
     caption_style,
+    dashboard_card_media_style,
     default_template_badge_style,
     pdf_icon_pill_style,
     recent_file_row_style,
+    scaled_dashboard_card_size,
 )
 
 __all__ = [
@@ -82,7 +84,7 @@ class ElidingLabel(QLabel):
 
 
 class ActionCard(QFrame):
-    """Card base reutilizável estilo ilovepdf."""
+    """Card base da grade — faixa de mídia + corpo tipográfico."""
 
     clicked = pyqtSignal()
 
@@ -93,29 +95,46 @@ class ActionCard(QFrame):
         subtitle: str = "",
         accent_color: str = "",
         accent_bg: str = "",
-        card_width: int = 168,
-        card_height: int = 156,
+        card_width: int | None = None,
+        card_height: int | None = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         p = PALETTE
         resolved_accent = accent_color or p.senai_blue_light
-        resolved_bg = accent_bg or "rgba(74, 111, 212, 0.15)"
+        resolved_bg = accent_bg or "rgba(74, 111, 212, 0.18)"
+        scaled_w, scaled_h = scaled_dashboard_card_size()
+        width = card_width if card_width is not None else scaled_w
+        height = card_height if card_height is not None else scaled_h
+        orange = resolved_accent.lower() in {p.senai_orange.lower(), "#f0431e"}
 
-        self.setFixedSize(card_width, card_height)
+        if card_width is not None:
+            self.setFixedWidth(width)
+            self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        else:
+            self.setMinimumWidth(width)
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(height)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
         self._idle_style = action_card_idle_style()
         self._hover_style = action_card_hover_style(resolved_accent)
         self.setStyleSheet(self._idle_style)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING.md, SPACING.lg, SPACING.md, SPACING.md)
-        layout.setSpacing(0)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
+        media = QFrame()
+        media.setObjectName("DashboardCardMedia")
+        media.setFixedHeight(max(72, round(78 * TYPOGRAPHY.size_body / 13)))
+        media.setStyleSheet(dashboard_card_media_style(orange=orange))
+        media_layout = QVBoxLayout(media)
+        media_layout.setContentsMargins(SPACING.md, SPACING.md, SPACING.md, SPACING.sm)
+        media_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        icon_size = max(40, round(44 * TYPOGRAPHY.size_body / 13))
         icon_label = QLabel(icon)
-        icon_label.setFixedSize(52, 52)
+        icon_label.setFixedSize(icon_size, icon_size)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_label.setStyleSheet(
             action_card_icon_style(
@@ -124,22 +143,30 @@ class ActionCard(QFrame):
                 icon=icon,
             )
         )
-        layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignHCenter)
-        layout.addSpacing(14)
+        media_layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignCenter)
+        root.addWidget(media)
+
+        body = QVBoxLayout()
+        body.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
+        body.setSpacing(4)
 
         title_label = QLabel(title)
         title_label.setWordWrap(True)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        title_label.setMaximumHeight(max(40, TYPOGRAPHY.size_body * 3 + 4))
         title_label.setStyleSheet(action_card_title_style())
-        layout.addWidget(title_label)
+        body.addWidget(title_label)
 
         if subtitle:
-            layout.addSpacing(4)
             sub_label = QLabel(subtitle)
             sub_label.setWordWrap(True)
-            sub_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            sub_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            sub_label.setMaximumHeight(max(30, TYPOGRAPHY.size_caption * 3))
             sub_label.setStyleSheet(action_card_subtitle_style())
-            layout.addWidget(sub_label)
+            body.addWidget(sub_label)
+
+        body.addStretch(1)
+        root.addLayout(body)
 
     def enterEvent(self, event) -> None:  # noqa: N802
         self.setStyleSheet(self._hover_style)

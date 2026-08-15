@@ -22,7 +22,12 @@ from src.ui.features.home.models.dashboard import (
 from src.ui.styles import SPACING, apply_elevation
 from src.ui.components.centered_layout import make_centered_column
 from src.ui.features.home.components.empty_state import EmptyState
-from src.ui.features.home.components.grid_utils import grid_columns_for_width
+from src.ui.features.home.components.grid_utils import (
+    add_grid_card,
+    configure_dashboard_grid,
+    finalize_dashboard_grid,
+    grid_columns_for_width,
+)
 from src.ui.features.home.components.layout_utils import (
     add_filter_empty_state,
     clear_layout,
@@ -61,10 +66,7 @@ class RecentesPanel(QWidget):
         self._grid_widget = QWidget()
         self._grid_widget.setStyleSheet("background:transparent;")
         self._grid = QGridLayout(self._grid_widget)
-        self._grid.setSpacing(SPACING.md)
-        self._grid.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
-        )
+        configure_dashboard_grid(self._grid, self._grid_widget)
         self._grid_cols = grid_columns_for_width(self._grid_widget.width())
         self._grid_widget.installEventFilter(self)
 
@@ -91,6 +93,7 @@ class RecentesPanel(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
     def refresh_appearance(self) -> None:
+        self._section_header.refresh_appearance()
         self._controls.refresh_appearance()
         self._refresh_views()
 
@@ -103,7 +106,8 @@ class RecentesPanel(QWidget):
         self._grid_empty_card, self._grid_empty_layout = make_list_card_shell()
         self._grid_empty_card.hide()
         layout.addWidget(self._grid_empty_card, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(self._grid_widget, stretch=1)
+        layout.addWidget(self._grid_widget, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addStretch(1)
         return page
 
     def eventFilter(self, obj, event) -> bool:
@@ -112,7 +116,7 @@ class RecentesPanel(QWidget):
         return super().eventFilter(obj, event)
 
     def _update_grid_columns(self) -> None:
-        cols = grid_columns_for_width(self._grid_widget.width())
+        cols = grid_columns_for_width(self._grid_widget.width(), horizontal_margins=0)
         if cols != self._grid_cols:
             self._grid_cols = cols
             self._rebuild_grid(self._filtered_files())
@@ -231,11 +235,13 @@ class RecentesPanel(QWidget):
         )
 
         cols = max(1, self._grid_cols)
+        place_cols = min(cols, len(files)) if files else cols
         for index, summary in enumerate(files):
             card = RecentFileCard(summary)
             apply_elevation(card, blur=18, y_offset=3, alpha=80)
             card.opened.connect(self.opened.emit)
-            self._grid.addWidget(card, index // cols, index % cols)
+            add_grid_card(self._grid, card, index, place_cols)
+        finalize_dashboard_grid(self._grid, place_cols)
 
     def _on_view_changed(self, mode: str) -> None:
         self._stack.setCurrentIndex(0 if mode == "list" else 1)

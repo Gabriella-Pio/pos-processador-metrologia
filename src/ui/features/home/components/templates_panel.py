@@ -18,7 +18,12 @@ from src.ui.components.buttons import IconButton
 from src.ui.components.icons import icon_close, icon_empty_results
 from src.ui.features.home.models.dashboard import TemplateSummary, empty_results_messages, filter_templates
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, apply_elevation, caption_style
-from src.ui.features.home.components.grid_utils import grid_columns_for_width
+from src.ui.features.home.components.grid_utils import (
+    add_grid_card,
+    configure_dashboard_grid,
+    finalize_dashboard_grid,
+    grid_columns_for_width,
+)
 from src.ui.components.centered_layout import make_centered_column
 from src.ui.features.home.components.empty_state import EmptyState
 from src.ui.features.home.components.layout_utils import (
@@ -65,7 +70,7 @@ class _TemplateListRow(QFrame):
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon.setStyleSheet(
             f"background: rgba(74,111,212,0.15); color: {p.senai_blue_light}; "
-            f"font-size: 9px; font-weight: {TYPOGRAPHY.weight_bold}; "
+            f"font-size: {TYPOGRAPHY.size_micro}px; font-weight: {TYPOGRAPHY.weight_bold}; "
             f"border-radius: {SPACING.radius_sm}px; border: none;"
         )
         layout.addWidget(icon)
@@ -130,7 +135,7 @@ class _TemplateCreateRow(QFrame):
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon.setStyleSheet(
             f"background: rgba(240, 67, 30, 0.12); color: {p.senai_orange}; "
-            f"font-size: 18px; font-weight: {TYPOGRAPHY.weight_bold}; "
+            f"font-size: {TYPOGRAPHY.size_h2}px; font-weight: {TYPOGRAPHY.weight_bold}; "
             f"border-radius: {SPACING.radius_sm}px; border: none;"
         )
         layout.addWidget(icon)
@@ -182,10 +187,7 @@ class TemplatesPanel(QWidget):
         self._grid_widget = QWidget()
         self._grid_widget.setStyleSheet("background:transparent;")
         self._grid = QGridLayout(self._grid_widget)
-        self._grid.setSpacing(SPACING.md)
-        self._grid.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
-        )
+        configure_dashboard_grid(self._grid, self._grid_widget)
         self._grid_cols = grid_columns_for_width(self._grid_widget.width())
         self._grid_widget.installEventFilter(self)
 
@@ -213,6 +215,7 @@ class TemplatesPanel(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
     def refresh_appearance(self) -> None:
+        self._section_header.refresh_appearance()
         self._toggle.refresh_appearance()
         self._refresh_views()
 
@@ -225,7 +228,8 @@ class TemplatesPanel(QWidget):
         self._grid_empty_card, self._grid_empty_layout = make_list_card_shell()
         self._grid_empty_card.hide()
         layout.addWidget(self._grid_empty_card, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(self._grid_widget, stretch=1)
+        layout.addWidget(self._grid_widget, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addStretch(1)
         return page
 
     def eventFilter(self, obj, event) -> bool:
@@ -234,7 +238,7 @@ class TemplatesPanel(QWidget):
         return super().eventFilter(obj, event)
 
     def _update_grid_columns(self) -> None:
-        cols = grid_columns_for_width(self._grid_widget.width())
+        cols = grid_columns_for_width(self._grid_widget.width(), horizontal_margins=0)
         if cols != self._grid_cols:
             self._grid_cols = cols
             self._refresh_views()
@@ -319,13 +323,16 @@ class TemplatesPanel(QWidget):
         )
 
         cols = max(1, self._grid_cols)
+        # +1 pelo card "Novo template" quando não está filtrando
+        total_slots = len(templates) + (0 if is_filtering else 1)
+        place_cols = min(cols, total_slots) if total_slots else cols
         for index, summary in enumerate(templates):
             card = TemplateCard(summary)
             apply_elevation(card, blur=20, y_offset=3, alpha=90)
             card.selected.connect(self.template_selected.emit)
             if summary.deletable:
                 card.delete_requested.connect(self.template_delete_requested.emit)
-            self._grid.addWidget(card, index // cols, index % cols)
+            add_grid_card(self._grid, card, index, place_cols)
 
         if not is_filtering:
             total = len(templates)
@@ -337,7 +344,8 @@ class TemplatesPanel(QWidget):
                 accent_bg="rgba(240, 67, 30, 0.10)",
             )
             create_card.clicked.connect(self.create_requested.emit)
-            self._grid.addWidget(create_card, total // cols, total % cols)
+            add_grid_card(self._grid, create_card, total, place_cols)
+        finalize_dashboard_grid(self._grid, place_cols)
 
     def _on_view_changed(self, mode: str) -> None:
         self._stack.setCurrentIndex(0 if mode == "list" else 1)
