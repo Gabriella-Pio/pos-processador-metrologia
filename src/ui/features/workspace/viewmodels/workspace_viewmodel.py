@@ -20,7 +20,6 @@ from src.core.application.project_service import ProjectService
 from src.core.application.project_snapshot_serializer import deserialize_project_snapshot
 from src.core.application.template_media import (
     locked_workspace_media_kinds,
-    merge_workspace_media_kinds,
     sanitize_workspace_media_kinds,
 )
 from src.core.application.version_snapshot_service import VersionSnapshotService
