@@ -3,33 +3,25 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QPushButton,
-    QSizePolicy,
-    QStackedWidget,
-    QVBoxLayout,
     QWidget,
 )
 
-from src.ui.components.centered_layout import make_centered_column
 from src.ui.components.icons import icon_empty_file, icon_empty_results, icon_trash
+from src.ui.features.home.components.dashboard_panel_shell import build_dashboard_panel_chrome
 from src.ui.features.home.components.empty_state import EmptyState
 from src.ui.features.home.components.grid_utils import (
     add_grid_card,
-    configure_dashboard_grid,
     finalize_dashboard_grid,
-    grid_columns_for_width,
 )
 from src.ui.features.home.components.layout_utils import (
     add_filter_empty_state,
     clear_layout,
-    make_list_card_shell,
 )
 from src.ui.features.home.components.project_card import ProjectCard, ProjectRow
-from src.ui.features.home.components.section_header import TabSectionHeader
 from src.ui.features.home.components.view_controls import ListViewControls
 from src.ui.features.home.models.dashboard import (
     ProjectSummary,
@@ -59,44 +51,21 @@ class OngoingProjectsPanel(QWidget):
 
         self._selection_bar = self._build_selection_bar()
 
-        self._list_card, self._list_layout = make_list_card_shell()
-        list_page = QWidget()
-        list_layout = QVBoxLayout(list_page)
-        list_layout.setContentsMargins(0, 0, 0, 0)
-        list_layout.addWidget(self._list_card, 0, Qt.AlignmentFlag.AlignTop)
-
-        self._grid_widget = QWidget()
-        self._grid_widget.setStyleSheet("background:transparent;")
-        self._grid = QGridLayout(self._grid_widget)
-        configure_dashboard_grid(self._grid, self._grid_widget)
-        self._grid_cols = grid_columns_for_width(self._grid_widget.width())
-        self._grid_widget.installEventFilter(self)
-
-        self._stack = QStackedWidget()
-        self._stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        self._stack.addWidget(list_page)
-        grid_page = QWidget()
-        grid_layout = QVBoxLayout(grid_page)
-        grid_layout.setContentsMargins(0, 0, 0, SPACING.lg)
-        grid_layout.addWidget(self._grid_widget, 0, Qt.AlignmentFlag.AlignTop)
-        grid_layout.addStretch(1)
-        self._stack.addWidget(grid_page)
-
-        self._section_header = TabSectionHeader(
-            "Projetos em andamento",
-            "Retome a edição sem precisar exportar",
-            right=self._controls,
+        self._chrome = build_dashboard_panel_chrome(
+            self,
+            title="Projetos em andamento",
+            subtitle="Retome a edição sem precisar exportar",
+            controls=self._controls,
+            below_header=self._selection_bar,
+            with_grid_empty=False,
+            outer_bottom_margin=SPACING.lg,
         )
-
-        centered_outer, column = make_centered_column()
-        column.addWidget(self._section_header)
-        column.addWidget(self._selection_bar)
-        column.addWidget(self._stack)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, SPACING.lg)
-        outer.addWidget(centered_outer)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._section_header = self._chrome.section_header
+        self._list_layout = self._chrome.list_layout
+        self._grid = self._chrome.grid
+        self._grid_widget = self._chrome.grid_widget
+        self._stack = self._chrome.stack
+        self._grid_widget.installEventFilter(self)
         self._sync_selection_bar()
 
     def _build_selection_bar(self) -> QWidget:
@@ -183,9 +152,7 @@ class OngoingProjectsPanel(QWidget):
 
     def eventFilter(self, obj, event) -> bool:
         if obj is self._grid_widget and event.type() == QEvent.Type.Resize:
-            cols = grid_columns_for_width(self._grid_widget.width(), horizontal_margins=0)
-            if cols != self._grid_cols:
-                self._grid_cols = cols
+            if self._chrome.sync_grid_columns():
                 self._rebuild_grid(self._filtered_projects())
         return super().eventFilter(obj, event)
 
@@ -275,13 +242,10 @@ class OngoingProjectsPanel(QWidget):
             self._list_layout.addWidget(row)
 
     def _rebuild_grid(self, projects: list[ProjectSummary]) -> None:
-        while self._grid.count():
-            item = self._grid.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        self._chrome.clear_grid()
         if not projects:
             return
-        cols = max(1, self._grid_cols)
+        cols = max(1, self._chrome.grid_cols)
         place_cols = min(cols, len(projects)) if projects else cols
         for index, summary in enumerate(projects):
             card = ProjectCard(
@@ -294,7 +258,7 @@ class OngoingProjectsPanel(QWidget):
         finalize_dashboard_grid(self._grid, place_cols)
 
     def _on_view_changed(self, mode: str) -> None:
-        self._stack.setCurrentIndex(0 if mode == "list" else 1)
+        self._chrome.set_view(mode)
 
     def _on_density_changed(self, mode: str) -> None:
         self._density = mode

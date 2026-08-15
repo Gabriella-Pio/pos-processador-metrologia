@@ -1,41 +1,30 @@
 """Painel de arquivos recentes — lista, grade e busca."""
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, Qt, pyqtSignal
-from PyQt6.QtWidgets import (
-    QFrame,
-    QGridLayout,
-    QSizePolicy,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtCore import QEvent, pyqtSignal
+from PyQt6.QtWidgets import QWidget
 
-from src.ui.components.cards import RecentFileCard, RecentFileRow
 from src.ui.components.icons import icon_empty_file, icon_empty_results
+from src.ui.features.home.components.dashboard_panel_shell import build_dashboard_panel_chrome
+from src.ui.features.home.components.empty_state import EmptyState
+from src.ui.features.home.components.grid_utils import (
+    add_grid_card,
+    finalize_dashboard_grid,
+)
+from src.ui.features.home.components.home_cards import RecentFileCard, RecentFileRow
+from src.ui.features.home.components.layout_utils import (
+    add_filter_empty_state,
+    clear_layout,
+    set_grid_filter_empty_mode,
+)
+from src.ui.features.home.components.view_controls import ListViewControls
 from src.ui.features.home.models.dashboard import (
     RecentFileSummary,
     RecentFilesFilterState,
     apply_recent_files_filters,
     empty_results_messages,
 )
-from src.ui.styles import SPACING, apply_elevation
-from src.ui.components.centered_layout import make_centered_column
-from src.ui.features.home.components.empty_state import EmptyState
-from src.ui.features.home.components.grid_utils import (
-    add_grid_card,
-    configure_dashboard_grid,
-    finalize_dashboard_grid,
-    grid_columns_for_width,
-)
-from src.ui.features.home.components.layout_utils import (
-    add_filter_empty_state,
-    clear_layout,
-    make_list_card_shell,
-    set_grid_filter_empty_mode,
-)
-from src.ui.features.home.components.section_header import TabSectionHeader
-from src.ui.features.home.components.view_controls import ListViewControls
+from src.ui.styles import apply_elevation
 
 
 class RecentesPanel(QWidget):
@@ -53,73 +42,33 @@ class RecentesPanel(QWidget):
         self._controls.view_changed.connect(self._on_view_changed)
         self._controls.density_changed.connect(self._on_density_changed)
 
-        self._list_card, self._list_layout = make_list_card_shell()
-
-        list_page_layout = QVBoxLayout()
-        list_page_layout.setContentsMargins(0, 0, 0, 0)
-        list_page_layout.setSpacing(0)
-        list_page_layout.addWidget(self._list_card, 0, Qt.AlignmentFlag.AlignTop)
-
-        list_page = QWidget()
-        list_page.setLayout(list_page_layout)
-
-        self._grid_widget = QWidget()
-        self._grid_widget.setStyleSheet("background:transparent;")
-        self._grid = QGridLayout(self._grid_widget)
-        configure_dashboard_grid(self._grid, self._grid_widget)
-        self._grid_cols = grid_columns_for_width(self._grid_widget.width())
+        self._chrome = build_dashboard_panel_chrome(
+            self,
+            title="Arquivos recentes",
+            subtitle="Continue de onde parou",
+            controls=self._controls,
+            with_grid_empty=True,
+            outer_bottom_margin=0,
+        )
+        self._section_header = self._chrome.section_header
+        self._list_layout = self._chrome.list_layout
+        self._grid = self._chrome.grid
+        self._grid_widget = self._chrome.grid_widget
+        self._grid_empty_card = self._chrome.grid_empty_card
+        self._grid_empty_layout = self._chrome.grid_empty_layout
+        self._stack = self._chrome.stack
         self._grid_widget.installEventFilter(self)
-
-        self._stack = QStackedWidget()
-        self._stack.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
-        )
-        self._stack.addWidget(list_page)
-        self._stack.addWidget(self._wrap_grid_page())
-
-        self._section_header = TabSectionHeader(
-            "Arquivos recentes",
-            "Continue de onde parou",
-            right=self._controls,
-        )
-
-        centered_outer, column = make_centered_column()
-        column.addWidget(self._section_header)
-        column.addWidget(self._stack)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(centered_outer)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
     def refresh_appearance(self) -> None:
         self._section_header.refresh_appearance()
         self._controls.refresh_appearance()
         self._refresh_views()
 
-    def _wrap_grid_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, SPACING.xl)
-        layout.setSpacing(0)
-
-        self._grid_empty_card, self._grid_empty_layout = make_list_card_shell()
-        self._grid_empty_card.hide()
-        layout.addWidget(self._grid_empty_card, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(self._grid_widget, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addStretch(1)
-        return page
-
     def eventFilter(self, obj, event) -> bool:
         if obj is self._grid_widget and event.type() == QEvent.Type.Resize:
-            self._update_grid_columns()
+            if self._chrome.sync_grid_columns():
+                self._rebuild_grid(self._filtered_files())
         return super().eventFilter(obj, event)
-
-    def _update_grid_columns(self) -> None:
-        cols = grid_columns_for_width(self._grid_widget.width(), horizontal_margins=0)
-        if cols != self._grid_cols:
-            self._grid_cols = cols
-            self._rebuild_grid(self._filtered_files())
 
     def render(self, files: list[RecentFileSummary]) -> None:
         self._all_files = list(files)
@@ -196,10 +145,7 @@ class RecentesPanel(QWidget):
             self._list_layout.addWidget(row)
 
     def _rebuild_grid(self, files: list[RecentFileSummary]) -> None:
-        while self._grid.count():
-            item = self._grid.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        self._chrome.clear_grid()
 
         if not self._all_files:
             set_grid_filter_empty_mode(
@@ -212,7 +158,7 @@ class RecentesPanel(QWidget):
                 icon=icon_empty_file(),
             )
             empty.action_requested.connect(self.import_requested.emit)
-            self._grid.addWidget(empty, 0, 0, 1, max(1, self._grid_cols))
+            self._grid.addWidget(empty, 0, 0, 1, max(1, self._chrome.grid_cols))
             return
 
         if not files:
@@ -234,7 +180,7 @@ class RecentesPanel(QWidget):
             self._grid_empty_card, self._grid_widget, show_empty=False
         )
 
-        cols = max(1, self._grid_cols)
+        cols = max(1, self._chrome.grid_cols)
         place_cols = min(cols, len(files)) if files else cols
         for index, summary in enumerate(files):
             card = RecentFileCard(summary)
@@ -244,9 +190,9 @@ class RecentesPanel(QWidget):
         finalize_dashboard_grid(self._grid, place_cols)
 
     def _on_view_changed(self, mode: str) -> None:
-        self._stack.setCurrentIndex(0 if mode == "list" else 1)
-        if mode == "grid":
-            self._update_grid_columns()
+        self._chrome.set_view(mode)
+        if mode == "grid" and self._chrome.sync_grid_columns():
+            self._rebuild_grid(self._filtered_files())
 
     def _on_density_changed(self, mode: str) -> None:
         self._density = mode

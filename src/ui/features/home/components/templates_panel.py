@@ -4,36 +4,31 @@ from __future__ import annotations
 from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QSizePolicy,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from src.ui.components.cards import ActionCard, TemplateCard
 from src.ui.components.buttons import IconButton
+from src.ui.components.cards import ActionCard
 from src.ui.components.icons import icon_close, icon_empty_results
-from src.ui.features.home.models.dashboard import TemplateSummary, empty_results_messages, filter_templates
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, apply_elevation, caption_style
+from src.ui.features.home.components.dashboard_panel_shell import build_dashboard_panel_chrome
+from src.ui.features.home.components.empty_state import EmptyState
 from src.ui.features.home.components.grid_utils import (
     add_grid_card,
-    configure_dashboard_grid,
     finalize_dashboard_grid,
-    grid_columns_for_width,
 )
-from src.ui.components.centered_layout import make_centered_column
-from src.ui.features.home.components.empty_state import EmptyState
+from src.ui.features.home.components.home_cards import TemplateCard
 from src.ui.features.home.components.layout_utils import (
     add_filter_empty_state,
     clear_layout,
-    make_list_card_shell,
     set_grid_filter_empty_mode,
 )
-from src.ui.features.home.components.section_header import TabSectionHeader
 from src.ui.features.home.components.view_controls import ViewToggle
+from src.ui.features.home.models.dashboard import TemplateSummary, empty_results_messages, filter_templates
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, apply_elevation, caption_style
 
 
 class _TemplateListRow(QFrame):
@@ -174,73 +169,37 @@ class TemplatesPanel(QWidget):
         self._toggle = ViewToggle(default="grid")
         self._toggle.view_changed.connect(self._on_view_changed)
 
-        self._list_card, self._list_layout = make_list_card_shell()
-
-        list_page_layout = QVBoxLayout()
-        list_page_layout.setContentsMargins(0, 0, 0, 0)
-        list_page_layout.setSpacing(0)
-        list_page_layout.addWidget(self._list_card, 0, Qt.AlignmentFlag.AlignTop)
-
-        list_page = QWidget()
-        list_page.setLayout(list_page_layout)
-
-        self._grid_widget = QWidget()
-        self._grid_widget.setStyleSheet("background:transparent;")
-        self._grid = QGridLayout(self._grid_widget)
-        configure_dashboard_grid(self._grid, self._grid_widget)
-        self._grid_cols = grid_columns_for_width(self._grid_widget.width())
+        self._chrome = build_dashboard_panel_chrome(
+            self,
+            title="Meus templates",
+            subtitle="Estruturas reutilizáveis para seus relatórios de metrologia",
+            controls=self._toggle,
+            with_grid_empty=True,
+            outer_bottom_margin=0,
+        )
+        self._section_header = self._chrome.section_header
+        self._list_layout = self._chrome.list_layout
+        self._grid = self._chrome.grid
+        self._grid_widget = self._chrome.grid_widget
+        self._grid_empty_card = self._chrome.grid_empty_card
+        self._grid_empty_layout = self._chrome.grid_empty_layout
+        self._stack = self._chrome.stack
+        self._chrome.set_view("grid")
         self._grid_widget.installEventFilter(self)
-
-        self._stack = QStackedWidget()
-        self._stack.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
-        )
-        self._stack.addWidget(list_page)
-        self._stack.addWidget(self._wrap_grid_page())
-        self._stack.setCurrentIndex(1)
-
-        centered_outer, column = make_centered_column()
-
-        self._section_header = TabSectionHeader(
-            "Meus templates",
-            "Estruturas reutilizáveis para seus relatórios de metrologia",
-            right=self._toggle,
-        )
-        column.addWidget(self._section_header)
-        column.addWidget(self._stack)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(centered_outer)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
     def refresh_appearance(self) -> None:
         self._section_header.refresh_appearance()
         self._toggle.refresh_appearance()
         self._refresh_views()
 
-    def _wrap_grid_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, SPACING.xl)
-        layout.setSpacing(0)
-
-        self._grid_empty_card, self._grid_empty_layout = make_list_card_shell()
-        self._grid_empty_card.hide()
-        layout.addWidget(self._grid_empty_card, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addWidget(self._grid_widget, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addStretch(1)
-        return page
-
     def eventFilter(self, obj, event) -> bool:
         if obj is self._grid_widget and event.type() == QEvent.Type.Resize:
-            self._update_grid_columns()
+            if self._chrome.sync_grid_columns():
+                self._refresh_views()
         return super().eventFilter(obj, event)
 
     def _update_grid_columns(self) -> None:
-        cols = grid_columns_for_width(self._grid_widget.width(), horizontal_margins=0)
-        if cols != self._grid_cols:
-            self._grid_cols = cols
+        if self._chrome.sync_grid_columns():
             self._refresh_views()
 
     def render(self, templates: list[TemplateSummary]) -> None:
@@ -295,10 +254,7 @@ class TemplatesPanel(QWidget):
             self._list_layout.addWidget(create_row)
 
     def _rebuild_grid(self, templates: list[TemplateSummary]) -> None:
-        while self._grid.count():
-            item = self._grid.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        self._chrome.clear_grid()
 
         templates = self._filtered_templates()
         is_filtering = bool(self._filter_query.strip())
@@ -322,7 +278,7 @@ class TemplatesPanel(QWidget):
             self._grid_empty_card, self._grid_widget, show_empty=False
         )
 
-        cols = max(1, self._grid_cols)
+        cols = max(1, self._chrome.grid_cols)
         # +1 pelo card "Novo template" quando não está filtrando
         total_slots = len(templates) + (0 if is_filtering else 1)
         place_cols = min(cols, total_slots) if total_slots else cols
@@ -348,7 +304,7 @@ class TemplatesPanel(QWidget):
         finalize_dashboard_grid(self._grid, place_cols)
 
     def _on_view_changed(self, mode: str) -> None:
-        self._stack.setCurrentIndex(0 if mode == "list" else 1)
+        self._chrome.set_view(mode)
         if mode == "grid":
             self._update_grid_columns()
 
