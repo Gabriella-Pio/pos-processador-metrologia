@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -18,10 +17,7 @@ from src.ui.features.workspace.document_commit import (
     refresh_export_validation,
 )
 from src.core.application.project_service import ProjectService
-from src.core.application.project_snapshot_serializer import (
-    apply_workspace_to_document,
-    deserialize_project_snapshot,
-)
+from src.core.application.project_snapshot_serializer import deserialize_project_snapshot
 from src.core.application.template_media import (
     locked_workspace_media_kinds,
     merge_workspace_media_kinds,
@@ -56,6 +52,14 @@ from src.ui.features.workspace.commands.project_commands import ProjectCommands
 from src.ui.features.workspace.commands.section_edit_commands import SectionEditCommands
 from src.ui.features.workspace.commands.template_commands import TemplateCommands
 from src.ui.features.workspace.commands.version_commands import VersionCommands
+from src.ui.features.workspace.helpers.workspace_helpers import (
+    catalog_section_presence,
+    dimensional_document_for_edit,
+    document_with_timeline,
+    preview_error_summary,
+    slot_progress_label,
+    version_status_text as format_version_status,
+)
 from src.ui.features.workspace.presenters.section_summary_presenter import SectionSummaryPresenter
 from src.ui.features.workspace.services.document_session_service import DocumentSessionService
 from src.ui.features.workspace.services.preview_service import PreviewService
@@ -277,12 +281,7 @@ class WorkspaceViewModel(QObject):
 
         if active_first and total > 1:
             slot = session.documents[active]
-            label = (
-                slot.source_pdf_path.name
-                if slot.source_pdf_path and slot.source_pdf_path.name
-                else slot.evaluated_component or f"arquivo {active + 1}"
-            )
-            self._update_busy_progress(1, total, label)
+            self._update_busy_progress(1, total, slot_progress_label(slot, active))
             if not self._parse_slot(session, active):
                 return False
             pending = [i for i in range(total) if i != active]
@@ -293,12 +292,7 @@ class WorkspaceViewModel(QObject):
 
         for index in range(total):
             slot = session.documents[index]
-            label = (
-                slot.source_pdf_path.name
-                if slot.source_pdf_path and slot.source_pdf_path.name
-                else slot.evaluated_component or f"arquivo {index + 1}"
-            )
-            self._update_busy_progress(index + 1, total, label)
+            self._update_busy_progress(index + 1, total, slot_progress_label(slot, index))
             if not self._parse_slot(session, index):
                 return False
         return True
@@ -332,11 +326,7 @@ class WorkspaceViewModel(QObject):
             self.import_notice.emit("Imagens Bosello", notice)
         done = sum(1 for slot in session.documents if slot.document is not None)
         total = self._bg_parse_total or len(session.documents)
-        label = (
-            session.documents[index].source_pdf_path.name
-            if session.documents[index].source_pdf_path
-            else f"arquivo {index + 1}"
-        )
+        label = slot_progress_label(session.documents[index], index)
         # Progresso sem bloquear o cursor (overlay só se já estiver busy).
         self.busy_progress.emit(done, total, label)
 
@@ -346,12 +336,7 @@ class WorkspaceViewModel(QObject):
             return
         label = f"arquivo {index + 1}"
         if session is not None and 0 <= index < len(session.documents):
-            slot = session.documents[index]
-            label = (
-                slot.source_pdf_path.name
-                if slot.source_pdf_path and slot.source_pdf_path.name
-                else slot.evaluated_component or label
-            )
+            label = slot_progress_label(session.documents[index], index)
         self._cancel_deferred_parse()
         self.error_occurred.emit(
             "Não foi possível ler o PDF",
@@ -378,12 +363,7 @@ class WorkspaceViewModel(QObject):
             return True
         self._bg_parse.claim_for_sync(index)
         slot = session.documents[index]
-        label = (
-            slot.source_pdf_path.name
-            if slot.source_pdf_path and slot.source_pdf_path.name
-            else slot.evaluated_component or f"arquivo {index + 1}"
-        )
-        self._begin_busy("Lendo PDF…", label)
+        self._begin_busy("Lendo PDF…", slot_progress_label(slot, index))
         try:
             ok = self._parse_slot(session, index)
             return ok
@@ -401,12 +381,7 @@ class WorkspaceViewModel(QObject):
         try:
             for offset, index in enumerate(pending, start=1):
                 slot = session.documents[index]
-                label = (
-                    slot.source_pdf_path.name
-                    if slot.source_pdf_path and slot.source_pdf_path.name
-                    else f"arquivo {index + 1}"
-                )
-                self._update_busy_progress(offset, len(pending), label)
+                self._update_busy_progress(offset, len(pending), slot_progress_label(slot, index))
                 if not self._parse_slot(session, index):
                     return False
             return True
@@ -523,12 +498,7 @@ class WorkspaceViewModel(QObject):
             total = len(new_indices)
             for offset, index in enumerate(new_indices, start=1):
                 slot = session.documents[index]
-                label = (
-                    slot.source_pdf_path.name
-                    if slot.source_pdf_path and slot.source_pdf_path.name
-                    else f"arquivo {offset}"
-                )
-                self._update_busy_progress(offset, total, label)
+                self._update_busy_progress(offset, total, slot_progress_label(slot, offset - 1))
                 if not self._parse_slot(session, index):
                     return
             ProjectCommands.ensure_project_attachment_paths(session)
@@ -638,10 +608,9 @@ class WorkspaceViewModel(QObject):
         )
         if not ok:
             slot = session.documents[index]
-            label = slot.source_pdf_path.name if slot.source_pdf_path.name else slot.evaluated_component
             self.error_occurred.emit(
                 "Não foi possível ler o PDF",
-                f"Erro ao processar {label}.",
+                f"Erro ao processar {slot_progress_label(slot, index)}.",
                 details,
             )
             return False
@@ -670,19 +639,11 @@ class WorkspaceViewModel(QObject):
 
     def _dimensional_document_for_edit(self) -> ReportDocument | None:
         """Documento onde persistem as medições dimensionais (peça CALYPSO base)."""
-        if not self._is_unified_editing():
-            return self._active_document()
-        session = self._app_state.project_session
-        if session is None:
-            return self._active_document()
-        for slot in session.documents:
-            doc = slot.document
-            if doc is None:
-                continue
-            kind = slot.source_kind or doc.source_kind or "calypso"
-            if kind == "calypso":
-                return doc
-        return self._active_document()
+        return dimensional_document_for_edit(
+            self._app_state.project_session,
+            self._active_document(),
+            unified_editing=self._is_unified_editing(),
+        )
 
     def update_parsed_field(self, key: str, value: str) -> None:
         self._mutate_data(
@@ -990,33 +951,12 @@ class WorkspaceViewModel(QObject):
         )
         if document is None:
             return []
-
-        try:
-            present = {section["id"] for section in self._exporter.list_sections(document)}
-        except Exception:
-            present = set()
-        present.update(
-            sid for sid in (getattr(document, "extra_section_ids", None) or []) if sid
+        present, deleted = catalog_section_presence(
+            document,
+            self._exporter,
+            self._app_state.project_session,
+            unified_editing=self._is_unified_editing(),
         )
-        present.update(
-            str(item.get("id"))
-            for item in document.custom_sections
-            if item.get("id")
-        )
-        if self._is_unified_editing():
-            session = self._app_state.project_session
-            if session is not None:
-                present.update(session.unified_extra_section_ids)
-                present.update(
-                    str(item.get("id"))
-                    for item in session.unified_custom_sections
-                    if item.get("id")
-                )
-                deleted = set(session.unified_deleted_section_ids)
-            else:
-                deleted = set(document.deleted_section_ids)
-        else:
-            deleted = set(document.deleted_section_ids)
         return list_addable_catalog_sections(
             present_section_ids=present,
             deleted_section_ids=deleted,
@@ -1177,21 +1117,10 @@ class WorkspaceViewModel(QObject):
         self,
         document: ReportDocument | None,
     ) -> ReportDocument | None:
-        if document is None:
-            return None
-        timeline = self.list_version_timeline()
-        if not timeline or timeline == document.version_history:
-            return document
-        return replace(document, version_history=list(timeline))
+        return document_with_timeline(document, self.list_version_timeline())
 
     def _preview_error_summary(self, details: str, *, max_len: int = 240) -> str:
-        lines = [line.strip() for line in details.strip().splitlines() if line.strip()]
-        if not lines:
-            return "Não foi possível determinar a causa do erro."
-        message = lines[-1]
-        if len(message) > max_len:
-            return f"{message[: max_len - 3]}..."
-        return message
+        return preview_error_summary(details, max_len=max_len)
 
     def _on_preview_failed(self, details: str) -> None:
         self.error_occurred.emit(
@@ -1364,13 +1293,11 @@ class WorkspaceViewModel(QObject):
         return list(document.version_history) if document is not None else []
 
     def version_status_text(self) -> str:
-        if self._viewing_version is not None:
-            return f"Visualizando versão v{self._viewing_version}"
-        if self._editing_from_version is not None:
-            return f"Editando a partir da v{self._editing_from_version}"
-        if self._last_registered_version is not None:
-            return f"Versão v{self._last_registered_version} registrada"
-        return "Rascunho salvo"
+        return format_version_status(
+            viewing_version=self._viewing_version,
+            editing_from_version=self._editing_from_version,
+            last_registered_version=self._last_registered_version,
+        )
 
     def restore_version(self, version_number: int) -> bool:
         session = self._app_state.project_session
@@ -1405,17 +1332,12 @@ class WorkspaceViewModel(QObject):
         for index in range(len(restored.documents)):
             if not self._parse_slot(restored, index):
                 return False
-            slot = restored.documents[index]
-            document = slot.document
-            if document is None:
-                continue
-            key = str(slot.source_pdf_path)
-            if key in workspaces:
-                apply_workspace_to_document(document, workspaces[key])
-            if key in histories:
-                document.version_history = histories[key]
-            if self._session_repo is not None:
-                self._session_repo.save(document)
+        VersionCommands.apply_snapshot_workspaces(
+            restored,
+            workspaces,
+            histories,
+            session_repo=self._session_repo,
+        )
 
         ProjectCommands.ensure_project_attachment_paths(restored)
         self._persist_project()
@@ -1481,32 +1403,14 @@ class WorkspaceViewModel(QObject):
 
     def _document_from_snapshot(self, version_number: int) -> ReportDocument | None:
         session = self._app_state.project_session
-        if session is None or not session.project_id:
+        if session is None:
             return None
-        snapshot = self._snapshot_service.get_snapshot(session.project_id, version_number)
-        if snapshot is None:
-            return None
-        try:
-            restored, workspaces, histories = deserialize_project_snapshot(
-                snapshot.snapshot_json
-            )
-        except (ValueError, TypeError):
-            return None
-        if not restored.documents:
-            return None
-        index = min(max(session.active_index, 0), len(restored.documents) - 1)
-        if not self._doc_service.parse_slot(restored, index)[0]:
-            return None
-        slot = restored.documents[index]
-        document = slot.document
-        if document is None:
-            return None
-        key = str(slot.source_pdf_path)
-        if key in workspaces:
-            apply_workspace_to_document(document, workspaces[key])
-        if key in histories:
-            document.version_history = histories[key]
-        return document
+        return VersionCommands.document_from_snapshot(
+            self._snapshot_service,
+            self._doc_service,
+            session,
+            version_number,
+        )
 
     def export_document(self, output_path: Path) -> None:
         outcome = self._export_commands.export_document(
