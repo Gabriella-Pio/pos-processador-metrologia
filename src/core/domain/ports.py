@@ -249,6 +249,11 @@ class ProjectRepositoryPort(ABC):
     def list_recent(self, limit: int = 50) -> list:
         ...
 
+    @abstractmethod
+    def delete(self, project_id: str) -> bool:
+        """Remove o projeto e versões associadas. True se algo foi apagado."""
+        ...
+
 
 class VersionSnapshotPort(ABC):
     """Porta de snapshots de versão por projeto (Fase 4)."""

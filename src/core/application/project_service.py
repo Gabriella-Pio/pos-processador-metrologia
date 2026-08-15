@@ -50,3 +50,17 @@ class ProjectService:
         workspace.display_name = cleaned
         self._repo.save(workspace)
         return True
+
+    def delete(self, project_id: str) -> bool:
+        if self._repo is None:
+            return False
+        return self._repo.delete(project_id)
+
+    def delete_many(self, project_ids: list[str]) -> int:
+        if self._repo is None:
+            return 0
+        removed = 0
+        for project_id in project_ids:
+            if self._repo.delete(project_id):
+                removed += 1
+        return removed

@@ -87,7 +87,7 @@ class _StickyTabScrollHost(QWidget):
             self._tab_bar.set_stuck(stuck)
 
 
-from src.ui.components.feedback import confirm_action, show_friendly_error
+from src.ui.components.feedback import confirm_action, confirm_dangerous_action, show_friendly_error
 from src.ui.features.home.components.hero import HeroCommandBar
 from src.ui.components.tab_bar import TabBar
 from src.ui.features.home.models.dashboard import (
@@ -152,6 +152,7 @@ class HomeView(QWidget):
         self._projects_panel = OngoingProjectsPanel()
         self._projects_panel.opened.connect(self.project_opened.emit)
         self._projects_panel.renamed.connect(self._on_project_renamed)
+        self._projects_panel.delete_requested.connect(self._on_projects_delete_requested)
         self._projects_panel.import_requested.connect(self.new_document_requested.emit)
 
         self._exports_panel = ExportsPanel()
@@ -239,6 +240,30 @@ class HomeView(QWidget):
 
     def _on_project_renamed(self, project_id: str, display_name: str) -> None:
         self._vm.rename_project(project_id, display_name)
+
+    def _on_projects_delete_requested(self, project_ids: list) -> None:
+        ids = [str(pid) for pid in project_ids if pid]
+        if not ids:
+            return
+        by_id = {p.project_id: p for p in self._projects}
+        if len(ids) == 1:
+            name = by_id[ids[0]].display_name if ids[0] in by_id else ids[0]
+            message = (
+                f"“{name}” será removido permanentemente.\n\n"
+                "Exports já gerados não são apagados."
+            )
+            title = "Excluir projeto?"
+        else:
+            message = (
+                f"{len(ids)} projetos serão removidos permanentemente.\n\n"
+                "Exports já gerados não são apagados."
+            )
+            title = "Excluir projetos?"
+        if not confirm_dangerous_action(self, title, message):
+            return
+        removed = self._vm.delete_projects(ids)
+        if removed:
+            self._projects_panel.clear_selection()
 
     def _apply_list_filters(self) -> None:
         state = self._merged_list_filter_state()

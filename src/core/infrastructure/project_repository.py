@@ -77,6 +77,16 @@ class SQLiteProjectRepository(ProjectRepositoryPort):
             ).fetchall()
         return [self._row_to_workspace(row) for row in rows]
 
+    def delete(self, project_id: str) -> bool:
+        with self._db._conectar() as conn:
+            conn.execute(
+                "DELETE FROM project_versions WHERE project_id = ?",
+                (project_id,),
+            )
+            cursor = conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
     def _row_to_workspace(self, row: tuple) -> ProjectWorkspace:
         slots_raw = json.loads(row[4] or "[]")
         updated = self._parse_data(row[6]) if row[6] else None

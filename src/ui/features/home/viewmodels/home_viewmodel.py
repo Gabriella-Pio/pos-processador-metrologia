@@ -84,6 +84,23 @@ class HomeViewModel(QObject):
                 traceback.format_exc(),
             )
 
+    def delete_projects(self, project_ids: list[str]) -> int:
+        if self._project_service is None or not project_ids:
+            return 0
+        try:
+            removed = self._project_service.delete_many(project_ids)
+        except Exception:  # noqa: BLE001
+            logger.exception("Falha ao excluir projetos")
+            self.error_occurred.emit(
+                "Não foi possível excluir o(s) projeto(s)",
+                "O banco de dados local pode estar indisponível.",
+                traceback.format_exc(),
+            )
+            return 0
+        if removed:
+            self._load_ongoing_projects()
+        return removed
+
     def _load_templates(self) -> None:
         try:
             raw_templates = self._template_repo.list_templates()

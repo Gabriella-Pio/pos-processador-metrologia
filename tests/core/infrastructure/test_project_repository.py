@@ -46,3 +46,37 @@ def test_projects_roundtrip(db_path: Path) -> None:
     assert len(ongoing) == 1
     assert ongoing[0].id == project_id
     assert len(ongoing[0].slots) == 2
+
+    assert service.rename(project_id, "Novo nome")
+    renamed = service.load_metadata(project_id)
+    assert renamed is not None
+    assert renamed.display_name == "Novo nome"
+
+    assert service.delete(project_id)
+    assert service.load_session(project_id) is None
+    assert service.list_ongoing() == []
+
+
+def test_delete_many_projects(db_path: Path) -> None:
+    db = DatabaseManager(str(db_path))
+    service = ProjectService(SQLiteProjectRepository(db))
+    ids = []
+    for name in ("A", "B", "C"):
+        pid = service.save_session(
+            ProjectSession(
+                client_project=name,
+                template_id="default",
+                report_mode="mmc",
+                documents=[
+                    ProjectDocumentSlot(
+                        source_pdf_path=Path(f"/data/{name}.pdf"),
+                        evaluated_component=name,
+                    )
+                ],
+            )
+        )
+        ids.append(pid)
+    assert service.delete_many([ids[0], ids[2]]) == 2
+    remaining = service.list_ongoing()
+    assert len(remaining) == 1
+    assert remaining[0].id == ids[1]
