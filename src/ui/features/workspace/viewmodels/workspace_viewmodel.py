@@ -65,6 +65,7 @@ from src.ui.features.workspace.services.document_session_service import Document
 from src.ui.features.workspace.services.preview_service import PreviewService
 from src.ui.features.workspace.services.slot_parse_worker import BackgroundSlotParseQueue
 from src.ui.features.workspace.services.template_workspace_service import TemplateWorkspaceService
+from src.ui.features.workspace.services.unified_session_edits import UnifiedSessionEdits
 from src.ui.features.workspace.undo_stack import DocumentUndoStack
 from src.ui.controllers.app_state import AppState
 from src.ui.shared.report_editor.preview_worker import (
@@ -697,23 +698,16 @@ class WorkspaceViewModel(QObject):
     def _is_unified_editing(self) -> bool:
         return bool(self._export_mode_unified and self._is_multi_document())
 
-    def _update_unified_section_override(self, section_id: str, **fields) -> bool:
-        session = self._app_state.project_session
-        if session is None:
-            return False
-        overrides = dict(session.unified_section_overrides.get(section_id) or {})
-        for key, value in fields.items():
-            if value is None:
-                overrides.pop(key, None)
-            else:
-                overrides[key] = value
-        session.unified_section_overrides[section_id] = overrides
+    def _commit_unified_layout(self) -> None:
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
-        return True
 
     def update_section_field(self, section_id: str, field: str, value: str) -> None:
         if self._is_unified_editing():
-            self._update_unified_section_override(section_id, **{field: value})
+            session = self._app_state.project_session
+            if session is not None and UnifiedSessionEdits.update_section_override(
+                session, section_id, **{field: value}
+            ):
+                self._commit_unified_layout()
             return
         self._mutate_layout(
             lambda doc: SectionEditCommands.update_section_field(doc, section_id, field, value)
@@ -722,16 +716,10 @@ class WorkspaceViewModel(QObject):
     def restore_section_block(self, section_id: str, title_key: str, body_key: str) -> None:
         if self._is_unified_editing():
             session = self._app_state.project_session
-            if session is None:
-                return
-            overrides = dict(session.unified_section_overrides.get(section_id) or {})
-            overrides.pop(title_key, None)
-            overrides.pop(body_key, None)
-            if overrides:
-                session.unified_section_overrides[section_id] = overrides
-            else:
-                session.unified_section_overrides.pop(section_id, None)
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            if session is not None and UnifiedSessionEdits.pop_override_keys(
+                session, section_id, title_key, body_key
+            ):
+                self._commit_unified_layout()
             return
         self._mutate_layout(
             lambda doc: SectionEditCommands.restore_section_block(
@@ -742,10 +730,10 @@ class WorkspaceViewModel(QObject):
     def restore_section(self, section_id: str) -> None:
         if self._is_unified_editing():
             session = self._app_state.project_session
-            if session is None:
-                return
-            session.unified_section_overrides.pop(section_id, None)
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            if session is not None and UnifiedSessionEdits.clear_section_override(
+                session, section_id
+            ):
+                self._commit_unified_layout()
             return
         self._mutate_layout(
             lambda doc: SectionEditCommands.restore_section(doc, section_id)
@@ -754,15 +742,10 @@ class WorkspaceViewModel(QObject):
     def restore_section_field(self, section_id: str, field: str) -> None:
         if self._is_unified_editing():
             session = self._app_state.project_session
-            if session is None:
-                return
-            overrides = dict(session.unified_section_overrides.get(section_id) or {})
-            overrides.pop(field, None)
-            if overrides:
-                session.unified_section_overrides[section_id] = overrides
-            else:
-                session.unified_section_overrides.pop(section_id, None)
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            if session is not None and UnifiedSessionEdits.pop_override_keys(
+                session, section_id, field
+            ):
+                self._commit_unified_layout()
             return
         self._mutate_layout(
             lambda doc: SectionEditCommands.restore_section_field(doc, section_id, field)
@@ -770,7 +753,11 @@ class WorkspaceViewModel(QObject):
 
     def update_section_table_rows(self, section_id: str, rows: list[dict[str, str]]) -> None:
         if self._is_unified_editing():
-            self._update_unified_section_override(section_id, table_rows=list(rows))
+            session = self._app_state.project_session
+            if session is not None and UnifiedSessionEdits.update_section_override(
+                session, section_id, table_rows=list(rows)
+            ):
+                self._commit_unified_layout()
             return
         self._mutate_layout(
             lambda doc: SectionEditCommands.update_section_table_rows(doc, section_id, rows)
@@ -779,15 +766,10 @@ class WorkspaceViewModel(QObject):
     def restore_section_table_rows(self, section_id: str) -> None:
         if self._is_unified_editing():
             session = self._app_state.project_session
-            if session is None:
-                return
-            overrides = dict(session.unified_section_overrides.get(section_id) or {})
-            overrides.pop("table_rows", None)
-            if overrides:
-                session.unified_section_overrides[section_id] = overrides
-            else:
-                session.unified_section_overrides.pop(section_id, None)
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            if session is not None and UnifiedSessionEdits.pop_override_keys(
+                session, section_id, "table_rows"
+            ):
+                self._commit_unified_layout()
             return
         self._mutate_layout(
             lambda doc: SectionEditCommands.restore_section_table_rows(doc, section_id)
@@ -798,22 +780,8 @@ class WorkspaceViewModel(QObject):
             session = self._app_state.project_session
             if session is None:
                 return False
-            customs = [
-                item for item in session.unified_custom_sections
-                if item.get("id") != section_id
-            ]
-            if len(customs) == len(session.unified_custom_sections) and not section_id.startswith("custom_"):
-                # Catálogo extra: remove da lista e marca como desligada.
-                extras = [sid for sid in session.unified_extra_section_ids if sid != section_id]
-                session.unified_extra_section_ids = extras
-                deleted = list(session.unified_deleted_section_ids)
-                if section_id not in deleted:
-                    deleted.append(section_id)
-                session.unified_deleted_section_ids = deleted
-            else:
-                session.unified_custom_sections = customs
-            session.unified_section_overrides.pop(section_id, None)
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            UnifiedSessionEdits.delete_section(session, section_id)
+            self._commit_unified_layout()
             return True
 
         document = self._active_document()
@@ -830,20 +798,13 @@ class WorkspaceViewModel(QObject):
         if section_id in PROTECTED_SECTION_IDS:
             return
 
-        # Modo unificado: preferência fica no projeto (o PDF consolidado é remontado).
-        if self._export_mode_unified and self._is_multi_document():
+        if self._is_unified_editing():
             session = self._app_state.project_session
             if session is None:
                 return
-            deleted = list(session.unified_deleted_section_ids)
-            if enabled:
-                if section_id in deleted:
-                    deleted.remove(section_id)
-            elif section_id not in deleted:
-                deleted.append(section_id)
-            session.unified_deleted_section_ids = deleted
-            self.refresh_sections_summary()
-            self.schedule_preview()
+            if UnifiedSessionEdits.set_section_enabled(session, section_id, enabled):
+                self.refresh_sections_summary()
+                self.schedule_preview()
             return
 
         document = self._active_document()
@@ -853,24 +814,18 @@ class WorkspaceViewModel(QObject):
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
 
     def update_section_media_kinds(self, section_id: str, kinds: list[str]) -> None:
-        if self._export_mode_unified and self._is_multi_document():
+        if self._is_unified_editing():
             session = self._app_state.project_session
             if session is None:
                 return
-            locked = (
-                []
-                if section_id in CHART_SECTION_IDS
-                else locked_workspace_media_kinds(
-                    section_id, session.active_document, self._template_repo
-                )
-                if session.active_document
-                else []
-            )
-            merged = sanitize_workspace_media_kinds(section_id, locked, kinds)
-            overrides = dict(session.unified_section_overrides.get(section_id) or {})
-            overrides["media_kinds"] = merged
-            session.unified_section_overrides[section_id] = overrides
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            if UnifiedSessionEdits.update_section_media_kinds(
+                session,
+                section_id,
+                kinds,
+                template_repo=self._template_repo,
+                active_document=session.active_document,
+            ):
+                self._commit_unified_layout()
             return
 
         document = self._active_document()
@@ -882,17 +837,12 @@ class WorkspaceViewModel(QObject):
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
 
     def update_disabled_chart_ids(self, section_id: str, disabled_ids: list[str]) -> None:
-        if self._export_mode_unified and self._is_multi_document():
+        if self._is_unified_editing():
             session = self._app_state.project_session
             if session is None:
                 return
-            overrides = dict(session.unified_section_overrides.get(section_id) or {})
-            if disabled_ids:
-                overrides["disabled_chart_ids"] = list(disabled_ids)
-            else:
-                overrides.pop("disabled_chart_ids", None)
-            session.unified_section_overrides[section_id] = overrides
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            if UnifiedSessionEdits.update_disabled_chart_ids(session, section_id, disabled_ids):
+                self._commit_unified_layout()
             return
 
         document = self._active_document()
@@ -902,7 +852,7 @@ class WorkspaceViewModel(QObject):
         self._commit_document_change(preview=True, summary=True, layout_dirty=True)
 
     def locked_media_kinds(self, section_id: str) -> list[str]:
-        if self._export_mode_unified and self._is_multi_document() and section_id in CHART_SECTION_IDS:
+        if self._is_unified_editing() and section_id in CHART_SECTION_IDS:
             return []
         document = self._active_document()
         if document is None:
@@ -915,21 +865,9 @@ class WorkspaceViewModel(QObject):
             session = self._app_state.project_session
             if session is None:
                 return None
-            customs = list(session.unified_custom_sections)
-            next_index = len(customs) + 1
-            section_id = f"custom_{next_index}"
-            while any(item.get("id") == section_id for item in customs):
-                next_index += 1
-                section_id = f"custom_{next_index}"
-            customs.append({"id": section_id, "title": cleaned, "custom": True})
-            session.unified_custom_sections = customs
-            session.unified_section_overrides[section_id] = {
-                "media_kinds": ["photos", "tables", "graphics"],
-                "title": cleaned,
-            }
-            deleted = [sid for sid in session.unified_deleted_section_ids if sid != section_id]
-            session.unified_deleted_section_ids = deleted
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
+            section_id = UnifiedSessionEdits.add_custom_section(session, cleaned)
+            if section_id is not None:
+                self._commit_unified_layout()
             return section_id
 
         document = self._active_document()
@@ -967,20 +905,10 @@ class WorkspaceViewModel(QObject):
             session = self._app_state.project_session
             if session is None:
                 return None
-            from src.core.domain.section_schema import PROTECTED_SECTION_IDS, SECTION_TITLES
-
-            sid = (section_id or "").strip()
-            if not sid or sid in PROTECTED_SECTION_IDS or sid not in SECTION_TITLES:
-                return None
-            extras = list(session.unified_extra_section_ids)
-            if sid not in extras:
-                extras.append(sid)
-            session.unified_extra_section_ids = extras
-            session.unified_deleted_section_ids = [
-                item for item in session.unified_deleted_section_ids if item != sid
-            ]
-            self._commit_document_change(preview=True, summary=True, layout_dirty=True)
-            return sid
+            added = UnifiedSessionEdits.add_catalog_section(session, section_id)
+            if added is not None:
+                self._commit_unified_layout()
+            return added
 
         document = self._active_document()
         if document is None:
