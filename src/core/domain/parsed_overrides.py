@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from src.core.parser.table_extractor import MedicaoItemDto
+from src.core.domain.measurement_dto import MedicaoItemDto
 
 
 def medicao_item_to_dict(item: MedicaoItemDto) -> dict[str, str]:

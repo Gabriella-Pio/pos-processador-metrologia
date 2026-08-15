@@ -1,22 +1,11 @@
 import re
-from dataclasses import dataclass
 from typing import List, Tuple
 from .constants import (
     LIXO_TECNICO, SIGLAS_VALIDAS, TERMOS_PARAMETROS_MAQUINA, 
     TERMOS_CARACTERISTICAS, TERMOS_PARADA_BLOCO, SECOES_METROLOGIA
 )
 from .utils import ParserUtils
-
-@dataclass
-class MedicaoItemDto:
-    caracteristica: str
-    tipo: str
-    valor_medido: str
-    nominal: str
-    tol_superior: str
-    tol_inferior: str
-    desvio: str
-    status: str
+from src.core.domain.measurement_dto import MedicaoItemDto
 
 class TableExtractor:
 

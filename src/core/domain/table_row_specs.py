@@ -70,12 +70,12 @@ TABLE_SECTIONS = frozenset({"identificacao", "controle_tecnico", "introducao", "
 def uses_table_rows_editor(section_id: str) -> bool:
     """Seções cuja aba Tabela usa o editor label/valor (inclui resumos estatísticos)."""
     from src.core.domain.section_schema import is_custom_section_id
-    from src.core.application.statistical_aggregator import tipo_from_estat_section_id
 
     return (
         section_id in TABLE_SECTIONS
         or is_custom_section_id(section_id)
-        or bool(tipo_from_estat_section_id(section_id))
+        or section_id.startswith("estat_resumo_")
+        or section_id.startswith("estat_detalhe_")
     )
 
 
