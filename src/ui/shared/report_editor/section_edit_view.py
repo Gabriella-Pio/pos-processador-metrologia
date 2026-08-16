@@ -1,50 +1,35 @@
-"""Formulário de edição de seção — título, blocos agrupados, mídia e placeholders."""
+"""Formulário de edição de seção — fachada sobre abas Conteúdo / Layout / Fotos / Gráficos / Tabela."""
 from __future__ import annotations
 
 from pathlib import Path
 
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QFrame,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QScrollArea,
-    QTabWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
+    QTabWidget,
 )
 
 from src.core.domain.chart_figure_defs import chart_figure_defs
-from src.core.domain.report_field_registry import get_edit_fields, get_media_blocks
+from src.core.domain.report_field_registry import get_media_blocks
 from src.core.application.interpretacao_edit import interpretacao_field_defs
 from src.core.domain.ports import ReportImage, VersionEntry
-from src.core.domain.table_row_registry import (
-    INTRODUCAO_BLOCK_TITLES,
-    SECTION_HEADING_DEFAULTS,
-    TABLE_SECTIONS,
-    uses_table_rows_editor,
-)
-from src.core.domain.section_schema import is_custom_section_id
-from src.ui.components.buttons import IconButton, SecondaryButton
+from src.core.domain.table_row_registry import TABLE_SECTIONS, uses_table_rows_editor
+from src.ui.components.buttons import IconButton
 from src.ui.components.modal_presentation import present_modal_dialog
 from src.ui.components.icons import icon_close, icon_help
-from src.ui.components.inputs import ThemedComboBox
-from src.ui.components.panels import ImageManagerPanel
-from src.ui.components.panels.image_annotation_dialog import ImageAnnotationDialog
-from src.ui.components.placeholder_field import PlaceholderTextEdit
 from src.ui.shared.report_editor.sidebar_chrome import editor_panel_header
-from src.ui.styles import SPACING, caption_style, form_label_style, sidebar_panel_style
+from src.ui.styles import SPACING, sidebar_panel_style
 from src.ui.shared.report_editor.section_help_dialog import SectionHelpDialog
 from src.ui.shared.report_editor.draggable_table_rows_editor import DraggableTableRowsEditor
-from src.ui.shared.report_editor.section_form_builder import SectionFormBuilder
 from src.ui.shared.report_editor.section_tabs_builder import SectionTabPages, SectionTabsBuilder
 from src.ui.shared.report_editor.template_layout_panel import TemplateLayoutPanel
+from src.ui.shared.report_editor.section_content_tab import SectionContentTab
+from src.ui.shared.report_editor.section_graphics_tab import SectionGraphicsTab
+from src.ui.shared.report_editor.section_photos_tab import SectionPhotosTab
 from src.ui.features.workspace.components.edit_help import build_help_text
 from src.ui.features.workspace.components.medicoes_table_editor import MedicoesTableEditor
-from src.ui.features.workspace.components.section_field_schema import default_field_values
 
 
 class SectionEditView(QFrame):
@@ -76,15 +61,7 @@ class SectionEditView(QFrame):
         self._loading = False
         self._defaults_mode = False
         self._section_overrides: dict = {}
-        self._version_entries: list[VersionEntry] = []
         self._locked_media_kinds: list[str] = []
-        self._catalog_origin_options: list[dict[str, str]] = []
-        self._field_widgets: dict[str, PlaceholderTextEdit | QLineEdit] = {}
-        self._debounce = QTimer(self)
-        self._debounce.setSingleShot(True)
-        self._debounce.setInterval(600)
-        self._debounce.timeout.connect(self._flush_textarea_pending)
-        self._pending_textarea_key: str | None = None
 
         header, self._header_title, actions_host = editor_panel_header()
         actions_layout = actions_host.layout()
@@ -96,40 +73,26 @@ class SectionEditView(QFrame):
         actions_layout.addWidget(self._help_btn)
         actions_layout.addWidget(self._close_btn)
 
-        self._section_title_edit = PlaceholderTextEdit(multiline=False)
-        self._section_title_edit.text_changed.connect(self._on_section_title_changed)
-        section_title_header = QLabel("Título da seção")
-        section_title_header.setObjectName("GlobalFieldLabel")
-        title_card = QFrame()
-        title_card.setObjectName("GlobalFieldCard")
-        title_card_layout = QVBoxLayout(title_card)
-        title_card_layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, SPACING.sm)
-        title_card_layout.setSpacing(SPACING.xs)
-        title_card_layout.addWidget(section_title_header)
-        title_card_layout.addWidget(self._section_title_edit)
-        self._section_title_host = title_card
-
-        self._origin_picker = QFrame()
-        self._origin_picker.setObjectName("GlobalFieldCard")
-        origin_layout = QVBoxLayout(self._origin_picker)
-        origin_layout.setContentsMargins(SPACING.sm, SPACING.sm, SPACING.sm, SPACING.sm)
-        origin_layout.setSpacing(SPACING.xs)
-        origin_label = QLabel("BASE DA SEÇÃO")
-        origin_label.setObjectName("GlobalFieldLabel")
-        origin_label.setStyleSheet(form_label_style())
-        self._origin_combo = ThemedComboBox()
-        self._origin_combo.setMinimumHeight(38)
-        self._origin_combo.currentIndexChanged.connect(self._on_origin_combo_changed)
-        self._origin_hint = QLabel(
-            "Comece do zero ou troque por uma seção do catálogo ainda não usada neste relatório."
+        self._content_tab = SectionContentTab()
+        self._content_tab.section_field_changed.connect(self.section_field_changed.emit)
+        self._content_tab.section_field_restore_requested.connect(
+            self.section_field_restore_requested.emit
         )
-        self._origin_hint.setWordWrap(True)
-        self._origin_hint.setObjectName("SidebarHint")
-        self._origin_hint.setStyleSheet(caption_style())
-        origin_layout.addWidget(origin_label)
-        origin_layout.addWidget(self._origin_combo)
-        origin_layout.addWidget(self._origin_hint)
-        self._origin_picker.hide()
+        self._content_tab.section_restore_requested.connect(self.section_restore_requested.emit)
+        self._content_tab.delete_requested.connect(self.delete_requested.emit)
+        self._content_tab.catalog_section_chosen.connect(self.catalog_section_chosen.emit)
+        self._content_tab.manage_versions_requested.connect(self.manage_versions_requested.emit)
+
+        self._photos_tab = SectionPhotosTab()
+        self._photos_tab.image_dropped.connect(self.image_dropped.emit)
+        self._photos_tab.image_remove_requested.connect(self.image_remove_requested.emit)
+        self._photos_tab.image_caption_changed.connect(self.image_caption_changed.emit)
+        self._photos_tab.image_selected.connect(self.image_selected.emit)
+        self._photos_tab.image_edits_changed.connect(self.image_edits_changed.emit)
+        self._photos_tab.bosello_picker_requested.connect(self.bosello_picker_requested.emit)
+
+        self._graphics_tab = SectionGraphicsTab()
+        self._graphics_tab.disabled_chart_ids_changed.connect(self._on_disabled_chart_ids)
 
         self._table_rows_editor = DraggableTableRowsEditor(
             "Linhas da tabela (como no preview)",
@@ -138,68 +101,9 @@ class SectionEditView(QFrame):
         self._table_rows_editor.rows_changed.connect(self._on_table_rows_changed)
         self._table_rows_editor.restore_requested.connect(self._on_table_rows_restore)
 
-        self._fields_host = QWidget()
-        self._fields_layout = QVBoxLayout(self._fields_host)
-        self._fields_layout.setContentsMargins(0, 0, 0, 0)
-        self._fields_layout.setSpacing(SPACING.sm)
-        self._form_builder = SectionFormBuilder(
-            self._fields_host,
-            self._fields_layout,
-            defaults_mode=False,
-            on_field_changed=self._on_field_changed,
-            on_line_finished=self._on_line_finished,
-            on_field_restore=lambda sid, key: self.section_field_restore_requested.emit(sid, key),
-            on_manage_versions=self.manage_versions_requested.emit,
-        )
-
         self._medicoes_editor = MedicoesTableEditor()
         self._medicoes_editor.rows_changed.connect(self.itens_medicao_changed.emit)
         self._medicoes_editor.restore_requested.connect(self.itens_medicao_restore_requested.emit)
-
-        self._active_image: ReportImage | None = None
-        self._section_images: list[ReportImage] = []
-        self._image_panel = ImageManagerPanel(show_header=False, show_caption=False, expand_list=True)
-        self._image_panel.image_dropped.connect(self.image_dropped.emit)
-        self._image_panel.image_remove_requested.connect(self.image_remove_requested.emit)
-        self._image_panel.image_caption_changed.connect(self.image_caption_changed.emit)
-        self._image_panel.image_selected.connect(self._on_image_selected)
-        self._image_panel.image_edit_requested.connect(self._open_annotation_editor)
-        self._image_panel.choose_file_requested.connect(self._on_insert_photo)
-        self._image_panel.bosello_picker_requested.connect(self.bosello_picker_requested.emit)
-
-        self._annotation_dialog = ImageAnnotationDialog(self)
-        self._annotation_dialog.edits_changed.connect(self._on_annotation_dialog_edits_changed)
-        self._annotation_dialog.caption_changed.connect(self.image_caption_changed.emit)
-        self._annotation_dialog.photo_navigated.connect(self._on_dialog_photo_navigated)
-
-        self._edit_photo_btn = SecondaryButton("Editar legenda, marcações e crop…")
-        self._edit_photo_btn.setEnabled(False)
-        self._edit_photo_btn.clicked.connect(lambda: self._open_annotation_editor())
-
-        self._photos_page = QWidget()
-        photos_layout = QVBoxLayout(self._photos_page)
-        photos_layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
-        photos_layout.setSpacing(SPACING.sm)
-        self._photos_hint = QLabel(
-            "Fotos desta seção. Duplo clique na lista ou use o botão abaixo para editar. "
-            "No editor: ← → troca de foto."
-        )
-        self._photos_hint.setWordWrap(True)
-        self._photos_hint.setObjectName("SidebarHint")
-        self._photos_hint.setStyleSheet(caption_style())
-        photos_layout.addWidget(self._photos_hint)
-        photos_layout.addWidget(self._image_panel, stretch=1)
-        photos_layout.addWidget(self._edit_photo_btn, stretch=0)
-
-        self._graphics_page = QWidget()
-        self._graphics_layout = QVBoxLayout(self._graphics_page)
-        self._graphics_layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
-        self._graphics_hint = QLabel("Integração com gráficos Calypso em breve.")
-        self._graphics_hint.setWordWrap(True)
-        self._graphics_hint.setObjectName("SidebarHint")
-        self._graphics_layout.addWidget(self._graphics_hint)
-        self._chart_checkboxes: dict[str, QCheckBox] = {}
-        self._graphics_layout.addStretch(1)
 
         self._tables_page = QWidget()
         self._tables_layout = QVBoxLayout(self._tables_page)
@@ -211,29 +115,6 @@ class SectionEditView(QFrame):
         self._layout_panel.kinds_changed.connect(self._on_template_media_kinds_changed)
         self._layout_panel.blocked_action.connect(self._on_layout_blocked)
         self._tabs_builder = SectionTabsBuilder()
-
-        self._delete_btn = SecondaryButton("Excluir seção")
-        self._delete_btn.clicked.connect(self._on_delete)
-        self._restore_section_btn = SecondaryButton("Restaurar seção inteira")
-        self._restore_section_btn.clicked.connect(self._on_restore_section)
-
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
-        scroll_layout.setSpacing(SPACING.sm)
-        scroll_layout.addWidget(self._origin_picker)
-        scroll_layout.addWidget(self._section_title_host)
-        scroll_layout.addWidget(self._fields_host)
-        scroll_layout.addWidget(self._restore_section_btn)
-        scroll_layout.addWidget(self._delete_btn)
-        scroll_layout.addStretch(1)
-
-        self._content_scroll = QScrollArea()
-        self._content_scroll.setObjectName("SectionEditorScroll")
-        self._content_scroll.setWidgetResizable(True)
-        self._content_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._content_scroll.setWidget(scroll_content)
 
         self._tabs = QTabWidget()
         self._tabs.setObjectName("SectionEditorTabs")
@@ -247,73 +128,30 @@ class SectionEditView(QFrame):
 
     def set_defaults_mode(self, enabled: bool) -> None:
         self._defaults_mode = enabled
-        self._form_builder.set_defaults_mode(enabled)
-        self._delete_btn.setVisible(not enabled)
-        self._restore_section_btn.setVisible(not enabled)
+        self._content_tab.set_defaults_mode(enabled)
+        self._graphics_tab.set_defaults_mode(enabled)
         self._close_btn.setToolTip("Fechar edição" if not enabled else "Voltar ao sumário")
-        if enabled:
-            self._origin_picker.hide()
 
     def set_catalog_origin_options(self, options: list[dict[str, str]]) -> None:
-        self._catalog_origin_options = list(options or [])
-        if self._section_id is not None:
-            is_custom = is_custom_section_id(self._section_id) or self._section_id.startswith(
-                "custom_"
-            )
-            self._sync_origin_picker(is_custom=is_custom)
-
-    def _sync_origin_picker(self, *, is_custom: bool) -> None:
-        show = (
-            is_custom
-            and not self._defaults_mode
-            and bool(self._catalog_origin_options)
-        )
-        self._origin_picker.setVisible(show)
-        if not show:
-            return
-        self._origin_combo.blockSignals(True)
-        self._origin_combo.clear()
-        self._origin_combo.addItem("Personalizada — começar do zero", None)
-        for option in self._catalog_origin_options:
-            label = option.get("label") or option.get("id", "")
-            if option.get("action") == "restore":
-                label = f"{label} (reativar)"
-            self._origin_combo.addItem(label, option.get("id"))
-        self._origin_combo.setCurrentIndex(0)
-        self._origin_combo.blockSignals(False)
-
-    def _on_origin_combo_changed(self, index: int) -> None:
-        if self._loading or index < 0:
-            return
-        catalog_id = self._origin_combo.itemData(index)
-        if not catalog_id:
-            return
-        self.catalog_section_chosen.emit(str(catalog_id))
+        self._content_tab.set_catalog_origin_options(options)
 
     def reset_breadcrumb(self) -> None:
         self._header_title.setText("EDITAR SEÇÃO")
 
     def has_focused_editor(self) -> bool:
-        """True se o usuário está digitando em algum PlaceholderTextEdit desta view."""
-        if self._section_title_edit.has_editor_focus():
+        if self._content_tab.has_focused_editor():
             return True
-        if self._image_panel.is_caption_editing():
-            return True
-        if self._annotation_dialog.is_caption_editing():
+        if self._photos_tab.is_caption_editing():
             return True
         if self._table_rows_editor.has_focused_editor():
             return True
         if self._medicoes_editor.has_focused_editor():
             return True
-        for widget in self._field_widgets.values():
-            if isinstance(widget, PlaceholderTextEdit) and widget.has_editor_focus():
-                return True
         return False
 
     def has_pending_textarea(self) -> bool:
         return (
-            self._pending_textarea_key is not None
-            or self._debounce.isActive()
+            self._content_tab.has_pending_textarea()
             or self._table_rows_editor.has_pending_emit()
             or self._medicoes_editor.has_pending_emit()
         )
@@ -322,10 +160,8 @@ class SectionEditView(QFrame):
         self.setStyleSheet(sidebar_panel_style())
         self._close_btn.refresh_appearance()
         self._help_btn.refresh_appearance()
-        self._delete_btn.refresh_appearance()
-        self._image_panel.refresh_appearance()
-        self._edit_photo_btn.refresh_appearance()
-        self._annotation_dialog.refresh_appearance()
+        self._content_tab.refresh_action_buttons()
+        self._photos_tab.refresh_appearance()
 
     def open_section(
         self,
@@ -337,46 +173,44 @@ class SectionEditView(QFrame):
         version_entries: list[VersionEntry] | None = None,
         locked_media_kinds: list[str] | None = None,
     ) -> None:
-        # Interpretação muda de quantidade por PDF — se os campos diferem, reconstrói.
         if (
             self._section_id == section_id
-            and self._field_widgets
+            and self._content_tab.field_widgets
             and not self._needs_field_rebuild(section_id, overrides)
         ):
             self.patch_section(overrides, table_rows, itens_medicao, section)
             return
         self._loading = True
-        scroll_pos = self._content_scroll.verticalScrollBar().value()
+        self._content_tab.set_loading(True)
+        self._graphics_tab.set_loading(True)
         self._section_id = section_id
         self._section_overrides = dict(overrides)
         if version_entries is not None:
-            self._version_entries = list(version_entries)
+            self._content_tab.set_version_entries(version_entries)
         if locked_media_kinds is not None:
             self._locked_media_kinds = list(locked_media_kinds)
-        # Limpa fotos da seção anterior até o painel reaplicar o filtro.
-        self._image_panel.render_images([])
-        is_custom = section.get("custom", False) or section_id.startswith("custom_")
-        self._delete_btn.setVisible(is_custom and not self._defaults_mode)
-        self._restore_section_btn.setVisible(not is_custom and not self._defaults_mode)
-        self._sync_origin_picker(is_custom=is_custom)
 
-        self._rebuild_section_title(section_id, overrides)
+        self._photos_tab.set_section_id(section_id)
+        self._photos_tab.clear_images()
+        is_custom = section.get("custom", False) or section_id.startswith("custom_")
+        scroll_pos = self._content_tab.open_content(section_id, overrides, is_custom=is_custom)
         self._rebuild_table_rows(section_id, table_rows or [])
-        self._rebuild_fields(section_id, overrides, is_custom)
         self._rebuild_editor_tabs(section_id)
-        self._update_photos_hint(section)
-        self._rebuild_graphics_page(section_id, overrides)
+        self._photos_tab.update_hint(section)
+        self._graphics_tab.rebuild(section_id, overrides)
 
         if section_id == "resultados" and itens_medicao is not None:
             self._medicoes_editor.set_rows(itens_medicao)
         self._loading = False
-        self._content_scroll.verticalScrollBar().setValue(scroll_pos)
+        self._content_tab.set_loading(False)
+        self._graphics_tab.set_loading(False)
+        self._content_tab.restore_scroll(scroll_pos)
         self._update_breadcrumb(section)
 
     def _needs_field_rebuild(self, section_id: str, overrides: dict) -> bool:
         if section_id == "interpretacao":
             expected = {f.key for f in interpretacao_field_defs(overrides)}
-            current = set(self._field_widgets.keys())
+            current = set(self._content_tab.field_widgets.keys())
             return expected != current
         return False
 
@@ -399,25 +233,14 @@ class SectionEditView(QFrame):
             )
             return
         self._loading = True
-        scroll_pos = self._content_scroll.verticalScrollBar().value()
+        self._content_tab.set_loading(True)
+        self._graphics_tab.set_loading(True)
+        scroll_pos = self._content_tab.scroll_position()
         section_id = self._section_id
         prev_disabled = set(self._section_overrides.get("disabled_chart_ids") or [])
         prev_media = list(self._section_overrides.get("media_kinds") or [])
         self._section_overrides = dict(overrides)
-
-        default = SECTION_HEADING_DEFAULTS.get(section_id, overrides.get("title", section_id))
-        self._section_title_edit.set_text(overrides.get("section_title", default))
-
-        defaults = default_field_values(section_id)
-        for key, widget in self._field_widgets.items():
-            if key.startswith("title_"):
-                value = overrides.get(key, INTRODUCAO_BLOCK_TITLES.get(key, ""))
-            else:
-                value = overrides.get(key, defaults.get(key, ""))
-            if isinstance(widget, PlaceholderTextEdit):
-                widget.set_text(value)
-            elif isinstance(widget, QLineEdit):
-                widget.setText(value)
+        self._content_tab.patch_fields(section_id, overrides)
 
         if uses_table_rows_editor(section_id) and table_rows is not None:
             from src.core.application.statistical_aggregator import (
@@ -439,22 +262,19 @@ class SectionEditView(QFrame):
             new_disabled = set(self._section_overrides.get("disabled_chart_ids") or [])
             new_media = list(self._section_overrides.get("media_kinds") or prev_media)
             if new_disabled != prev_disabled or new_media != prev_media:
-                self._rebuild_graphics_page(section_id, self._section_overrides)
+                self._graphics_tab.rebuild(section_id, self._section_overrides)
         self._loading = False
-        self._content_scroll.verticalScrollBar().setValue(scroll_pos)
+        self._content_tab.set_loading(False)
+        self._graphics_tab.set_loading(False)
+        self._content_tab.restore_scroll(scroll_pos)
 
     def _update_breadcrumb(self, section: dict) -> None:
-        # Cabeçalho compacto — o título longo é editável na aba Conteúdo.
         _ = section
         self._header_title.setText("EDITAR SEÇÃO")
 
     def set_itens_medicao(self, rows: list[dict[str, str]]) -> None:
         if self._section_id == "resultados":
             self._medicoes_editor.set_rows(rows)
-
-    def _rebuild_section_title(self, section_id: str, overrides: dict) -> None:
-        default = SECTION_HEADING_DEFAULTS.get(section_id, overrides.get("title", section_id))
-        self._section_title_edit.set_text(overrides.get("section_title", default))
 
     def _rebuild_table_rows(self, section_id: str, rows: list[dict[str, str]]) -> None:
         if not uses_table_rows_editor(section_id):
@@ -478,22 +298,10 @@ class SectionEditView(QFrame):
             self._rebuild_editor_tabs(self._section_id)
 
     def set_version_entries(self, entries: list[VersionEntry]) -> None:
-        self._version_entries = list(entries)
+        self._content_tab.set_version_entries(entries)
+        self._content_tab.set_section_overrides(self._section_overrides)
         if self._section_id == "historico_versoes" and not self._defaults_mode:
-            self._field_widgets = self._form_builder.rebuild(
-                self._section_id,
-                self._section_overrides,
-                False,
-                version_entries=self._version_entries,
-            )
-
-    def _rebuild_fields(self, section_id: str, overrides: dict, is_custom: bool) -> None:
-        self._field_widgets = self._form_builder.rebuild(
-            section_id,
-            overrides,
-            is_custom,
-            version_entries=self._version_entries,
-        )
+            self._content_tab.rebuild_version_history_fields()
 
     def _rebuild_editor_tabs(self, section_id: str) -> None:
         self._tabs_builder.rebuild(
@@ -502,10 +310,10 @@ class SectionEditView(QFrame):
             section_overrides=self._section_overrides,
             defaults_mode=self._defaults_mode,
             pages=SectionTabPages(
-                content_scroll=self._content_scroll,
+                content_scroll=self._content_tab.scroll_area,
                 layout_panel=self._layout_panel,
-                photos_page=self._photos_page,
-                graphics_page=self._graphics_page,
+                photos_page=self._photos_tab,
+                graphics_page=self._graphics_tab,
                 tables_page=self._tables_page,
                 tables_layout=self._tables_layout,
                 table_rows_editor=self._table_rows_editor,
@@ -513,20 +321,6 @@ class SectionEditView(QFrame):
             ),
             locked_media_kinds=self._locked_media_kinds,
         )
-
-    def _current_overrides(self) -> dict:
-        if self._section_id is None:
-            return {}
-        values: dict = {}
-        if self._section_id:
-            default = SECTION_HEADING_DEFAULTS.get(self._section_id, "")
-            values["section_title"] = self._section_title_edit.get_text()
-        for key, widget in self._field_widgets.items():
-            if isinstance(widget, PlaceholderTextEdit):
-                values[key] = widget.get_text()
-            elif isinstance(widget, QLineEdit):
-                values[key] = widget.text()
-        return values
 
     def _on_layout_blocked(self, message: str) -> None:
         self._layout_panel.show_blocked_notice(message)
@@ -554,17 +348,10 @@ class SectionEditView(QFrame):
             self._section_overrides["media_kinds"] = merged
             self._rebuild_editor_tabs(self._section_id)
 
-    def _on_insert_photo(self) -> None:
-        from PyQt6.QtWidgets import QFileDialog
-
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Inserir fotografia",
-            "",
-            "Imagens (*.png *.jpg *.jpeg)",
-        )
-        if path:
-            self.image_dropped.emit(Path(path))
+    def _on_disabled_chart_ids(self, section_id: str, disabled: list) -> None:
+        self.disabled_chart_ids_changed.emit(section_id, disabled)
+        self._section_overrides = dict(self._section_overrides)
+        self._section_overrides["disabled_chart_ids"] = list(disabled)
 
     def _show_help(self) -> None:
         section_id = self._section_id or ""
@@ -582,10 +369,10 @@ class SectionEditView(QFrame):
 
     def focus_tab_for_kind(self, kind: str) -> None:
         targets = {
-            "content": self._content_scroll,
+            "content": self._content_tab.scroll_area,
             "layout": self._layout_panel,
-            "photos": self._photos_page,
-            "graphics": self._graphics_page,
+            "photos": self._photos_tab,
+            "graphics": self._graphics_tab,
             "tables": self._tables_page,
         }
         widget = targets.get(kind)
@@ -598,150 +385,21 @@ class SectionEditView(QFrame):
     def _on_editor_tab_changed(self, index: int) -> None:
         if index < 0:
             return
-        if self._tabs.widget(index) is self._photos_page:
-            self._image_panel.schedule_list_layout_sync()
+        if self._tabs.widget(index) is self._photos_tab:
+            self._photos_tab.schedule_list_layout_sync()
 
     def focus_section_title(self) -> None:
-        """Foca o campo editável do título na aba Conteúdo."""
-        content_index = self._tabs.indexOf(self._content_scroll)
+        content_index = self._tabs.indexOf(self._content_tab.scroll_area)
         if content_index >= 0:
             self._tabs.setCurrentIndex(content_index)
-        QTimer.singleShot(80, self._focus_section_title_editor)
-
-    def _focus_section_title_editor(self) -> None:
-        self._content_scroll.ensureWidgetVisible(self._section_title_host, 0, 40)
-        self._section_title_edit.focus_editor(select_all=True)
-
-    def _rebuild_graphics_page(self, section_id: str, overrides: dict) -> None:
-        while self._graphics_layout.count():
-            item = self._graphics_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
-        self._chart_checkboxes.clear()
-
-        defs = chart_figure_defs(section_id)
-        if not defs:
-            if section_id == "grafica":
-                self._graphics_hint = QLabel(
-                    "Gráficos analíticos desta seção. Associe imagens exportadas do CALYPSO "
-                    "ou use o layout para reservar espaço no PDF."
-                )
-            else:
-                self._graphics_hint = QLabel("Integração com gráficos Calypso em breve.")
-            self._graphics_hint.setWordWrap(True)
-            self._graphics_hint.setObjectName("SidebarHint")
-            self._graphics_layout.addWidget(self._graphics_hint)
-            self._graphics_layout.addStretch(1)
-            return
-
-        intro = QLabel(
-            "Marque os gráficos que devem aparecer no PDF. "
-            "Para remover todos de uma vez, desmarque <b>Gráficos</b> na aba Layout."
-        )
-        intro.setWordWrap(True)
-        intro.setObjectName("SidebarHint")
-        self._graphics_layout.addWidget(intro)
-
-        disabled = {
-            str(item)
-            for item in (overrides.get("disabled_chart_ids") or [])
-            if item
-        }
-        for figure in defs:
-            cb = QCheckBox(figure.label)
-            cb.setChecked(figure.id not in disabled)
-            cb.stateChanged.connect(
-                lambda _state, section=section_id: self._emit_disabled_chart_ids(section)
-            )
-            self._chart_checkboxes[figure.id] = cb
-            self._graphics_layout.addWidget(cb)
-        self._graphics_layout.addStretch(1)
-
-    def _emit_disabled_chart_ids(self, section_id: str) -> None:
-        if self._loading or self._defaults_mode:
-            return
-        disabled = [
-            figure_id
-            for figure_id, cb in self._chart_checkboxes.items()
-            if not cb.isChecked()
-        ]
-        self.disabled_chart_ids_changed.emit(section_id, disabled)
-        self._section_overrides = dict(self._section_overrides)
-        self._section_overrides["disabled_chart_ids"] = list(disabled)
-
-    def _update_photos_hint(self, section: dict | None = None) -> None:
-        title = ""
-        if section:
-            title = section.get("display_title") or section.get("title") or ""
-        if title:
-            self._photos_hint.setText(
-                f"Fotos desta seção ({title}). Duplo clique na lista ou use o botão abaixo. "
-                "No editor: ← → troca de foto."
-            )
-        else:
-            self._photos_hint.setText(
-                "Fotos desta seção. Duplo clique na lista ou use o botão abaixo para editar. "
-                "No editor: ← → troca de foto."
-            )
+        QTimer.singleShot(80, self._content_tab.focus_section_title_editor)
 
     def render_images(self, images: list[ReportImage]) -> None:
-        section_id = self._section_id
-        if section_id is None:
-            self._image_panel.render_images([])
-            self._image_panel.set_bosello_captures_available(False)
-            return
-        filtered = [img for img in images if img.section_id == section_id]
-        self._section_images = filtered
-        self._image_panel.render_images(filtered)
+        self._photos_tab.set_section_id(self._section_id)
+        self._photos_tab.render_images(images)
 
     def set_bosello_captures_available(self, available: bool) -> None:
-        self._image_panel.set_bosello_captures_available(available)
-
-    def _on_image_selected(self, image: ReportImage | None) -> None:
-        self._active_image = image
-        self._edit_photo_btn.setEnabled(image is not None)
-        self.image_selected.emit(image)
-
-    def _open_annotation_editor(self, image: ReportImage | None = None) -> None:
-        target = image if image is not None else self._image_panel.selected_image()
-        if target is None:
-            return
-        self._annotation_dialog.open_for(target, gallery=self._section_images)
-
-    def _on_dialog_photo_navigated(self, image: ReportImage) -> None:
-        self._image_panel.select_image_by_path(str(image.image_path))
-
-    def _on_annotation_dialog_edits_changed(self, image: ReportImage) -> None:
-        self.image_edits_changed.emit(image)
-
-    def _on_section_title_changed(self, text: str) -> None:
-        if self._loading or self._section_id is None:
-            return
-        self.section_field_changed.emit(self._section_id, "section_title", text)
-
-    def _on_field_changed(self, key: str, text: str) -> None:
-        if self._loading or self._section_id is None or not key:
-            return
-        textarea_keys = {f.key for f in get_edit_fields(self._section_id) if f.field_type == "textarea"}
-        if key in textarea_keys:
-            self._pending_textarea_key = key
-            self._debounce.start()
-        else:
-            self.section_field_changed.emit(self._section_id, key, text)
-
-    def _on_line_finished(self, key: str, widget: QLineEdit) -> None:
-        if self._loading or self._section_id is None:
-            return
-        self.section_field_changed.emit(self._section_id, key, widget.text())
-
-    def _flush_textarea_pending(self) -> None:
-        if self._section_id is None or self._pending_textarea_key is None:
-            return
-        key = self._pending_textarea_key
-        widget = self._field_widgets.get(key)
-        if isinstance(widget, PlaceholderTextEdit):
-            self.section_field_changed.emit(self._section_id, key, widget.get_text())
+        self._photos_tab.set_bosello_captures_available(available)
 
     def _on_table_rows_changed(self, rows: list) -> None:
         if self._loading or self._section_id is None:
@@ -751,11 +409,3 @@ class SectionEditView(QFrame):
     def _on_table_rows_restore(self) -> None:
         if self._section_id is not None:
             self.table_rows_restore_requested.emit(self._section_id)
-
-    def _on_restore_section(self) -> None:
-        if self._section_id is not None:
-            self.section_restore_requested.emit(self._section_id)
-
-    def _on_delete(self) -> None:
-        if self._section_id is not None:
-            self.delete_requested.emit(self._section_id)
