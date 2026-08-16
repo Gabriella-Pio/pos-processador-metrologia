@@ -90,16 +90,12 @@ class WorkspaceLifecycleCoordinator:
                     build_unified_export_document(session)
                 )
             except UnifiedExportError as exc:
+                # Fallback silencioso para a peça ativa — evita modal a cada refresh do preview.
                 logger.info("Preview unificado indisponível: %s", exc.message)
-                self.error_occurred.emit(
-                    "Preview unificado indisponível",
-                    exc.message,
-                    "",
-                )
-                return None
+                return self._document_with_project_timeline(self._active_document())
             except Exception:
                 logger.exception("Falha ao montar preview unificado")
-                return None
+                return self._document_with_project_timeline(self._active_document())
         return self._document_with_project_timeline(self._active_document())
 
 

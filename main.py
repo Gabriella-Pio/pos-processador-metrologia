@@ -26,10 +26,12 @@ from PyQt6.QtWidgets import QApplication
 
 from src.app.bootstrap import create_main_window
 from src.ui.accessibility import AppearanceManager
+from src.ui.crash_guard import install_exception_guard
 
 
 def main() -> None:
     app = QApplication(sys.argv)
+    install_exception_guard()
     AppearanceManager.instance().load()
     window = create_main_window()
     window.showMaximized()

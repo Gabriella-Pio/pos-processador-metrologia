@@ -7,13 +7,14 @@ from PyQt6.QtCore import QPoint, Qt, QTimer
 from PyQt6.QtGui import QCursor, QFontMetrics, QPixmap
 from PyQt6.QtWidgets import (
     QFileDialog,
+    QTabBar,
     QToolButton,
     QWidget,
 )
 
 from src.core.application.project_serializer import resolved_display_name
 from src.core.domain.ports import ReportDocument
-from src.ui.components.feedback import confirm_action, show_friendly_error, show_info
+from src.ui.components.feedback import FeedbackLevel, confirm_action, show_friendly_error, show_info
 from src.ui.components.icons import icon_close
 from src.ui.components.modal_presentation import present_modal_dialog
 from src.ui.features.workspace.components.workspace_tab_labels import (

@@ -3,6 +3,8 @@ Workspace — editor à esquerda, preview à direita, abas por PDF do projeto.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QCursor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
@@ -16,13 +18,18 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
 )
 
+from src.core.domain.ports import ReportDocument
 from src.ui.components.inputs import LayoutTemplateSelector
 from src.ui.components.icons import icon_edit, icon_plus
 from src.ui.components.feedback import (
     FeedbackLevel,
     InlineBanner,
+    confirm_action,
+    show_friendly_error,
+    show_info,
 )
 from src.ui.controllers.app_state import AppState
+from src.ui.features.workspace.commands.project_commands import ProjectCommands
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from src.ui.features.workspace.components.section_editor_panel import SectionEditorPanel
 from src.ui.features.workspace.components.workspace_export_flow import (
