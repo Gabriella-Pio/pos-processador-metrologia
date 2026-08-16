@@ -3,12 +3,9 @@ Workspace — editor à esquerda, preview à direita, abas por PDF do projeto.
 """
 from __future__ import annotations
 
-from pathlib import Path
-
-from PyQt6.QtCore import QPoint, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QCursor, QFontMetrics, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QCursor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
-    QFileDialog,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -19,79 +16,44 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
 )
 
-from src.core.application.project_serializer import resolved_display_name
-from src.core.application.piece_ordering import extract_piece_number_from_name
-from src.core.domain.ports import ReportDocument
-from src.core.domain.project_session import ProjectDocumentSlot
 from src.ui.components.inputs import LayoutTemplateSelector
-from src.ui.components.icons import icon_close, icon_edit, icon_plus
+from src.ui.components.icons import icon_edit, icon_plus
 from src.ui.components.feedback import (
     FeedbackLevel,
     InlineBanner,
-    confirm_action,
-    show_friendly_error,
-    show_info,
 )
-from src.ui.components.modal_presentation import present_modal_dialog
-from src.ui.features.workspace.dialogs.save_template_dialog import SaveTemplateDialog
-from src.ui.features.workspace.dialogs.version_register_dialog import VersionRegisterDialog
 from src.ui.controllers.app_state import AppState
-from src.ui.features.workspace.commands.project_commands import ProjectCommands
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
 from src.ui.features.workspace.components.section_editor_panel import SectionEditorPanel
 from src.ui.features.workspace.components.workspace_export_flow import (
     apply_export_validation_banner,
     run_workspace_export,
 )
+from src.ui.features.workspace.components.workspace_media_flow import WorkspaceMediaFlowMixin
 from src.ui.features.workspace.components.workspace_preview_chrome import (
     build_workspace_action_bar,
     build_workspace_preview_column,
     build_workspace_project_tabs_strip,
     sync_export_mode_menu_icons,
 )
+from src.ui.features.workspace.components.workspace_preview_sync import WorkspacePreviewSyncMixin
+from src.ui.features.workspace.components.workspace_project_tabs import WorkspaceProjectTabsMixin
+from src.ui.features.workspace.components.workspace_tab_labels import document_header_label
+from src.ui.features.workspace.components.workspace_template_flow import WorkspaceTemplateFlowMixin
+from src.ui.features.workspace.components.workspace_version_flow import WorkspaceVersionFlowMixin
 from src.ui.shared.report_editor.editor_shell import build_editor_stack, create_three_column_splitter
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
 
 
-def _document_tab_label(slot: ProjectDocumentSlot) -> str:
-    """Rótulo da aba — número natural do arquivo quando existir."""
-    number = extract_piece_number_from_name(slot.source_pdf_path.name)
-    if number is not None:
-        stem = f"Peça {number}"
-    elif slot.source_pdf_path.name:
-        stem = slot.source_pdf_path.stem[:20]
-    else:
-        stem = (slot.evaluated_component or "Relatório")[:20]
-    kind = getattr(slot, "source_kind", "") or (
-        slot.document.source_kind if slot.document else ""
-    )
-    badge = "Tomo" if kind == "insp_ect" else "MMC"
-    return f"{stem} [{badge}]"
+class WorkspaceView(
+    WorkspaceProjectTabsMixin,
+    WorkspaceTemplateFlowMixin,
+    WorkspaceMediaFlowMixin,
+    WorkspacePreviewSyncMixin,
+    WorkspaceVersionFlowMixin,
+    QWidget,
+):
 
-
-def _document_tab_tooltip(slot: ProjectDocumentSlot) -> str:
-    path = slot.source_pdf_path.resolve()
-    kind = getattr(slot, "source_kind", "") or (
-        slot.document.source_kind if slot.document else ""
-    )
-    lines = [path.name, str(path), f"Origem: {kind or 'desconhecida'}"]
-    component = slot.evaluated_component.strip()
-    if component and component != path.stem:
-        lines.append(f"Componente avaliado: {component}")
-    if slot.template_id:
-        lines.append(f"Template: {slot.template_id}")
-    return "\n".join(lines)
-
-
-def _document_header_label(document: ReportDocument, session) -> str:
-    base = f"{document.client_project} — {document.evaluated_component}"
-    if session is not None and len(session.documents) > 1:
-        slot = session.documents[session.active_index]
-        return f"{slot.source_pdf_path.name} · {base}"
-    return base
-
-
-class WorkspaceView(QWidget):
     def __init__(self, app_state: AppState, view_model: WorkspaceViewModel, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("WorkspaceSurface")
@@ -153,6 +115,7 @@ class WorkspaceView(QWidget):
         self._update_export_options_visibility()
         self._sync_project_title_width()
 
+
     def refresh_appearance(self) -> None:
         self._banner.refresh_appearance()
         if hasattr(self, "_export_btn"):
@@ -166,6 +129,7 @@ class WorkspaceView(QWidget):
                 self._export_individual_action,
                 self._export_merged_action,
             )
+
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
@@ -230,6 +194,7 @@ class WorkspaceView(QWidget):
         self._main_splitter = splitter
         outer.addWidget(splitter, stretch=1)
 
+
     def _connect_signals(self) -> None:
         self._app_state.document_changed.connect(self._on_document_changed)
         self._app_state.project_changed.connect(self._on_project_changed)
@@ -276,6 +241,7 @@ class WorkspaceView(QWidget):
         self._vm.version_timeline_changed.connect(self._on_version_timeline_changed)
         self._vm.version_status_changed.connect(self._on_version_status_changed)
 
+
     def _setup_shortcuts(self) -> None:
         save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
         save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -285,222 +251,6 @@ class WorkspaceView(QWidget):
         export_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         export_shortcut.activated.connect(self._on_export_clicked)
 
-    def _show_preview_menu(self) -> None:
-        self._preview_menu.popup(
-            self._more_btn.mapToGlobal(QPoint(0, self._more_btn.height()))
-        )
-
-    def _populate_template_combo(self, templates: list[dict]) -> None:
-        session = self._app_state.project_session
-        document = self._app_state.active_document
-        slot = session.active_slot if session is not None else None
-        # Em lote misto, o layout exibido é o da aba ativa — não o template da sessão.
-        current_id = (
-            (document.template_id if document is not None else None)
-            or (slot.template_id if slot is not None else None)
-            or (session.template_id if session is not None else None)
-            or "default"
-        )
-        self._template_combo.blockSignals(True)
-        self._template_combo.clear()
-        for template in templates:
-            self._template_combo.addItem(template["name"], template["id"])
-        index = self._template_combo.findData(current_id)
-        if index >= 0:
-            self._template_combo.setCurrentIndex(index)
-        self._template_combo.blockSignals(False)
-
-    def _on_template_changed(self, index: int) -> None:
-        if index < 0:
-            return
-        template_id = self._template_combo.itemData(index)
-        session = self._app_state.project_session
-        document = self._app_state.active_document
-        current_id = (
-            (document.template_id if document is not None else None)
-            or (session.template_id if session is not None else None)
-        )
-        if session is None or document is None or template_id == current_id:
-            return
-        if self._vm.is_layout_dirty():
-            if not confirm_action(
-                self,
-                "Alterar template?",
-                "Há alterações no layout atual. Trocar o template vai substituí-las pelos defaults salvos.",
-            ):
-                self._populate_template_combo(self._vm.list_templates())
-                return
-        self._vm.change_template(template_id)
-
-    def _on_layout_dirty_changed(self, dirty: bool) -> None:
-        suffix = " ●" if dirty else ""
-        self._save_layout_action.setEnabled(dirty)
-        self._save_layout_action.setText(f"Salvar layout…{suffix}")
-        self._template_selector.set_layout_dirty(dirty)
-
-    def _on_data_dirty_changed(self, dirty: bool) -> None:
-        self._data_dirty_label.setText("● Medições alteradas" if dirty else "")
-
-    def _focus_template_combo(self) -> None:
-        self._template_combo.setFocus()
-        self._template_combo.showPopup()
-
-    def _on_save_template_clicked(self) -> None:
-        document = self._app_state.active_document
-        session = self._app_state.project_session
-        if document is None or session is None:
-            return
-        dialog = SaveTemplateDialog(
-            self._vm.list_templates(),
-            document.template_id,
-            self,
-        )
-        if present_modal_dialog(self, dialog) != dialog.DialogCode.Accepted:
-            return
-        template_id = self._vm.save_current_as_template(
-            dialog.template_name,
-            dialog.create_new,
-        )
-        if template_id:
-            show_info(self, "Template salvo", f"Layout salvo como “{dialog.template_name}”.")
-            self._populate_template_combo(self._vm.list_templates())
-
-    def _update_export_options_visibility(self) -> None:
-        session = self._app_state.project_session
-        multi = session is not None and len(session.documents) > 1
-        self._export_individual_action.setVisible(multi)
-        self._export_merged_action.setVisible(multi)
-        if not multi:
-            self._export_individual_action.setChecked(True)
-            self._vm.set_export_mode_unified(False)
-        else:
-            self._vm.set_export_mode_unified(self._export_merged_action.isChecked())
-        if session is not None:
-            self._rebuild_project_tabs(session)
-
-    def _on_export_mode_toggled(self, checked: bool) -> None:
-        if not checked:
-            return
-        sync_export_mode_menu_icons(
-            self._export_individual_action,
-            self._export_merged_action,
-        )
-        unified = self._export_merged_action.isChecked()
-        self._vm.set_export_mode_unified(unified)
-        session = self._app_state.project_session
-        if session is not None:
-            self._rebuild_project_tabs(session)
-        if unified:
-            self._banner.set_level(FeedbackLevel.INFO)
-            self._banner.set_message(
-                "Modo unificado — preview e export usam o PDF consolidado do lote."
-            )
-        else:
-            self._banner.set_message("")
-            self._banner.sync_visibility()
-
-    def _rebuild_project_tabs(self, session) -> None:
-        self._project_tabs.blockSignals(True)
-        while self._project_tabs.count():
-            self._project_tabs.removeTab(0)
-
-        unified = self._vm.export_mode_unified and len(session.documents) > 1
-        self._add_pdf_btn.setVisible(not unified)
-
-        if unified:
-            n = len(session.documents)
-            self._project_tabs.addTab(f"Relatório unificado ({n} arquivos)")
-            self._project_tabs.setTabToolTip(
-                0,
-                "PDF consolidado do lote.\n"
-                "Volte para “Exportar PDFs individuais” no menu ⋯ para ver as abas por arquivo.",
-            )
-            self._project_tabs.setCurrentIndex(0)
-            self._project_tabs.setVisible(True)
-            self._project_tabs.blockSignals(False)
-            self._project_tabs.updateGeometry()
-            return
-
-        multi = len(session.documents) > 1
-        for index, slot in enumerate(session.documents):
-            label = _document_tab_label(slot)
-            self._project_tabs.addTab(label)
-            tip = _document_tab_tooltip(slot)
-            if multi:
-                tip += "\n\nClique em × para remover do projeto (o arquivo no disco não é apagado)."
-                close_btn = QToolButton(self._project_tabs)
-                close_btn.setObjectName("WorkspaceProjectTabClose")
-                close_btn.setIcon(icon_close())
-                close_btn.setAutoRaise(True)
-                close_btn.setFixedSize(18, 18)
-                close_btn.setIconSize(close_btn.iconSize())
-                close_btn.setToolTip("Remover do projeto")
-                close_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-                close_btn.clicked.connect(
-                    lambda _checked=False, idx=index: self._on_project_tab_close_requested(idx)
-                )
-                self._project_tabs.setTabButton(
-                    index,
-                    QTabBar.ButtonPosition.RightSide,
-                    close_btn,
-                )
-            self._project_tabs.setTabToolTip(index, tip)
-        if session.documents:
-            self._project_tabs.setCurrentIndex(
-                min(max(session.active_index, 0), len(session.documents) - 1)
-            )
-        self._project_tabs.setVisible(bool(session.documents))
-        self._project_tabs.blockSignals(False)
-        self._project_tabs.updateGeometry()
-
-    def _on_project_loaded(self, session) -> None:
-        self._project_title_block = True
-        self._project_title_edit.setText(resolved_display_name(session))
-        self._project_title_block = False
-        self._sync_project_title_width()
-        self._rebuild_project_tabs(session)
-        self._update_export_options_visibility()
-        self._refresh_versions()
-
-    def _on_project_changed(self, session) -> None:
-        if session is None:
-            self._project_title_block = True
-            self._project_title_edit.clear()
-            self._project_title_block = False
-            while self._project_tabs.count():
-                self._project_tabs.removeTab(0)
-            self._project_tabs.setVisible(False)
-        self._update_export_options_visibility()
-
-    def _sync_project_title_width(self) -> None:
-        metrics = QFontMetrics(self._project_title_edit.font())
-        text = self._project_title_edit.text() or self._project_title_edit.placeholderText() or " "
-        width = metrics.horizontalAdvance(text) + 36
-        self._project_title_edit.setFixedWidth(min(max(180, width), 560))
-
-    def _focus_project_title(self) -> None:
-        self._project_title_edit.setFocus(Qt.FocusReason.MouseFocusReason)
-        self._project_title_edit.selectAll()
-
-    def _on_project_title_edited(self) -> None:
-        if self._project_title_block:
-            return
-        self._vm.set_display_name(self._project_title_edit.text())
-
-    def _on_project_display_name_changed(self, display_name: str) -> None:
-        if self._project_title_edit.text() == display_name:
-            return
-        self._project_title_block = True
-        self._project_title_edit.setText(display_name)
-        self._project_title_block = False
-        self._sync_project_title_width()
-
-    def _on_project_tab_changed(self, index: int) -> None:
-        if index < 0:
-            return
-        if self._vm.export_mode_unified:
-            return
-        self._vm.switch_document(index)
 
     def _on_document_changed(self, document: ReportDocument | None) -> None:
         if document is None:
@@ -511,7 +261,7 @@ class WorkspaceView(QWidget):
             self._section_editor.update_document_context(None)
             return
         self._document_title_label.setText(
-            _document_header_label(document, self._app_state.project_session)
+            document_header_label(document, self._app_state.project_session)
         )
         session = self._app_state.project_session
         if session is not None:
@@ -532,17 +282,10 @@ class WorkspaceView(QWidget):
         self._on_data_dirty_changed(self._vm.is_data_dirty())
         self._update_export_options_visibility()
 
+
     def _on_global_fields_ready(self, values: dict, overridden: set) -> None:
         self._section_editor.render_global_fields(values, overridden)
 
-    def _on_preview_generating(self, generating: bool) -> None:
-        # Status só no chrome — sem overlay flutuando sobre o PDF.
-        self._preview_status.set_busy(generating, "Atualizando preview…")
-        if not generating:
-            self._on_version_status_changed(self._vm.version_status_text())
-
-    def _on_version_status_changed(self, text: str) -> None:
-        self._preview_status.set_idle_text(text)
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
         self._edit_stack.setCurrentIndex(1 if visible else 0)
@@ -553,11 +296,13 @@ class WorkspaceView(QWidget):
         else:
             self._main_splitter.setSizes([240, 0, 1120])
 
+
     def _sync_section_meta_row(self) -> None:
         has_section = bool(self._active_section_label.text().strip())
         self._active_section_label.setVisible(has_section)
         self._meta_sep_before_section.setVisible(True)
         self._meta_sep_before_layout.setVisible(has_section)
+
 
     def _on_section_selected(self, section_id: str) -> None:
         self._active_section_id = section_id
@@ -569,6 +314,7 @@ class WorkspaceView(QWidget):
         self._active_section_label.setText(f"Seção: {title}")
         self._sync_section_meta_row()
         self._focus_preview_section(section_id)
+
 
     def _on_section_delete(self, section_id: str) -> None:
         if not confirm_action(
@@ -583,6 +329,7 @@ class WorkspaceView(QWidget):
                 self._active_section_label.setText("")
                 self._sync_section_meta_row()
 
+
     def _on_add_custom_section(self) -> None:
         section_id = self._vm.add_custom_section("Nova seção")
         if not section_id:
@@ -593,243 +340,10 @@ class WorkspaceView(QWidget):
         self._sync_section_meta_row()
         self._section_editor.focus_section_title()
 
-    def _on_image_dropped(self, image_path: Path) -> None:
-        # Preferir a seção em edição — evita gravar foto na seção errada.
-        section_id = self._section_editor.editing_section_id() or self._active_section_id
-        if section_id is None:
-            show_friendly_error(
-                self,
-                "Selecione uma seção",
-                "Abra a edição de uma seção antes de associar uma fotografia.",
-            )
-            return
-        self._active_section_id = section_id
-        self._vm.add_image_to_section(image_path, section_id)
-
-    def _on_image_remove(self, image) -> None:
-        self._vm.remove_image(image)
-
-    def _on_image_caption_changed(self, image, caption: str) -> None:
-        self._vm.update_image_caption(image, caption)
-
-    def _on_image_selected(self, image) -> None:
-        self._active_annotation_image = image
-
-    def _on_image_edits_changed(self, _image) -> None:
-        self._vm.notify_image_edits_changed()
-
-    def _on_tool_selected(self, tool_id: str) -> None:
-        self._active_annotation_tool = tool_id
-
-    def _refresh_images(self) -> None:
-        images = self._vm.images_for_workspace_ui()
-        self._section_editor.render_images(images)
-        if self._vm.export_mode_unified:
-            has_bosello = any(img.bosello_import or img.section_id == "tomografia" for img in images)
-            if not has_bosello:
-                session = self._app_state.project_session
-                if session is not None:
-                    for slot in session.documents:
-                        doc = slot.document
-                        if doc is not None and doc.bosello_captured_paths:
-                            has_bosello = True
-                            break
-            self._section_editor.set_bosello_captures_available(has_bosello)
-            return
-        document = self._app_state.active_document
-        if document is not None:
-            self._section_editor.set_bosello_captures_available(
-                len(document.bosello_captured_paths) > 0
-            )
-
-    def _on_bosello_picker_requested(self) -> None:
-        section_id = self._section_editor.editing_section_id() or self._active_section_id
-        if section_id is None:
-            show_friendly_error(
-                self,
-                "Selecione uma seção",
-                "Abra a edição de uma seção antes de adicionar capturas Bosello.",
-            )
-            return
-
-        session = self._app_state.project_session
-        document = self._app_state.active_document
-        captures: list[Path] = []
-        if self._vm.export_mode_unified and session is not None:
-            seen: set[str] = set()
-            for slot in session.documents:
-                doc = slot.document
-                if doc is None:
-                    continue
-                for path in doc.bosello_captured_paths:
-                    key = str(path)
-                    if key in seen or not path.is_file():
-                        continue
-                    seen.add(key)
-                    captures.append(path)
-            paths_in_section = [
-                img.image_path
-                for img in session.unified_images
-                if img.section_id == section_id
-            ]
-        else:
-            if document is None:
-                show_friendly_error(
-                    self,
-                    "Selecione uma seção",
-                    "Abra a edição de uma seção antes de adicionar capturas Bosello.",
-                )
-                return
-            captures = [path for path in document.bosello_captured_paths if path.is_file()]
-            from src.core.application.bosello_image_import import section_image_paths
-
-            paths_in_section = section_image_paths(document, section_id)
-
-        if not captures:
-            show_friendly_error(
-                self,
-                "Sem capturas Bosello",
-                "Não há imagens capturadas do PDF Bosello neste projeto.",
-            )
-            return
-
-        from src.ui.features.workspace.dialogs.bosello_capture_picker_dialog import (
-            BoselloCapturePickerDialog,
-        )
-
-        dialog = BoselloCapturePickerDialog(
-            captures,
-            section_id=section_id,
-            paths_in_section=paths_in_section,
-            parent=self,
-        )
-        if present_modal_dialog(self, dialog) != dialog.DialogCode.Accepted:
-            return
-        selected = dialog.selected_paths()
-        if not selected:
-            return
-        added = self._vm.add_bosello_captures_to_section(selected, section_id)
-        if added:
-            show_info(
-                self,
-                "Fotos adicionadas",
-                f"{added} captura(s) Bosello adicionada(s) à seção.",
-            )
-
-    def _refresh_versions(self) -> None:
-        self._section_editor.render_versions(self._vm.list_version_timeline())
-
-    def _on_version_timeline_changed(self, entries: list) -> None:
-        self._section_editor.render_versions(entries)
-
-    def _on_preview_version(self, version_number: int) -> None:
-        self._vm.preview_version(version_number)
-
-    def _on_restore_version(self, version_number: int) -> None:
-        if not self._vm.restore_version(version_number):
-            return
-        self._on_version_status_changed(self._vm.version_status_text())
-
-    def _on_export_version(self, version_number: int) -> None:
-        document = self._app_state.active_document
-        default_name = "relatorio.pdf"
-        if document is not None:
-            default_name = f"{document.evaluated_component}_v{version_number}.pdf"
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            f"Exportar versão v{version_number}",
-            default_name,
-            "PDF (*.pdf)",
-        )
-        if path:
-            self._vm.export_version_snapshot(version_number, Path(path))
-
-    def _on_sections_summary_ready(self, sections: list[dict]) -> None:
-        self._section_anchor_map = {s["id"]: s for s in sections}
-        self._preview_panel.set_anchor_map(self._section_anchor_map)
-        for section in sections:
-            section.setdefault("subtitle", "")
-            section.setdefault("body", "")
-        self._section_editor.render_sections(sections)
-        if self._active_section_id:
-            self._section_editor.set_active_section(self._active_section_id)
-            self._focus_preview_section(self._active_section_id)
-
-    def _on_preview_page_clicked(self, page_number: int) -> None:
-        section_id = self._preview_panel.section_id_for_page(page_number)
-        if section_id:
-            self._on_preview_section_clicked(section_id)
-
-    def _on_preview_section_clicked(
-        self,
-        section_id: str,
-        focus_target: str = "section_title",
-        image_path: str = "",
-    ) -> None:
-        self._active_section_id = section_id
-        self._section_editor.open_edit_for_section(section_id)
-        anchor = self._section_anchor_map.get(section_id, {})
-        title = anchor.get("title", section_id) if isinstance(anchor, dict) else section_id
-        self._active_section_label.setText(f"Seção: {title}")
-        self._sync_section_meta_row()
-        if focus_target == "section_title":
-            QTimer.singleShot(0, self._section_editor.focus_section_title)
-
-    def _on_preview_metadata(self, metadata: dict) -> None:
-        sections = metadata.get("sections", metadata)
-        photo_anchors = metadata.get("photo_anchors", [])
-        self._preview_panel.set_photo_anchors(photo_anchors)
-        self._preview_panel.update_anchor_map(sections)
-        for section_id, info in sections.items():
-            if section_id in self._section_anchor_map:
-                self._section_anchor_map[section_id]["page_start"] = info.get("page")
-                self._section_anchor_map[section_id]["anchor_rect"] = info
 
     def _on_export_validation(self, issues: list[dict]) -> None:
         apply_export_validation_banner(self._banner, issues)
 
-    def _clear_preview_pages(self) -> None:
-        self._preview_panel.clear()
-
-    def _focus_preview_section(self, section_id: str) -> None:
-        self._preview_panel.focus_section(section_id)
-
-    def _on_add_pdf_clicked(self) -> None:
-        document = self._app_state.active_document
-        default_component = document.evaluated_component if document else "Componente"
-        paths, _ = QFileDialog.getOpenFileNames(self, "Adicionar PDFs ao projeto", "", "PDF (*.pdf)")
-        if paths:
-            self._vm.append_pdfs_to_project([Path(p) for p in paths], default_component)
-
-    def _on_project_tab_close_requested(self, index: int) -> None:
-        self._confirm_remove_document(index)
-
-    def _confirm_remove_document(self, index: int) -> None:
-        session = self._app_state.project_session
-        if session is None or not (0 <= index < len(session.documents)):
-            return
-        slot = session.documents[index]
-        label = slot.source_pdf_path.name or slot.evaluated_component or "Relatório"
-        if not confirm_action(
-            self,
-            "Remover relatório do projeto?",
-            f"“{label}” será removido deste projeto.\n\nO arquivo PDF no disco não será apagado.",
-        ):
-            return
-        self._vm.remove_document_from_project(index)
-
-    def _on_register_version(self) -> None:
-        document = self._app_state.active_document
-        if document is None:
-            return
-        default_responsible = ""
-        if document.control_info is not None:
-            default_responsible = document.control_info.measured_by or ""
-        dialog = VersionRegisterDialog(default_responsible, self)
-        if present_modal_dialog(self, dialog) != dialog.DialogCode.Accepted:
-            return
-        responsible, description = dialog.get_values()
-        self._vm.register_new_version(responsible, description)
 
     def _on_export_clicked(self) -> None:
         run_workspace_export(
@@ -840,5 +354,7 @@ class WorkspaceView(QWidget):
             export_merged=self._export_merged_action.isChecked(),
         )
 
+
     def _on_export_finished(self, final_path: Path) -> None:
         show_info(self, "Exportação concluída", f"Relatório salvo em:\n{final_path}")
+
