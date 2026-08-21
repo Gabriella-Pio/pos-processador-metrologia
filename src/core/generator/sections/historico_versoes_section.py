@@ -1,10 +1,15 @@
 from reportlab.lib import colors
-from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import KeepInFrame, Paragraph, Spacer, Table, TableStyle
 from .base import BaseSection, append_section_title
 from ..constants import ReportTheme
 from ..prose_helpers import append_section_prose_paragraph, get_section_heading
+from src.core.domain.pdf_plain_text import pdf_paragraph_text
 from src.core.domain.report_field_registry import PROSE_TEMPLATES
 from src.core.domain.table_row_registry import SECTION_HEADING_DEFAULTS
+
+# Frame "Later" do relatório: ~528 × 708 pt. Folga para título + prosa acima da tabela.
+_MAX_HISTORY_TABLE_HEIGHT = 620
+_HISTORY_TABLE_WIDTH = 540
 
 
 class HistoricoVersoesSection(BaseSection):
@@ -60,10 +65,10 @@ class HistoricoVersoesSection(BaseSection):
 
         for entrada in entradas:
             linhas.append([
-                Paragraph(f"v{entrada['version_number']}", styles['celula_centro']),
-                Paragraph(entrada['timestamp_str'], styles['celula_centro']),
-                Paragraph(entrada['responsible_name'], styles['celula']),
-                Paragraph(entrada['description'], styles['celula']),
+                Paragraph(pdf_paragraph_text(f"v{entrada['version_number']}"), styles['celula_centro']),
+                Paragraph(pdf_paragraph_text(entrada['timestamp_str']), styles['celula_centro']),
+                Paragraph(pdf_paragraph_text(entrada['responsible_name']), styles['celula']),
+                Paragraph(pdf_paragraph_text(entrada['description']), styles['celula']),
             ])
 
         tabela = Table(linhas, colWidths=[45, 110, 140, 245])
@@ -75,5 +80,17 @@ class HistoricoVersoesSection(BaseSection):
             ('PADDING', (0, 0), (-1, -1), 4),
         ]))
 
-        story.append(tabela)
+        _, height = tabela.wrap(_HISTORY_TABLE_WIDTH, 100_000)
+        if height > _MAX_HISTORY_TABLE_HEIGHT:
+            story.append(
+                KeepInFrame(
+                    _HISTORY_TABLE_WIDTH,
+                    _MAX_HISTORY_TABLE_HEIGHT,
+                    [tabela],
+                    mode="shrink",
+                    hAlign="LEFT",
+                )
+            )
+        else:
+            story.append(tabela)
         story.append(Spacer(1, 10))

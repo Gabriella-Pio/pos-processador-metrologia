@@ -63,3 +63,35 @@ def test_historico_section_renders_intro_when_no_versions() -> None:
     assert len(paragraphs) >= 2
     intro_paragraphs = [p for p in paragraphs if "Texto introdutório do histórico." in p.text]
     assert intro_paragraphs
+
+
+def _zalgo(text: str, marks: int = 80) -> str:
+    stack = "".join(chr(0x0300 + (index % 16)) for index in range(marks))
+    return "".join(char + stack for char in text)
+
+
+def test_historico_section_zalgo_description_fits_page() -> None:
+    section = HistoricoVersoesSection()
+    story: list = []
+    styles = ReportStyles.criar_estilos()
+    section.render(
+        story,
+        styles,
+        None,
+        {
+            "section_prose": {"historico_versoes": {"intro": "Intro."}},
+            "section_anchor_map": {},
+            "section_number_map": {"historico_versoes": "3"},
+            "historico_versoes": [
+                {
+                    "version_number": 2,
+                    "timestamp_str": "21/08/2026 10:00",
+                    "responsible_name": "Ana",
+                    "description": _zalgo("abcdefghijklmnopqrstuvwxyzç"),
+                }
+            ],
+        },
+    )
+    table = next(item for item in story if isinstance(item, Table))
+    _width, height = table.wrap(528, 10_000)
+    assert height < 708
