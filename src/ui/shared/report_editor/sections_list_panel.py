@@ -282,6 +282,7 @@ class SectionsListPanel(QFrame):
         self._list.setUniformItemSizes(True)
         self._list.setSpacing(SPACING.sm)
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._list.itemDoubleClicked.connect(self._on_item_double_clicked)
 
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
@@ -444,6 +445,11 @@ class SectionsListPanel(QFrame):
         self._click_timer.stop()
         self._pending_section_id = None
         self.section_edit_requested.emit(section_id)
+
+    def _on_item_double_clicked(self, item: QListWidgetItem) -> None:
+        widget = self._list.itemWidget(item)
+        if isinstance(widget, (SectionSummaryRow, TemplateSectionRow)):
+            self._on_row_edit_requested(widget.section_id)
 
     def _emit_single_click(self) -> None:
         if self._pending_section_id is not None:

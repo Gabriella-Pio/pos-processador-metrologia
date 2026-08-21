@@ -57,3 +57,25 @@ def test_template_render_sections_keeps_vertical_scroll() -> None:
 def test_workspace_render_sections_keeps_vertical_scroll() -> None:
     app, panel = _shown_panel("workspace")
     _assert_rebuild_keeps_scroll(panel, app, enabled_at=8)
+
+
+def test_double_click_requests_edit_instead_of_navigate() -> None:
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+
+    app, panel = _shown_panel("workspace")
+    navigated: list[str] = []
+    edited: list[str] = []
+    panel.section_navigated.connect(navigated.append)
+    panel.section_edit_requested.connect(edited.append)
+
+    row = panel._list.itemWidget(panel._list.item(2))
+    assert row is not None
+    QTest.mouseDClick(row, Qt.MouseButton.LeftButton)
+    QTest.qWait(350)
+    app.processEvents()
+
+    assert "secao_2" in edited
+    assert navigated == []
+    panel.close()
+

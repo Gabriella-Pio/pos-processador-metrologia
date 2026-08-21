@@ -66,6 +66,21 @@ class _SummaryRowChromeMixin:
         _repolish(self)
         super().leaveEvent(event)
 
+    def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802
+        """Windows entrega o 2º clique como DblClick, não como outro mousePress."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            child = self.childAt(event.position().toPoint())
+            widget = child
+            while widget is not None and widget is not self:
+                if isinstance(widget, (QCheckBox, QToolButton)):
+                    super().mouseDoubleClickEvent(event)
+                    return
+                widget = widget.parentWidget()
+            self.edit_requested.emit(self.section_id)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
 
 def _drag_handle(section_id: str) -> QWidget:
     if is_sidebar_section_draggable(section_id):

@@ -21,7 +21,13 @@ from src.ui.components.icons import icon_ellipsis, icon_edit
 from src.ui.components.preview_status_chip import PreviewStatusChip
 from src.ui.features.templates.components.template_sidebar_panel import TemplateSidebarPanel
 from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
-from src.ui.shared.report_editor.editor_shell import build_editor_column, create_three_column_splitter
+from src.ui.shared.report_editor.editor_shell import (
+    EDITING_RATIOS,
+    PREVIEW_ONLY_RATIOS,
+    build_editor_column,
+    create_three_column_splitter,
+    splitter_sizes,
+)
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
 from src.ui.styles import SPACING, caption_style, configure_app_popup_menu
 
@@ -191,13 +197,19 @@ class TemplateEditorView(QWidget):
         self._preview_status.set_busy(generating, "Atualizando preview…")
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
+        sizes = self._main_splitter.sizes()
+        editor_already_open = visible and len(sizes) >= 2 and sizes[1] > 20
+        if visible and not editor_already_open:
+            self._preview_panel.pin_vertical_scroll()
         self._edit_stack.setCurrentIndex(1 if visible else 0)
         self._edit_container.setVisible(visible)
+        if editor_already_open:
+            return
+        width = self._main_splitter.width()
         if visible:
-            self._main_splitter.setSizes([240, 320, 800])
-            QTimer.singleShot(0, self._preview_panel.center_horizontal_scroll)
+            self._main_splitter.setSizes(splitter_sizes(width, EDITING_RATIOS))
         else:
-            self._main_splitter.setSizes([240, 0, 1120])
+            self._main_splitter.setSizes(splitter_sizes(width, PREVIEW_ONLY_RATIOS))
             self._section_title_label.setText("")
 
     def _on_section_selected(self, section_id: str) -> None:
@@ -287,8 +299,13 @@ class TemplateEditorView(QWidget):
             return
         _ = image_path
         self._active_section_id = section_id
+        self._preview_panel.pin_vertical_scroll()
         self._sidebar.open_edit_for_section(section_id)
-        self._on_section_selected(section_id)
+        self._vm.set_active_section(section_id)
+        section = self._section_anchor_map.get(section_id, {})
+        title = section.get("display_title") or section.get("title", section_id)
+        self._section_title_label.setText(f"Seção: {title}")
+        self._preview_panel.highlight_section(section_id)
         if focus_target == "section_title":
             QTimer.singleShot(0, self._sidebar.focus_section_title)
         elif focus_target in {"photos", "graphics", "tables"}:

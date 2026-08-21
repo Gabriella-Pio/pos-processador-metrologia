@@ -72,11 +72,13 @@ class WorkspacePreviewSyncMixin:
         if not is_sidebar_section(section_id):
             return
         self._active_section_id = section_id
+        self._preview_panel.pin_vertical_scroll()
         self._section_editor.open_edit_for_section(section_id)
         anchor = self._section_anchor_map.get(section_id, {})
         title = anchor.get("title", section_id) if isinstance(anchor, dict) else section_id
         self._active_section_label.setText(f"Seção: {title}")
         self._sync_section_meta_row()
+        self._preview_panel.highlight_section(section_id)
         if focus_target == "section_title":
             QTimer.singleShot(0, self._section_editor.focus_section_title)
 

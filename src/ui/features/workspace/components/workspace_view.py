@@ -48,7 +48,13 @@ from src.ui.features.workspace.components.workspace_project_tabs import Workspac
 from src.ui.features.workspace.components.workspace_tab_labels import document_header_label
 from src.ui.features.workspace.components.workspace_template_flow import WorkspaceTemplateFlowMixin
 from src.ui.features.workspace.components.workspace_version_flow import WorkspaceVersionFlowMixin
-from src.ui.shared.report_editor.editor_shell import build_editor_stack, create_three_column_splitter
+from src.ui.shared.report_editor.editor_shell import (
+    EDITING_RATIOS,
+    PREVIEW_ONLY_RATIOS,
+    build_editor_stack,
+    create_three_column_splitter,
+    splitter_sizes,
+)
 from src.ui.shared.report_editor.preview_panel import PreviewPanel
 
 
@@ -295,13 +301,19 @@ class WorkspaceView(
 
 
     def _on_edit_visibility_changed(self, visible: bool) -> None:
+        sizes = self._main_splitter.sizes()
+        editor_already_open = visible and len(sizes) >= 2 and sizes[1] > 20
+        if visible and not editor_already_open:
+            self._preview_panel.pin_vertical_scroll()
         self._edit_stack.setCurrentIndex(1 if visible else 0)
         self._edit_container.setVisible(visible)
+        if editor_already_open:
+            return
+        width = self._main_splitter.width()
         if visible:
-            self._main_splitter.setSizes([240, 320, 800])
-            QTimer.singleShot(0, self._preview_panel.center_horizontal_scroll)
+            self._main_splitter.setSizes(splitter_sizes(width, EDITING_RATIOS))
         else:
-            self._main_splitter.setSizes([240, 0, 1120])
+            self._main_splitter.setSizes(splitter_sizes(width, PREVIEW_ONLY_RATIOS))
 
 
     def _sync_section_meta_row(self) -> None:

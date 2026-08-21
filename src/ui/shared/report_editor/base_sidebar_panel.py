@@ -88,8 +88,10 @@ class BaseSidebarPanel(QFrame):
             locked_media_kinds,
         )
         self._after_edit_opened(section_id)
+        already_open = self._edit_open
         self._edit_open = True
-        self.edit_visibility_changed.emit(True)
+        if not already_open:
+            self.edit_visibility_changed.emit(True)
 
     def _after_edit_opened(self, section_id: str) -> None:
         """Hook pós-abertura (ex.: filtrar fotos no workspace)."""
