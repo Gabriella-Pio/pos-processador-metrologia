@@ -466,6 +466,9 @@ class ThemedComboBox(QComboBox):
         super().__init__(parent)
         configure_themed_combo(self)
 
+    def refresh_appearance(self) -> None:
+        self.view().setStyleSheet(_filter_combo_popup_stylesheet())
+
     def showPopup(self) -> None:
         view = self.view()
         view.setMinimumWidth(self.width())

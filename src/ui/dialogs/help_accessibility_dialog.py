@@ -22,7 +22,7 @@ from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.components.feedback import confirm_action, confirm_dangerous_action, show_info
 from src.ui.components.inputs import ThemedComboBox
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, heading_style, caption_style
+from src.ui.styles import SPACING
 from src.core.application.storage_cleanup import (
     DEFAULT_DB_PATH,
     audit_storage,
@@ -161,9 +161,8 @@ class HelpAccessibilityDialog(AppDialog):
         layout.addLayout(footer)
 
     def _build_shortcuts_tab(self) -> QWidget:
-        p = PALETTE
         page = QWidget()
-        page.setStyleSheet(f"background: transparent;")
+        page.setStyleSheet("background: transparent;")
         outer = QVBoxLayout(page)
         outer.setContentsMargins(SPACING.lg, SPACING.lg, SPACING.lg, SPACING.lg)
         outer.setSpacing(SPACING.lg)
@@ -174,20 +173,15 @@ class HelpAccessibilityDialog(AppDialog):
 
         outer.addWidget(self._group_title("Dicas"))
         tips_frame = QFrame()
-        tips_frame.setStyleSheet(
-            f"QFrame {{ background: {p.bg_surface}; border: 1px solid {p.border}; "
-            f"border-radius: {SPACING.radius_md}px; }}"
-        )
+        tips_frame.setObjectName("PrefsCard")
+        tips_frame.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         tips_layout = QVBoxLayout(tips_frame)
         tips_layout.setContentsMargins(SPACING.md, SPACING.md, SPACING.md, SPACING.md)
         tips_layout.setSpacing(SPACING.sm)
         for tip in HELP_TIPS:
             row = QLabel(f"• {tip}")
             row.setWordWrap(True)
-            row.setStyleSheet(
-                f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_body}px; "
-                f"background: transparent; border: none;"
-            )
+            row.setObjectName("PrefsTip")
             tips_layout.addWidget(row)
         outer.addWidget(tips_frame)
         outer.addStretch(1)
@@ -195,20 +189,13 @@ class HelpAccessibilityDialog(AppDialog):
 
     def _group_title(self, text: str) -> QLabel:
         label = QLabel(text.upper())
-        label.setStyleSheet(
-            f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
-            f"font-weight: {TYPOGRAPHY.weight_semibold}; letter-spacing: 0.8px; "
-            f"background: transparent; border: none; margin-bottom: 2px;"
-        )
+        label.setObjectName("PrefsMutedCaps")
         return label
 
     def _shortcut_table(self, rows: tuple[ShortcutRow, ...]) -> QFrame:
-        p = PALETTE
         frame = QFrame()
-        frame.setStyleSheet(
-            f"QFrame {{ background: {p.bg_surface}; border: 1px solid {p.border}; "
-            f"border-radius: {SPACING.radius_md}px; }}"
-        )
+        frame.setObjectName("PrefsCard")
+        frame.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QVBoxLayout(frame)
         layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.sm)
         layout.setSpacing(SPACING.xs)
@@ -218,27 +205,17 @@ class HelpAccessibilityDialog(AppDialog):
             row.setSpacing(SPACING.md)
 
             key_label = QLabel(keys)
+            key_label.setObjectName("ShortcutKey")
             key_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             key_label.setMinimumWidth(76)
-            key_label.setStyleSheet(
-                f"color: {p.senai_orange}; font-family: monospace; font-size: {TYPOGRAPHY.size_caption}px; "
-                f"font-weight: {TYPOGRAPHY.weight_bold}; background: rgba(240,67,30,0.12); "
-                f"border: 1px solid rgba(240,67,30,0.25); border-radius: {SPACING.radius_sm}px; "
-                f"padding: 6px 8px;"
-            )
 
             text_col = QVBoxLayout()
             text_col.setSpacing(2)
             action_label = QLabel(action)
-            action_label.setStyleSheet(
-                f"color: {p.text_primary}; font-weight: {TYPOGRAPHY.weight_semibold}; "
-                f"background: transparent; border: none;"
-            )
+            action_label.setObjectName("ShortcutAction")
             desc_label = QLabel(description)
+            desc_label.setObjectName("ShortcutDesc")
             desc_label.setWordWrap(True)
-            desc_label.setStyleSheet(
-                f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent; border: none;"
-            )
             text_col.addWidget(action_label)
             text_col.addWidget(desc_label)
 
@@ -248,15 +225,14 @@ class HelpAccessibilityDialog(AppDialog):
 
             if index < len(rows) - 1:
                 sep = QFrame()
+                sep.setObjectName("PrefsSeparator")
                 sep.setFrameShape(QFrame.Shape.HLine)
                 sep.setFixedHeight(1)
-                sep.setStyleSheet(f"background: {p.border_subtle}; border: none;")
                 layout.addWidget(sep)
 
         return frame
 
     def _build_accessibility_tab(self) -> QWidget:
-        p = PALETTE
         page = QWidget()
         page.setStyleSheet("background: transparent;")
         outer = QVBoxLayout(page)
@@ -307,28 +283,23 @@ class HelpAccessibilityDialog(AppDialog):
             "Alterações aplicadas imediatamente e salvas para a próxima sessão."
         )
         hint.setWordWrap(True)
-        hint.setStyleSheet(
-            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent; border: none;"
-        )
+        hint.setObjectName("PrefsHint")
         outer.addWidget(hint)
 
         preview = QFrame()
-        preview.setStyleSheet(
-            f"QFrame {{ background: {p.bg_surface}; border: 1px solid {p.border}; "
-            f"border-radius: {SPACING.radius_md}px; }}"
-        )
+        preview.setObjectName("PrefsCard")
+        preview.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         preview_layout = QVBoxLayout(preview)
         preview_layout.setContentsMargins(SPACING.md, SPACING.md, SPACING.md, SPACING.md)
         preview_layout.setSpacing(SPACING.xs)
         preview_caption = QLabel("PRÉ-VISUALIZAÇÃO")
-        preview_caption.setStyleSheet(
-            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_micro}px; font-weight: {TYPOGRAPHY.weight_semibold}; "
-            f"letter-spacing: 0.6px; background: transparent; border: none;"
-        )
+        preview_caption.setObjectName("PrefsPreviewCaption")
         self._preview_title = QLabel("Relatório de Metrologia")
+        self._preview_title.setObjectName("PrefsPreviewTitle")
         self._preview_body = QLabel(
             "Texto de exemplo — dimensões, tolerâncias e resultados de medição."
         )
+        self._preview_body.setObjectName("PrefsPreviewBody")
         self._preview_body.setWordWrap(True)
         preview_layout.addWidget(preview_caption)
         preview_layout.addWidget(self._preview_title)
@@ -342,7 +313,6 @@ class HelpAccessibilityDialog(AppDialog):
         return page
 
     def _build_storage_tab(self) -> QWidget:
-        p = PALETTE
         page = QWidget()
         page.setStyleSheet("background: transparent;")
         outer = QVBoxLayout(page)
@@ -354,7 +324,7 @@ class HelpAccessibilityDialog(AppDialog):
             "PDFs ZEISS originais e exports salvos não são apagados."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet(caption_style())
+        intro.setObjectName("PrefsSecondaryText")
         outer.addWidget(intro)
 
         self._storage_summary_host = QVBoxLayout()
@@ -402,7 +372,7 @@ class HelpAccessibilityDialog(AppDialog):
         )
         stale_row.addWidget(self._stale_months_combo)
         self._stale_projects_label = QLabel()
-        self._stale_projects_label.setStyleSheet(caption_style())
+        self._stale_projects_label.setObjectName("PrefsSecondaryText")
         stale_row.addWidget(self._stale_projects_label, stretch=1)
         outer.addLayout(stale_row)
 
@@ -423,12 +393,9 @@ class HelpAccessibilityDialog(AppDialog):
         *,
         dangerous: bool = False,
     ) -> QFrame:
-        p = PALETTE
         frame = QFrame()
-        frame.setStyleSheet(
-            f"QFrame {{ background: {p.bg_surface}; border: 1px solid {p.border}; "
-            f"border-radius: {SPACING.radius_md}px; }}"
-        )
+        frame.setObjectName("PrefsCard")
+        frame.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QHBoxLayout(frame)
         layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.sm)
         layout.setSpacing(SPACING.md)
@@ -436,13 +403,10 @@ class HelpAccessibilityDialog(AppDialog):
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
         title_label = QLabel(title)
-        title_label.setStyleSheet(
-            f"color: {p.text_primary}; font-weight: {TYPOGRAPHY.weight_semibold}; "
-            f"background: transparent; border: none;"
-        )
+        title_label.setObjectName("PrefsPrimaryText")
         desc_label = QLabel(description)
         desc_label.setWordWrap(True)
-        desc_label.setStyleSheet(caption_style())
+        desc_label.setObjectName("PrefsSecondaryText")
         text_col.addWidget(title_label)
         text_col.addWidget(desc_label)
         layout.addLayout(text_col, stretch=1)
@@ -469,14 +433,11 @@ class HelpAccessibilityDialog(AppDialog):
                 f"{format_storage_size(category.total_bytes)}"
             )
             row.setWordWrap(True)
-            row.setStyleSheet(caption_style())
+            row.setObjectName("PrefsSecondaryText")
             self._storage_summary_host.addWidget(row)
             detail = QLabel(category.description)
             detail.setWordWrap(True)
-            detail.setStyleSheet(
-                f"color: {PALETTE.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
-                f"background: transparent; border: none; margin-bottom: 4px;"
-            )
+            detail.setObjectName("PrefsMutedDetail")
             self._storage_summary_host.addWidget(detail)
 
         months = int(self._stale_months_combo.currentData() or 6)
@@ -553,22 +514,15 @@ class HelpAccessibilityDialog(AppDialog):
         self._refresh_storage_audit()
 
     def _settings_section(self, title: str, description: str) -> QWidget:
-        p = PALETTE
         box = QWidget()
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(3)
         title_label = QLabel(title.upper())
-        title_label.setStyleSheet(
-            f"color: {p.text_muted}; font-size: {TYPOGRAPHY.size_caption}px; "
-            f"font-weight: {TYPOGRAPHY.weight_semibold}; letter-spacing: 0.8px; "
-            f"background: transparent; border: none;"
-        )
+        title_label.setObjectName("PrefsMutedCaps")
         desc_label = QLabel(description)
         desc_label.setWordWrap(True)
-        desc_label.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_caption}px; background: transparent; border: none;"
-        )
+        desc_label.setObjectName("PrefsSecondaryText")
         layout.addWidget(title_label)
         layout.addWidget(desc_label)
         return box
@@ -593,7 +547,6 @@ class HelpAccessibilityDialog(AppDialog):
             self._theme_group.blockSignals(False)
             self._contrast_group.blockSignals(False)
             self._font_combo.blockSignals(False)
-        self._refresh_preview_styles()
         self._refresh_widget_styles()
 
     def _collect_draft(self) -> AppearanceSettings:
@@ -605,7 +558,6 @@ class HelpAccessibilityDialog(AppDialog):
     def _apply_draft(self) -> None:
         self._draft = self._collect_draft()
         self._manager.apply(self._draft)
-        self._refresh_preview_styles()
         self._refresh_widget_styles()
 
     def _reset_defaults(self) -> None:
@@ -613,17 +565,6 @@ class HelpAccessibilityDialog(AppDialog):
         self._manager.apply(self._draft)
         self._sync_controls_from_settings()
 
-    def _refresh_preview_styles(self) -> None:
-        p = PALETTE
-        self._preview_title.setStyleSheet(
-            f"color: {p.text_primary}; font-size: {TYPOGRAPHY.size_h3}px; "
-            f"font-weight: {TYPOGRAPHY.weight_bold}; background: transparent; border: none;"
-        )
-        self._preview_body.setStyleSheet(
-            f"color: {p.text_secondary}; font-size: {TYPOGRAPHY.size_body}px; "
-            f"background: transparent; border: none;"
-        )
-
     def _refresh_widget_styles(self) -> None:
         """Atualiza estilos do próprio diálogo após mudança de tema."""
-        self._refresh_preview_styles()
+        self.refresh_appearance()

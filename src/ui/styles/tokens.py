@@ -44,6 +44,11 @@ class Palette:
     text_disabled: str = "#484F58"
     text_on_primary: str = "#FFFFFF"
 
+    # Tooltip: o Windows ignora o fundo do QSS e usa chrome nativo escuro.
+    # text_primary no tema claro fica ilegível nesse fundo — cores próprias.
+    tooltip_bg: str = "#21262D"
+    tooltip_text: str = "#F3F6FA"
+
     success: str = "#3FB950"
     success_bg: str = "rgba(63, 185, 80, 30)"
     warning: str = "#D29922"

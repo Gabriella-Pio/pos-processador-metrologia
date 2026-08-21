@@ -128,13 +128,11 @@ class AppDialog(QDialog):
         text_col.setSpacing(SPACING.xs)
         title_label = QLabel(title)
         title_label.setObjectName("AppDialogTitle")
-        title_label.setStyleSheet(heading_style(1))
         text_col.addWidget(title_label)
         if subtitle:
             subtitle_label = QLabel(subtitle)
             subtitle_label.setObjectName("AppDialogSubtitle")
             subtitle_label.setWordWrap(True)
-            subtitle_label.setStyleSheet(caption_style())
             text_col.addWidget(subtitle_label)
 
         close_btn = IconButton(icon_close(), "Fechar (Esc)")
@@ -216,6 +214,22 @@ class AppDialog(QDialog):
         footer.addWidget(primary)
         layout.addLayout(footer)
         return primary
+
+    def refresh_appearance(self) -> None:
+        """Reaplica chrome e botões depois de troca de tema com o modal aberto."""
+        from src.ui.components.buttons import _BaseButton
+
+        for button in self.findChildren(_BaseButton):
+            button.refresh_appearance()
+        from src.ui.components.inputs import ThemedComboBox
+
+        for combo in self.findChildren(ThemedComboBox):
+            combo.refresh_appearance()
+        style = self.style()
+        for widget in [self, self._surface, *self.findChildren(QWidget)]:
+            style.unpolish(widget)
+            style.polish(widget)
+            widget.update()
 
 
 class AppMessageDialog(AppDialog):

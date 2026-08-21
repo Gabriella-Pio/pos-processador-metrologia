@@ -18,7 +18,7 @@ from src.ui.accessibility.themes import (
     dark_palette,
     light_palette,
 )
-from src.ui.styles.helpers import base_stylesheet
+from src.ui.styles.helpers import base_stylesheet, restore_link_color
 from src.ui.styles.qss_loader import clear_style_cache
 from src.ui.styles.tokens import PALETTE, TYPOGRAPHY
 
@@ -132,14 +132,18 @@ class AppearanceManager(QObject):
     def _apply_qt_chrome_palette(app: QApplication) -> None:
         """Ajusta roles que o QSS não cobre bem (tooltip, placeholder)."""
         qt_palette = app.palette()
-        qt_palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(PALETTE.bg_elevated))
-        qt_palette.setColor(QPalette.ColorRole.ToolTipText, QColor(PALETTE.text_primary))
-        # PlaceholderText costuma herdar do tema do SO — no dark some no campo de busca.
+        tooltip_bg = QColor(PALETTE.tooltip_bg)
+        tooltip_text = QColor(PALETTE.tooltip_text)
         placeholder = QColor(PALETTE.text_secondary)
+        link = QColor(restore_link_color())
         for group in (
             QPalette.ColorGroup.Active,
             QPalette.ColorGroup.Inactive,
             QPalette.ColorGroup.Disabled,
         ):
+            qt_palette.setColor(group, QPalette.ColorRole.ToolTipBase, tooltip_bg)
+            qt_palette.setColor(group, QPalette.ColorRole.ToolTipText, tooltip_text)
             qt_palette.setColor(group, QPalette.ColorRole.PlaceholderText, placeholder)
+            qt_palette.setColor(group, QPalette.ColorRole.Link, link)
+            qt_palette.setColor(group, QPalette.ColorRole.LinkVisited, link)
         app.setPalette(qt_palette)

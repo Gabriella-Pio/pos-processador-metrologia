@@ -472,12 +472,13 @@ QLineEdit#GlobalFieldInput:focus {{
     background-color: {bg_surface};
 }}
 QLabel#FieldRestoreLink {{
-    color: {senai_blue_light};
+    color: {senai_blue};
     font-size: {size_caption}px;
+    font-weight: {weight_semibold};
     background: transparent;
 }}
 QLabel#FieldRestoreLink:hover {{
-    color: {text_primary};
+    color: {senai_blue_hover};
 }}
 QWidget#SidebarTabHeader {{
     background: transparent;
@@ -781,13 +782,12 @@ QDialog {{
 
 /* ── Tooltip ── */
 QToolTip {{
-    background-color: {bg_elevated};
-    color: {text_primary};
+    background-color: {tooltip_bg};
+    color: {tooltip_text};
     border: 1px solid {border_strong};
     padding: 6px 10px;
     border-radius: {radius_sm}px;
     font-size: {size_caption}px;
-    opacity: 255;
 }}
 
 QLineEdit#TemplateNameInput {{
@@ -985,6 +985,99 @@ QDialog#AppDialog QRadioButton:disabled {{
 QDialog#AppDialog QRadioButton::indicator:disabled {{
     border-color: {border_subtle};
     background-color: {bg_surface};
+}}
+QDialog#AppDialog QLabel#AppDialogTitle {{
+    color: {text_primary};
+    font-size: {size_h1}px;
+    font-weight: {weight_bold};
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#AppDialogSubtitle {{
+    color: {text_secondary};
+    font-size: {size_caption}px;
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#PrefsMutedCaps {{
+    color: {text_muted};
+    font-size: {size_caption}px;
+    font-weight: {weight_semibold};
+    letter-spacing: 0.8px;
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#PrefsSecondaryText {{
+    color: {text_secondary};
+    font-size: {size_caption}px;
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#PrefsHint,
+QDialog#AppDialog QLabel#PrefsMutedDetail {{
+    color: {text_muted};
+    font-size: {size_caption}px;
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#ShortcutDesc {{
+    color: {text_muted};
+    font-size: {size_caption}px;
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#PrefsPrimaryText,
+QDialog#AppDialog QLabel#ShortcutAction {{
+    color: {text_primary};
+    font-weight: {weight_semibold};
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#PrefsTip {{
+    color: {text_secondary};
+    font-size: {size_body}px;
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#PrefsPreviewCaption {{
+    color: {text_muted};
+    font-size: {size_micro}px;
+    font-weight: {weight_semibold};
+    letter-spacing: 0.6px;
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#PrefsPreviewTitle {{
+    color: {text_primary};
+    font-size: {size_h3}px;
+    font-weight: {weight_bold};
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QLabel#PrefsPreviewBody {{
+    color: {text_secondary};
+    font-size: {size_body}px;
+    background: transparent;
+    border: none;
+}}
+QDialog#AppDialog QFrame#PrefsCard {{
+    background: {bg_surface};
+    border: 1px solid {border};
+    border-radius: {radius_md}px;
+}}
+QDialog#AppDialog QFrame#PrefsSeparator {{
+    background: {border_subtle};
+    border: none;
+}}
+QDialog#AppDialog QLabel#ShortcutKey {{
+    color: {senai_orange};
+    font-family: monospace;
+    font-size: {size_caption}px;
+    font-weight: {weight_bold};
+    background: {senai_orange_glow};
+    border: 1px solid {senai_orange};
+    border-radius: {radius_sm}px;
+    padding: 6px 8px;
 }}
 
 /* ── Listas e Árvores ── */

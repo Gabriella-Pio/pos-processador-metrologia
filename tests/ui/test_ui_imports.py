@@ -488,7 +488,7 @@ def test_appearance_manager_persists_settings(tmp_path) -> None:
 
 def test_help_accessibility_dialog_instantiates() -> None:
     pytest.importorskip("PyQt6")
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QLabel
 
     app = QApplication.instance() or QApplication([])
     from src.ui.dialogs.help_accessibility_dialog import HelpAccessibilityDialog, HelpDialogMode
@@ -498,6 +498,13 @@ def test_help_accessibility_dialog_instantiates() -> None:
 
     prefs = HelpAccessibilityDialog(mode=HelpDialogMode.PREFERENCES)
     assert prefs.windowTitle() == "Preferências"
+    subtitle = prefs.findChild(QLabel, "AppDialogSubtitle")
+    assert subtitle is not None
+    assert subtitle.styleSheet() == ""
+    section_desc = prefs.findChild(QLabel, "PrefsSecondaryText")
+    assert section_desc is not None
+    assert section_desc.styleSheet() == ""
+    prefs.refresh_appearance()
 
 
 def test_project_setup_dialog_single_screen() -> None:
