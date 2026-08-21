@@ -13,6 +13,7 @@ from src.ui.shared.report_editor.preview_hit_tester import (
     anchor_widget_rect,
     hit_test_at_click,
 )
+from src.ui.components.widget_lifecycle import clear_layout
 from src.ui.styles import SPACING, caption_style
 
 
@@ -34,14 +35,15 @@ class PreviewPanel(QFrame):
         self._center_h_timer = QTimer(self)
         self._center_h_timer.setSingleShot(True)
         self._center_h_timer.timeout.connect(self._apply_center_horizontal_scroll)
+        self._pending_vscroll_ratio: float | None = None
 
-        self._status_label = QLabel("")
+        self._status_label = QLabel("", self)
         self._status_label.setObjectName("WorkspacePreviewStatus")
         self._status_label.hide()
 
-        self._scroll = QScrollArea()
+        self._scroll = QScrollArea(self)
         self._scroll.setObjectName("WorkspacePreviewScroll")
-        self._pages_host = QWidget()
+        self._pages_host = QWidget(self._scroll)
         self._pages_layout = QVBoxLayout(self._pages_host)
         self._pages_layout.setContentsMargins(0, 0, 0, 0)
         self._pages_layout.setSpacing(SPACING.lg)
@@ -78,26 +80,40 @@ class PreviewPanel(QFrame):
         _ = (busy, message)
 
     def set_anchor_map(self, anchor_map: dict[str, dict]) -> None:
-        self._anchor_map = dict(anchor_map)
+        merged: dict[str, dict] = {}
+        for section_id, info in dict(anchor_map).items():
+            item = dict(info)
+            previous = self._anchor_map.get(section_id, {})
+            if not item.get("anchor_rect") and previous.get("anchor_rect"):
+                item["anchor_rect"] = previous["anchor_rect"]
+            if item.get("page_start") is None and previous.get("page_start") is not None:
+                item["page_start"] = previous["page_start"]
+            merged[section_id] = item
+        self._anchor_map = merged
         self._apply_highlight()
 
     def set_photo_anchors(self, photo_anchors: list[dict]) -> None:
         self._photo_anchors = list(photo_anchors or [])
 
     def update_anchor_map(self, anchor_map: dict[str, dict]) -> None:
-        for section_id, info in anchor_map.items():
-            if section_id in self._anchor_map:
-                self._anchor_map[section_id]["page_start"] = info.get("page")
-                self._anchor_map[section_id]["anchor_rect"] = info
+        for section_id, info in (anchor_map or {}).items():
+            current = self._anchor_map.setdefault(section_id, {})
+            rect = info.get("anchor_rect") if isinstance(info.get("anchor_rect"), dict) else info
+            if isinstance(rect, dict) and any(key in rect for key in ("x", "y", "width", "page")):
+                current["anchor_rect"] = rect
+            page = info.get("page") or info.get("page_start")
+            if page is None and isinstance(rect, dict):
+                page = rect.get("page")
+            if page is not None:
+                current["page_start"] = page
         self._apply_highlight()
 
     def render_pages(self, pages_png: list[bytes]) -> None:
-        scroll_pos = self._scroll.verticalScrollBar().value()
-        prev_count = len(self._page_items)
+        self._pending_vscroll_ratio = self._vertical_scroll_ratio()
         highlighted = self._highlighted_section_id
         self.clear()
         if not pages_png:
-            empty = QLabel("Nenhuma página disponível para preview.")
+            empty = QLabel("Nenhuma página disponível para preview.", self._pages_host)
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty.setObjectName("SidebarHint")
             empty.setStyleSheet(caption_style())
@@ -106,16 +122,16 @@ class PreviewPanel(QFrame):
 
         self._page_items = []
         for index, page_png in enumerate(pages_png, start=1):
-            page_container = QWidget()
+            page_container = QWidget(self._pages_host)
             page_layout = QVBoxLayout(page_container)
             page_layout.setContentsMargins(0, 0, 0, 0)
 
-            page_label = QLabel(f"Página {index}")
+            page_label = QLabel(f"Página {index}", page_container)
             page_label.setObjectName("WorkspacePageLabel")
             page_label.setCursor(Qt.CursorShape.PointingHandCursor)
             page_label.mousePressEvent = lambda event, pn=index: self.page_clicked.emit(pn)  # type: ignore[method-assign]
 
-            image_label = PreviewPageLabel()
+            image_label = PreviewPageLabel(page_container)
             image_label.setObjectName("WorkspacePreviewPage")
             image_label.setCursor(Qt.CursorShape.PointingHandCursor)
             pixmap = QPixmap()
@@ -141,11 +157,31 @@ class PreviewPanel(QFrame):
             )
 
         self._pages_layout.addStretch(1)
-        if abs(len(pages_png) - prev_count) <= 1:
-            self._scroll.verticalScrollBar().setValue(scroll_pos)
         if highlighted:
             self.highlight_section(highlighted)
-        QTimer.singleShot(0, self.center_horizontal_scroll)
+        QTimer.singleShot(0, self._after_pages_laid_out)
+
+    def _vertical_scroll_ratio(self) -> float | None:
+        bar = self._scroll.verticalScrollBar()
+        maximum = bar.maximum()
+        if maximum <= 0:
+            return None
+        return bar.value() / maximum
+
+    def _restore_vertical_scroll(self) -> None:
+        ratio = self._pending_vscroll_ratio
+        self._pending_vscroll_ratio = None
+        if ratio is None:
+            return
+        if self._scroll_animation is not None:
+            self._scroll_animation.stop()
+            self._scroll_animation = None
+        bar = self._scroll.verticalScrollBar()
+        bar.setValue(round(ratio * bar.maximum()))
+
+    def _after_pages_laid_out(self) -> None:
+        self._restore_vertical_scroll()
+        self.center_horizontal_scroll()
 
     def center_horizontal_scroll(self) -> None:
         """Centraliza a folha na preview quando há overflow horizontal."""
@@ -160,13 +196,9 @@ class PreviewPanel(QFrame):
         hbar.setValue(maximum // 2)
 
     def clear(self) -> None:
-        while self._pages_layout.count():
-            item = self._pages_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
+        clear_layout(self._pages_layout, discard=True)
         self._page_items = []
-        self._highlighted_section_id = None
+        # Mantém o destaque da seção ativa; clear() só derruba os widgets.
 
     def focus_section(self, section_id: str) -> None:
         self.highlight_section(section_id)

@@ -1,7 +1,7 @@
 """Apresentação de diálogos com overlay — clique fora e Esc fecham."""
 from __future__ import annotations
 
-from PyQt6.QtCore import QEvent, QEventLoop, QObject, Qt
+from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtWidgets import QApplication, QDialog, QMainWindow, QWidget
 
 from src.ui.components.modal_overlay import ModalOverlay
@@ -57,24 +57,17 @@ def present_modal_dialog(parent: QWidget, dialog: QDialog) -> int:
 
     overlay.show()
     overlay.raise_()
-
-    loop = QEventLoop()
-    dialog.finished.connect(loop.quit)
     dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
     _center_dialog_on_window(parent, dialog)
-    dialog.setWindowFlag(Qt.WindowType.Window, True)
-    dialog.show()
     dialog.raise_()
-    dialog.activateWindow()
-    loop.exec()
+    result = int(dialog.exec())
 
     if app is not None and escape_filter is not None:
         app.removeEventFilter(escape_filter)
 
-    result = dialog.result()
-    dialog.hide()
-    dialog.setWindowFlag(Qt.WindowType.Window, False)
     overlay.hide()
     host.removeEventFilter(overlay)
     overlay.deleteLater()
+    if hasattr(dialog, "set_overlay"):
+        dialog.set_overlay(None)
     return result

@@ -18,6 +18,7 @@ from src.core.domain.markdown_prose import resolve_list_enter
 from src.core.domain.placeholder_utils import PLACEHOLDER_CATALOG, extract_placeholders, placeholder_label, remove_placeholder
 from src.ui.components.flow_layout import FlowLayout
 from src.ui.components.rich_text_toolbar import RichTextToolbar
+from src.ui.components.widget_lifecycle import clear_layout
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
 
 
@@ -135,7 +136,7 @@ class PlaceholderTextEdit(QFrame):
         completer_keys = [f"{{{key}}}" for key, _ in PLACEHOLDER_CATALOG]
 
         # Caixa visual só no editor — chips ficam abaixo, fora da borda
-        self._editor = _PlainTextEdit(continue_lists=self._supports_formatting)
+        self._editor = _PlainTextEdit(continue_lists=self._supports_formatting, parent=self)
         self._editor.setObjectName("PlaceholderEditor")
         self._editor.setAcceptRichText(False)
         self._editor.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
@@ -161,10 +162,10 @@ class PlaceholderTextEdit(QFrame):
             lambda _size: self._adjust_editor_height()
         )
 
-        self._completer = QCompleter(completer_keys)
+        self._completer = QCompleter(completer_keys, self._editor)
         self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
 
-        self._chips_host = QWidget()
+        self._chips_host = QWidget(self)
         self._chips_host.setObjectName("PlaceholderChipsHost")
         self._chips_host.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self._chips_layout = FlowLayout(
@@ -310,15 +311,11 @@ class PlaceholderTextEdit(QFrame):
         self.text_changed.emit(self.get_text())
 
     def _rebuild_chips(self) -> None:
-        while self._chips_layout.count():
-            item = self._chips_layout.takeAt(0)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                widget.deleteLater()
+        clear_layout(self._chips_layout, discard=True)
         keys = extract_placeholders(self.get_text())
         self._chips_host.setVisible(bool(keys))
         for key in keys:
-            chip = _PlaceholderChip(key)
+            chip = _PlaceholderChip(key, self._chips_host)
             chip.remove_requested.connect(self._remove_placeholder)
             self._chips_layout.addWidget(chip)
         self.updateGeometry()

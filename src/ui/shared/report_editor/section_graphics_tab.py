@@ -5,6 +5,7 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QCheckBox, QLabel, QVBoxLayout, QWidget
 
 from src.core.domain.chart_figure_defs import chart_figure_defs
+from src.ui.components.widget_lifecycle import clear_layout
 from src.ui.styles import SPACING
 
 
@@ -18,7 +19,7 @@ class SectionGraphicsTab(QWidget):
         self._chart_checkboxes: dict[str, QCheckBox] = {}
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(SPACING.md, SPACING.sm, SPACING.md, SPACING.md)
-        self._graphics_hint = QLabel("Integração com gráficos Calypso em breve.")
+        self._graphics_hint = QLabel("Integração com gráficos Calypso em breve.", self)
         self._graphics_hint.setWordWrap(True)
         self._graphics_hint.setObjectName("SidebarHint")
         self._layout.addWidget(self._graphics_hint)
@@ -31,11 +32,7 @@ class SectionGraphicsTab(QWidget):
         self._defaults_mode = enabled
 
     def rebuild(self, section_id: str, overrides: dict) -> None:
-        while self._layout.count():
-            item = self._layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
+        clear_layout(self._layout, discard=True)
         self._chart_checkboxes.clear()
 
         defs = chart_figure_defs(section_id)
@@ -43,10 +40,11 @@ class SectionGraphicsTab(QWidget):
             if section_id == "grafica":
                 self._graphics_hint = QLabel(
                     "Gráficos analíticos desta seção. Associe imagens exportadas do CALYPSO "
-                    "ou use o layout para reservar espaço no PDF."
+                    "ou use o layout para reservar espaço no PDF.",
+                    self,
                 )
             else:
-                self._graphics_hint = QLabel("Integração com gráficos Calypso em breve.")
+                self._graphics_hint = QLabel("Integração com gráficos Calypso em breve.", self)
             self._graphics_hint.setWordWrap(True)
             self._graphics_hint.setObjectName("SidebarHint")
             self._layout.addWidget(self._graphics_hint)
@@ -55,7 +53,8 @@ class SectionGraphicsTab(QWidget):
 
         intro = QLabel(
             "Marque os gráficos que devem aparecer no PDF. "
-            "Para remover todos de uma vez, desmarque <b>Gráficos</b> na aba Layout."
+            "Para remover todos de uma vez, desmarque <b>Gráficos</b> na aba Layout.",
+            self,
         )
         intro.setWordWrap(True)
         intro.setObjectName("SidebarHint")
@@ -67,7 +66,7 @@ class SectionGraphicsTab(QWidget):
             if item
         }
         for figure in defs:
-            cb = QCheckBox(figure.label)
+            cb = QCheckBox(figure.label, self)
             cb.setChecked(figure.id not in disabled)
             cb.stateChanged.connect(
                 lambda _state, section=section_id: self._emit_disabled_chart_ids(section)

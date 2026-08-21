@@ -5,6 +5,7 @@ from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QCheckBox, QFrame, QLabel, QVBoxLayout, QWidget
 
 from src.ui.styles import SPACING, PALETTE, caption_style
+from src.ui.components.widget_lifecycle import clear_layout
 
 
 def _notice_style(*, padding: str = "8px") -> str:
@@ -163,11 +164,7 @@ class TemplateLayoutPanel(QFrame):
             )
 
     def set_table_widget(self, widget: QWidget | None) -> None:
-        while self._tables_host_layout.count():
-            item = self._tables_host_layout.takeAt(0)
-            child = item.widget()
-            if child is not None:
-                child.setParent(None)
+        clear_layout(self._tables_host_layout, discard=False)
         if widget is not None:
             self._tables_host_layout.addWidget(widget)
             self._tables_host.setVisible(True)
