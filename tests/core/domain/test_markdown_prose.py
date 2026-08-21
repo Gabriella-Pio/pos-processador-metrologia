@@ -81,3 +81,12 @@ def test_resolve_list_enter_default_for_plain_line() -> None:
 
 def test_empty_string() -> None:
     assert markdown_to_reportlab_html("") == ""
+
+
+def test_zalgo_does_not_keep_stacked_marks() -> None:
+    marks = "".join(chr(0x0300 + (index % 16)) for index in range(80))
+    html = markdown_to_reportlab_html("a" + marks)
+    combining = sum(1 for char in html if "\u0300" <= char <= "\u036f")
+    assert combining <= 2
+    assert html[:1].isalpha()
+

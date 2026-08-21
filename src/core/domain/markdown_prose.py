@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from src.core.domain.pdf_plain_text import limit_combining_marks
+
 _PLACEHOLDER_PATTERN = re.compile(r"\{[^{}]+\}")
 _NUMBERED_LINE = re.compile(r"^(\d+)\. (.*)$")
 
@@ -45,7 +47,7 @@ def markdown_to_reportlab_html(text: str) -> str:
     if not text:
         return ""
 
-    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = limit_combining_marks(text).replace("\r\n", "\n").replace("\r", "\n")
     placeholders: list[str] = []
 
     def _stash_placeholder(match: re.Match[str]) -> str:
