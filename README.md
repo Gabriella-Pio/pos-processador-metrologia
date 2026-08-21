@@ -52,9 +52,13 @@ python3 main.py
 ```bash
 # Windows
 python -m venv venv
+OU
+py -m venv venv
 venv\Scripts\activate.bat
 pip install -r requirements.txt
-python main.py
+OU
+py -m pip install -r requirements.txt
+python main.py OU py main.py
 ```
 
 ## Fluxo principal
