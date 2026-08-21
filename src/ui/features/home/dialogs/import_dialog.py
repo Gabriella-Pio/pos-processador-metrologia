@@ -22,7 +22,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QMessageBox,
     QSizePolicy,
     QStackedLayout,
     QVBoxLayout,
@@ -33,7 +32,7 @@ from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import IconButton, PrimaryButton, SecondaryButton
 from src.ui.components.icons import icon_close, icon_file_pdf
 from src.ui.components.inputs import LabeledLineEdit
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, fit_to_screen
 
 
 class _PdfListRow(QFrame):
@@ -287,7 +286,9 @@ class DropZone(QFrame):
             self._warning_label.setText(msg)
             self._warning_label.show()
         else:
-            QMessageBox.information(self.window(), "Arquivo já importado", msg)
+            from src.ui.components.feedback import show_info
+
+            show_info(self.window(), "Arquivo já importado", msg)
 
     def _update_counter(self) -> None:
         count = self._list.count()
@@ -318,8 +319,9 @@ class ImportDialog(AppDialog):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent, window_title="Importar Relatórios PDF", minimum_width=540)
-        self.setMinimumHeight(560)
-        self._surface.setMinimumHeight(520)
+        _, dialog_height = fit_to_screen(560, 560, reference=parent)
+        self.setMinimumHeight(dialog_height)
+        self._surface.setMinimumHeight(dialog_height - 40)
 
         self._client_field = LabeledLineEdit("Cliente / Projeto", required=True)
         self._component_field = LabeledLineEdit("Componente Avaliado", required=True)

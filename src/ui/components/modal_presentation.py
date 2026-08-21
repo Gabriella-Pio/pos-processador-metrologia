@@ -58,6 +58,8 @@ def present_modal_dialog(parent: QWidget, dialog: QDialog) -> int:
     overlay.show()
     overlay.raise_()
     dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+    if hasattr(dialog, "prepare_for_show"):
+        dialog.prepare_for_show()
     _center_dialog_on_window(parent, dialog)
     dialog.raise_()
     result = int(dialog.exec())

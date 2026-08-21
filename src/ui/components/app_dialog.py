@@ -4,7 +4,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QDialog,
@@ -19,7 +19,8 @@ from PyQt6.QtWidgets import (
 
 from src.ui.components.buttons import DangerButton, IconButton, PrimaryButton, SecondaryButton
 from src.ui.components.icons import icon_close
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, caption_style, heading_style
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, available_size, caption_style, fit_to_screen, heading_style
+from src.ui.styles.screen_metrics import SCREEN_MARGIN
 
 
 class DialogKind(Enum):
@@ -61,16 +62,20 @@ class AppDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self._overlay: QWidget | None = None
+        self._fit_scroll: QScrollArea | None = None
         self.setObjectName("AppDialog")
         self.setWindowTitle(window_title)
-        self.setMinimumWidth(minimum_width + _SHADOW_MARGIN * 2)
+        minimum_width, _ = fit_to_screen(minimum_width + _SHADOW_MARGIN * 2, 0, reference=parent)
+        self.setMinimumWidth(minimum_width)
+        minimum_width -= _SHADOW_MARGIN * 2
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowFlags(
             Qt.WindowType.Dialog
             | Qt.WindowType.FramelessWindowHint
         )
 
-        shell = QVBoxLayout(self)
+        self._shell = QVBoxLayout(self)
+        shell = self._shell
         shell.setContentsMargins(
             _SHADOW_MARGIN,
             _SHADOW_MARGIN,
@@ -104,6 +109,47 @@ class AppDialog(QDialog):
             event.accept()
             return
         super().keyPressEvent(event)
+
+    def showEvent(self, event) -> None:  # noqa: ANN001, N802
+        super().showEvent(event)
+        self._enable_scroll_if_taller_than_screen()
+        # Campos com altura deferida (ex.: PlaceholderTextEdit) só reportam o
+        # tamanho real depois do primeiro ciclo de eventos.
+        QTimer.singleShot(0, self._enable_scroll_if_taller_than_screen)
+
+    def prepare_for_show(self) -> None:
+        """Finaliza tamanho/layout antes de o Windows criar a janela nativa."""
+        self._enable_scroll_if_taller_than_screen()
+        self.adjustSize()
+
+    def _enable_scroll_if_taller_than_screen(self) -> None:
+        """Rede de segurança para escalas altas do Windows.
+
+        Quando o conteúdo do diálogo não cabe na altura disponível, ele passa a
+        rolar dentro da janela — sem isso o rodapé com os botões de ação fica
+        fora da tela e o fluxo trava.
+        """
+        if self._fit_scroll is not None:
+            return
+        _, screen_h = available_size(self)
+        limit = screen_h - SCREEN_MARGIN
+        content_h = max(self._surface.minimumHeight(), self._surface.minimumSizeHint().height())
+        if content_h + _SHADOW_MARGIN * 2 <= limit:
+            return
+
+        scroll = QScrollArea()
+        scroll.setObjectName("AppDialogFitScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget { background: transparent; }")
+        self._shell.removeWidget(self._surface)
+        scroll.setWidget(self._surface)
+        self._shell.addWidget(scroll)
+        self._fit_scroll = scroll
+
+        self.setMinimumHeight(0)
+        self.resize(self.width(), limit)
 
     def set_overlay(self, overlay: QWidget | None) -> None:
         self._overlay = overlay

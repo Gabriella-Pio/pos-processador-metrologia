@@ -22,7 +22,17 @@ from src.ui.components.panels.image_annotation_canvas import ImageAnnotationCanv
 from src.ui.components.panels.marker_legend_panel import MarkerLegendPanel
 from src.ui.components.panels.photo_pdf_preview import PhotoPdfPreviewPanel
 from src.ui.components.placeholder_field import PlaceholderTextEdit
-from src.ui.styles import SPACING, caption_style
+from src.ui.styles import SPACING, available_size, caption_style, fit_dialog
+from src.ui.styles.screen_metrics import SCREEN_MARGIN
+
+#: Altura somada de cabeçalho, legenda, barra de ferramentas, rodapé e margens.
+_DIALOG_CHROME_HEIGHT = 531
+
+
+def _canvas_min_height(dialog: QWidget) -> int:
+    """Sobra para a foto depois do chrome — evita diálogo maior que a tela."""
+    _, screen_h = available_size(dialog)
+    return max(160, min(360, screen_h - SCREEN_MARGIN - _DIALOG_CHROME_HEIGHT))
 
 
 class ImageAnnotationDialog(AppDialog):
@@ -32,8 +42,7 @@ class ImageAnnotationDialog(AppDialog):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent, window_title="Editar fotografia", minimum_width=960)
-        self.setMinimumSize(1040, 920)
-        self.resize(1060, 940)
+        fit_dialog(self, 1060, 940)
         self.setModal(True)
         self._image: ReportImage | None = None
         self._gallery: list[ReportImage] = []
@@ -54,7 +63,7 @@ class ImageAnnotationDialog(AppDialog):
         self._caption_edit.text_changed.connect(self._on_caption_changed)
 
         self._canvas = ImageAnnotationCanvas()
-        self._canvas.setMinimumHeight(360)
+        self._canvas.setMinimumHeight(_canvas_min_height(self))
         self._canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._canvas.edits_changed.connect(self._on_canvas_edits_changed)
 
@@ -80,7 +89,7 @@ class ImageAnnotationDialog(AppDialog):
         legend_scroll.setWidgetResizable(True)
         legend_scroll.setFrameShape(QFrame.Shape.NoFrame)
         legend_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        legend_scroll.setMaximumHeight(112)
+        legend_scroll.setMaximumHeight(112 if available_size(self)[1] >= 900 else 88)
         legend_scroll.setWidget(self._legend_panel)
 
         bottom_row = QFrame()
@@ -116,10 +125,24 @@ class ImageAnnotationDialog(AppDialog):
             "Atalhos: Selecionar · S/C/T/N ferramentas · ← → trocar foto · Del apagar · "
             "Ctrl+C/V copiar/colar · Ctrl+Z desfazer",
         )
-        layout.addWidget(self._photo_label)
-        layout.addWidget(self._caption_label)
-        layout.addWidget(self._caption_edit)
-        layout.addWidget(editor_host, stretch=1)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(SPACING.md)
+        body_layout.addWidget(self._photo_label)
+        body_layout.addWidget(self._caption_label)
+        body_layout.addWidget(self._caption_edit)
+        body_layout.addWidget(editor_host, stretch=1)
+
+        # Em telas curtas (escala alta do Windows) o corpo rola; cabeçalho e
+        # botões continuam visíveis em vez de sair para fora da tela.
+        body_scroll = QScrollArea()
+        body_scroll.setObjectName("ImageAnnotationBodyScroll")
+        body_scroll.setWidgetResizable(True)
+        body_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        body_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        body_scroll.setWidget(body)
+        layout.addWidget(body_scroll, stretch=1)
 
         self.add_dialog_divider(layout)
         footer = QHBoxLayout()

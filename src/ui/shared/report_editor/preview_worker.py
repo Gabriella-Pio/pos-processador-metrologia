@@ -8,6 +8,7 @@ from collections.abc import Callable
 from PyQt6.QtCore import QObject, QRunnable, QThreadPool, QTimer, pyqtSignal, pyqtSlot
 
 from src.core.domain.ports import ReportDocument
+from src.ui.shared.report_editor.preview_constants import raster_zoom
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +34,19 @@ class PreviewWorker(QRunnable):
         generation: int,
         document: ReportDocument,
         preview_service,
+        zoom: float | None = None,
     ) -> None:
         super().__init__()
         self._generation = generation
         self._document = document
         self._preview_service = preview_service
+        self._zoom = zoom
         self.signals = PreviewWorkerSignals()
 
     @pyqtSlot()
     def run(self) -> None:
         try:
-            pages = self._preview_service.render_pages(self._document)
+            pages = self._preview_service.render_pages(self._document, self._zoom)
             exporter = self._preview_service._exporter
             metadata = build_preview_metadata(exporter)
             self.signals.finished.emit(self._generation, pages, metadata)
@@ -107,7 +110,8 @@ class DebouncedPreviewRunner(QObject):
         self._set_generating(True)
         self._generation += 1
         generation = self._generation
-        worker = PreviewWorker(generation, document, self._preview_service)
+        # A densidade da tela é lida aqui, na thread da UI, e não no worker.
+        worker = PreviewWorker(generation, document, self._preview_service, raster_zoom())
         worker.signals.finished.connect(self._on_finished)
         worker.signals.failed.connect(self._on_failed)
         QThreadPool.globalInstance().start(worker)

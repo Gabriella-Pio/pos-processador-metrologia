@@ -46,6 +46,12 @@ from src.ui.styles.helpers import (
     tab_style,
     view_toggle_style,
 )
+from src.ui.styles.screen_metrics import (
+    available_size,
+    fit_dialog,
+    fit_to_screen,
+    preview_device_pixel_ratio,
+)
 from src.ui.styles.tokens import (
     DASHBOARD_CARD_HEIGHT,
     DASHBOARD_CARD_WIDTH,
@@ -61,6 +67,10 @@ __all__ = [
     "PALETTE",
     "SPACING",
     "TYPOGRAPHY",
+    "available_size",
+    "fit_dialog",
+    "fit_to_screen",
+    "preview_device_pixel_ratio",
     "scaled_dashboard_card_size",
     "action_card_hover_style",
     "action_card_icon_style",

@@ -2,7 +2,7 @@
 Componentes de feedback ao usuário — dark edition.
 
 InlineBanner → faixa estilo GitHub Alert (border-left colorida)
-show_friendly_error / show_info / confirm_action → diálogos do design system
+show_friendly_error / show_info / confirm_action / prompt_text → design system
 """
 from __future__ import annotations
 
@@ -10,9 +10,11 @@ from enum import Enum, auto
 from typing import Optional
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
+from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QWidget
 
-from src.ui.components.app_dialog import AppMessageDialog, DialogKind
+from src.ui.components.app_dialog import AppDialog, AppMessageDialog, DialogKind, present_app_dialog
+from src.ui.components.buttons import PrimaryButton, SecondaryButton
+from src.ui.components.inputs import LabeledLineEdit
 from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
 from src.ui.styles.helpers import inline_banner_style
 
@@ -142,3 +144,81 @@ def confirm_dangerous_action(parent: Optional[QWidget], title: str, message: str
         cancel_label="Cancelar",
         danger=True,
     )
+
+
+class _TextPromptDialog(AppDialog):
+    """Prompt de texto alinhado ao tema (substitui QInputDialog no Windows)."""
+
+    def __init__(
+        self,
+        parent: Optional[QWidget],
+        title: str,
+        label: str,
+        *,
+        default: str = "",
+        placeholder: str = "",
+        ok_label: str = "OK",
+        cancel_label: str = "Cancelar",
+    ) -> None:
+        super().__init__(parent, window_title=title, minimum_width=420)
+        self._value = ""
+
+        self._field = LabeledLineEdit(label, placeholder=placeholder)
+        self._field.set_text(default)
+        self._field.field.returnPressed.connect(self.accept)
+
+        layout = self.create_root_layout()
+        self.add_dialog_header(layout, title)
+        layout.addWidget(self._field)
+
+        self.add_dialog_divider(layout)
+        footer = QHBoxLayout()
+        footer.setSpacing(SPACING.sm)
+        footer.addStretch(1)
+        cancel_btn = SecondaryButton(cancel_label)
+        cancel_btn.clicked.connect(self.reject)
+        ok_btn = PrimaryButton(ok_label)
+        ok_btn.setMinimumWidth(100)
+        ok_btn.clicked.connect(self.accept)
+        footer.addWidget(cancel_btn)
+        footer.addWidget(ok_btn)
+        layout.addLayout(footer)
+
+    def showEvent(self, event) -> None:  # noqa: ANN001, N802
+        super().showEvent(event)
+        self._field.field.setFocus()
+        if self._field.field.text():
+            self._field.field.selectAll()
+
+    def accept(self) -> None:  # noqa: N802
+        self._value = self._field.text()
+        super().accept()
+
+    @property
+    def value(self) -> str:
+        return self._value
+
+
+def prompt_text(
+    parent: Optional[QWidget],
+    title: str,
+    label: str,
+    *,
+    default: str = "",
+    placeholder: str = "",
+    allow_empty: bool = False,
+) -> str | None:
+    """Pede um texto ao usuário com o chrome do app (não o diálogo nativo do SO)."""
+    dialog = _TextPromptDialog(
+        parent,
+        title,
+        label,
+        default=default,
+        placeholder=placeholder,
+    )
+    if present_app_dialog(parent, dialog) != QDialog.DialogCode.Accepted:
+        return None
+    cleaned = dialog.value.strip()
+    if not cleaned and not allow_empty:
+        return None
+    return cleaned

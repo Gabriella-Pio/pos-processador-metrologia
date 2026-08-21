@@ -4,12 +4,12 @@ from __future__ import annotations
 from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QPushButton,
     QWidget,
 )
 
+from src.ui.components.feedback import prompt_text
 from src.ui.components.icons import icon_empty_file, icon_empty_results, icon_trash
 from src.ui.features.home.components.dashboard_panel_shell import build_dashboard_panel_chrome
 from src.ui.features.home.components.empty_state import EmptyState
@@ -299,13 +299,13 @@ class OngoingProjectsPanel(QWidget):
         )
         if summary is None:
             return
-        text, ok = QInputDialog.getText(
+        text = prompt_text(
             self,
             "Renomear projeto",
             "Nome do projeto:",
-            text=summary.display_name,
+            default=summary.display_name,
         )
-        if not ok:
+        if text is None:
             return
         cleaned = text.strip()
         if cleaned and cleaned != summary.display_name:

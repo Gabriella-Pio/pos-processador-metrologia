@@ -157,6 +157,9 @@ class PlaceholderTextEdit(QFrame):
             f" border: 1px solid {PALETTE.senai_blue_light};"
             f"}}"
         )
+        # Sem altura explícita o editor mantém o padrão de 480px do QWidget até o
+        # primeiro _adjust_editor_height, inflando o sizeHint de quem o contém.
+        self._editor.setFixedHeight(self._min_editor_height())
         self._editor.textChanged.connect(self._on_text_changed)
         self._editor.document().documentLayout().documentSizeChanged.connect(
             lambda _size: self._adjust_editor_height()

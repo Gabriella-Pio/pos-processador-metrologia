@@ -22,7 +22,7 @@ from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.components.feedback import confirm_action, confirm_dangerous_action, show_info
 from src.ui.components.inputs import ThemedComboBox
-from src.ui.styles import SPACING
+from src.ui.styles import SPACING, fit_dialog
 from src.core.application.storage_cleanup import (
     DEFAULT_DB_PATH,
     audit_storage,
@@ -99,12 +99,10 @@ class HelpAccessibilityDialog(AppDialog):
     ) -> None:
         if mode is HelpDialogMode.HELP:
             super().__init__(parent, window_title="Ajuda", minimum_width=580)
-            self.setMinimumSize(580, 460)
-            self.resize(640, 520)
+            fit_dialog(self, 640, 520)
         else:
             super().__init__(parent, window_title="Preferências", minimum_width=580)
-            self.setMinimumSize(580, 480)
-            self.resize(640, 560)
+            fit_dialog(self, 640, 560)
         self._mode = mode
         self._db_path = Path(db_path)
         self._manager = AppearanceManager.instance()

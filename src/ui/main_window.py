@@ -32,6 +32,7 @@ from src.ui.features.home.dialogs.project_setup_dialog import ProjectSetupDialog
 from src.ui.features.home.viewmodels.home_viewmodel import HomeViewModel
 from src.ui.features.templates.viewmodels.template_editor_viewmodel import TemplateEditorViewModel
 from src.ui.features.workspace.viewmodels.workspace_viewmodel import WorkspaceViewModel
+from src.ui.styles import fit_to_screen
 
 
 class MainWindow(QMainWindow):
@@ -48,7 +49,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         super().__init__()
         self.setWindowTitle("Pós-processamento de Relatórios de Metrologia — SENAI × ZEISS")
-        self.setMinimumSize(960, 600)
+        self.setMinimumSize(*fit_to_screen(960, 600))
         # QSS vem do AppearanceManager (app-wide); refresh_appearance atualiza a janela.
 
         self._parser = report_parser

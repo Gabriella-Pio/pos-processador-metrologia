@@ -21,7 +21,7 @@ from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
 from src.ui.components.inputs import LabeledLineEdit, ThemedComboBox
 from src.ui.features.home.dialogs.import_dialog import DropZone
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY
+from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, fit_to_screen
 
 
 class ProjectSetupDialog(AppDialog):
@@ -36,9 +36,10 @@ class ProjectSetupDialog(AppDialog):
         overlay: QWidget | None = None,
     ) -> None:
         super().__init__(parent, window_title="Novo Projeto de Medição", minimum_width=680)
-        self.setMinimumHeight(640)
-        self.setMaximumHeight(900)
-        self._surface.setMinimumHeight(600)
+        _, dialog_height = fit_to_screen(640, 640, reference=parent)
+        self.setMinimumHeight(dialog_height)
+        self.setMaximumHeight(max(dialog_height, min(900, fit_to_screen(900, 900)[1])))
+        self._surface.setMinimumHeight(dialog_height - 40)
         self._parser = parser
         self._template_repo = template_repo
         self._overlay = overlay

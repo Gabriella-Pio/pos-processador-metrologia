@@ -16,10 +16,11 @@ from PyQt6.QtGui import (
     QPolygonF,
     QWheelEvent,
 )
-from PyQt6.QtWidgets import QInputDialog, QSizePolicy, QWidget
+from PyQt6.QtWidgets import QSizePolicy, QWidget
 
 from src.core.application.annotation_clipboard import copy_from_image, take_clipboard_copy
 from src.core.domain.ports import Annotation, ImageCrop, ReportImage
+from src.ui.components.feedback import prompt_text
 from src.ui.styles import PALETTE
 
 
@@ -179,11 +180,7 @@ class ImageAnnotationCanvas(QWidget):
         return left, top, width, height
 
     def _prompt_text(self, title: str, label: str, default: str = "") -> str | None:
-        text, accepted = QInputDialog.getText(self, title, label, text=default)
-        if not accepted:
-            return None
-        cleaned = text.strip()
-        return cleaned or None
+        return prompt_text(self, title, label, default=default)
 
     def _annotation_index_at(self, norm: tuple[float, float]) -> int | None:
         if self._image is None:

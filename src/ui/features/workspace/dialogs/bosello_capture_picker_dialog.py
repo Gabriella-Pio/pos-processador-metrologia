@@ -17,7 +17,14 @@ from PyQt6.QtWidgets import (
 
 from src.ui.components.app_dialog import AppDialog
 from src.ui.components.buttons import PrimaryButton, SecondaryButton
-from src.ui.styles import PALETTE, SPACING, TYPOGRAPHY, caption_style, heading_style
+from src.ui.styles import (
+    PALETTE,
+    SPACING,
+    TYPOGRAPHY,
+    caption_style,
+    fit_to_screen,
+    heading_style,
+)
 
 
 class _CaptureTile(QFrame):
@@ -126,7 +133,7 @@ class BoselloCapturePickerDialog(AppDialog):
             window_title="Capturas do relatório Bosello",
             minimum_width=520,
         )
-        self.setMinimumHeight(420)
+        self.setMinimumHeight(fit_to_screen(420, 420, reference=parent)[1])
 
         self._tiles: list[_CaptureTile] = []
         self._selected: set[str] = set()

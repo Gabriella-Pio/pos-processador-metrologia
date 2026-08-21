@@ -7,18 +7,18 @@ from pathlib import Path
 import fitz
 
 from src.core.domain.ports import ReportDocument, ReportExporter
-from src.ui.shared.report_editor.preview_constants import PREVIEW_ZOOM
+from src.ui.shared.report_editor.preview_constants import raster_zoom
 
 
 class PreviewService:
     def __init__(self, exporter: ReportExporter) -> None:
         self._exporter = exporter
 
-    def render_pages(self, document: ReportDocument, zoom: float = PREVIEW_ZOOM) -> list[bytes]:
+    def render_pages(self, document: ReportDocument, zoom: float | None = None) -> list[bytes]:
         with tempfile.TemporaryDirectory(prefix="metrologia_preview_") as tmp_dir:
             rascunho_path = Path(tmp_dir) / "preview.pdf"
             self._exporter.export(document, rascunho_path)
-            return self._rasterize(rascunho_path, zoom)
+            return self._rasterize(rascunho_path, raster_zoom() if zoom is None else zoom)
 
     @staticmethod
     def _rasterize(pdf_path: Path, zoom: float) -> list[bytes]:

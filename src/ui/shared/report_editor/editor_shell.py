@@ -6,6 +6,31 @@ from PyQt6.QtWidgets import QSplitter, QStackedWidget, QVBoxLayout, QWidget
 
 DEFAULT_SPLITTER_SIZES = (240, 320, 800)
 
+#: Proporções das três colunas com o formulário de seção aberto / apenas preview.
+EDITING_RATIOS = (0.18, 0.24, 0.58)
+PREVIEW_ONLY_RATIOS = (0.18, 0.0, 0.82)
+
+_MIN_SIDEBAR = 200
+_MIN_EDITOR = 280
+_MIN_PREVIEW = 320
+
+
+def splitter_sizes(total_width: int, ratios: tuple[float, float, float]) -> list[int]:
+    """Converte proporções na largura real do splitter, respeitando mínimos por coluna.
+
+    Tamanhos absolutos quebram quando a escala do Windows encolhe a área lógica:
+    somar colunas pensadas para 1360 px numa janela de 1280 px espreme o preview.
+    """
+    total = total_width if total_width > 0 else sum(DEFAULT_SPLITTER_SIZES)
+    sidebar = max(_MIN_SIDEBAR, round(total * ratios[0]))
+    editor = max(_MIN_EDITOR, round(total * ratios[1])) if ratios[1] > 0 else 0
+    preview = total - sidebar - editor
+    if preview < _MIN_PREVIEW:
+        deficit = _MIN_PREVIEW - preview
+        editor = max(0, editor - deficit)
+        preview = total - sidebar - editor
+    return [sidebar, editor, max(0, preview)]
+
 
 def create_three_column_splitter(
     sidebar: QWidget,
