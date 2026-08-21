@@ -202,7 +202,7 @@ def _greeting_and_date() -> tuple[str, str, str]:
         "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
     ]
     hour = now.hour
-    greeting = "Bom dia" if hour < 12 else "Boa tarde" if hour < 18 else "Boa noite"
+    greeting = "Bom dia, vamos para os novos desafios!" if hour < 12 else "Boa tarde, vamos para os novos desafios!" if hour < 18 else "Boa noite, vamos para os novos desafios!"
     parts = greeting.rsplit(" ", 1)
     base = parts[0] + " " if len(parts) == 2 else greeting
     accent = parts[1] if len(parts) == 2 else ""
