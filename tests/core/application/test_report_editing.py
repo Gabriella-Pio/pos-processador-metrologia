@@ -149,6 +149,23 @@ def test_build_template_preview_document() -> None:
     summary = build_template_sections_summary(sections_config, content)
     assert any(s["id"] == "introducao" for s in summary)
     assert summary[0]["enabled"] is True
+    assert all(s["id"] != "cabecalho" for s in summary)
+
+
+def test_template_summary_omits_institutional_header() -> None:
+    from src.core.application.template_preview import build_template_sections_summary
+    from src.core.domain.field_definitions import get_edit_fields
+    from src.core.domain.section_schema import is_sidebar_section
+
+    summary = build_template_sections_summary({}, {})
+    ids = [section["id"] for section in summary]
+    assert "cabecalho" not in ids
+    assert "introducao" in ids
+    assert ids[0] == "introducao"
+    assert is_sidebar_section("introducao")
+    assert is_sidebar_section("custom_1")
+    assert not is_sidebar_section("cabecalho")
+    assert get_edit_fields("cabecalho", defaults_mode=True) == ()
 
 
 def test_sections_list_panel_template_mode() -> None:

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.core.domain.ports import ReportDocument, TechnicalControlInfo, VersionEntry
-from src.core.domain.section_schema import PROTECTED_SECTION_IDS, is_custom_section_id, merge_saved_template_config
+from src.core.domain.section_schema import PROTECTED_SECTION_IDS, is_custom_section_id, is_sidebar_section, merge_saved_template_config
 from src.core.parser.parser import RelatorioCalypsoDto
 from src.core.parser.table_extractor import MedicaoItemDto
 
@@ -143,6 +143,8 @@ def build_template_sections_summary(
     section_defaults, _global = split_template_content_defaults(content_defaults)
     result: list[dict] = []
     for section_id, label, enabled in _ordered_sections(sections_config):
+        if not is_sidebar_section(section_id):
+            continue
         defaults = dict(default_prose_values(section_id, {"report_kind": report_kind}))
         defaults.update(section_defaults.get(section_id, {}))
         if section_id == "interpretacao":

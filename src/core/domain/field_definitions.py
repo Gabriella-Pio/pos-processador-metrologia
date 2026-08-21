@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.core.domain.prose_templates import INTRODUCAO_BODY_TITLE_KEYS
+from src.core.domain.section_catalog import catalog_by_id
 
 
 @dataclass(frozen=True)
@@ -224,6 +225,9 @@ _MEDIA_KIND_LABELS: dict[str, str] = {
 def get_edit_fields(section_id: str, *, defaults_mode: bool = False) -> tuple[SectionFieldDef, ...]:
     if section_id.startswith("custom_"):
         return _CUSTOM_DEFAULT_FIELDS
+    meta = catalog_by_id().get(section_id)
+    if meta is not None and not meta.navigable:
+        return ()
     fields = _SECTION_FIELDS.get(
         section_id, (_prose("intro", "Texto introdutório"),)
     )

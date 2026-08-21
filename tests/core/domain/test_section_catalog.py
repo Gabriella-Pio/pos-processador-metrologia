@@ -161,3 +161,4 @@ def test_fixed_and_protected_section_ids() -> None:
     assert intro.fixed_position == "start"
     assert historico.fixed_position == "none"
     assert anexos.fixed_position == "end"
+    assert catalog_by_id()["cabecalho"].navigable is False

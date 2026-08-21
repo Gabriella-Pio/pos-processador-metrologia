@@ -16,7 +16,7 @@ from src.core.application.template_block_resolver import (
     resolve_template_blocks,
 )
 from src.core.domain.section_numbering import build_section_number_map
-from src.core.domain.section_schema import is_navigable_section
+from src.core.domain.section_schema import is_sidebar_section
 from src.core.domain.ports import ReportDocument, TechnicalControlInfo, TemplateRepository
 from src.core.parser.source_kind import detect_source_kind
 
@@ -114,7 +114,7 @@ class RealReportExporterAdapter:
         resultado = []
         for bloco in blocos:
             tipo = bloco["tipo"]
-            if not is_navigable_section(tipo) and not tipo.startswith("custom_"):
+            if not is_sidebar_section(tipo):
                 continue
             quantidade_fotos = fotos_por_secao.get(tipo, 0)
             resultado.append(

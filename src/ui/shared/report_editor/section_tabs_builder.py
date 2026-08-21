@@ -10,9 +10,10 @@ from src.core.application.template_media import (
     workspace_addable_media_kinds,
 )
 from src.core.domain.report_field_registry import effective_media_kinds, get_media_blocks
-from src.core.domain.section_schema import is_custom_section_id
+from src.core.domain.section_schema import is_custom_section_id, is_sidebar_section
 from src.core.domain.table_row_registry import TABLE_SECTIONS, uses_table_rows_editor
 from src.ui.components.icons import icon_chart, icon_edit, icon_image, icon_table
+from src.ui.components.widget_lifecycle import clear_layout
 from src.ui.shared.report_editor.template_layout_panel import TemplateLayoutPanel
 
 
@@ -56,9 +57,10 @@ class SectionTabsBuilder:
                 pages.layout_panel.set_table_widget(pages.table_rows_editor)
             else:
                 pages.layout_panel.set_table_widget(None)
-            layout_index = tabs.addTab(pages.layout_panel, "Layout")
-            tabs.setTabIcon(layout_index, icon_image())
-            tabs.tabBar().setVisible(True)
+            if is_sidebar_section(section_id):
+                layout_index = tabs.addTab(pages.layout_panel, "Layout")
+                tabs.setTabIcon(layout_index, icon_image())
+            tabs.tabBar().setVisible(tabs.count() > 1)
             return
 
         locked = list(locked_media_kinds or [])
@@ -89,11 +91,7 @@ class SectionTabsBuilder:
             elif media.kind == "graphics":
                 tab_defs.append(("graphics", "Gráficos", pages.graphics_page))
             elif media.kind == "tables":
-                while pages.tables_layout.count():
-                    item = pages.tables_layout.takeAt(0)
-                    widget = item.widget()
-                    if widget is not None:
-                        widget.setParent(None)
+                clear_layout(pages.tables_layout, discard=False)
                 if section_id == "resultados":
                     pages.tables_layout.addWidget(pages.medicoes_editor, 0)
                 elif uses_table_rows_editor(section_id):

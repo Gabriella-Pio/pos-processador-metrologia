@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.core.domain.section_schema import is_sidebar_section
 from src.ui.components.buttons import ChromeIconButton, PrimaryButton
 from src.ui.components.feedback import confirm_action, show_friendly_error, show_info
 from src.ui.components.icons import icon_ellipsis, icon_edit
@@ -180,9 +181,7 @@ class TemplateEditorView(QWidget):
         self._vm.global_fields_ready.connect(self._sidebar.render_global_fields)
         self._vm.preview_ready.connect(self._preview_panel.render_pages)
         self._vm.preview_generating.connect(self._on_preview_generating)
-        self._vm.preview_metadata_ready.connect(
-            lambda metadata: self._preview_panel.update_anchor_map(metadata.get("sections", metadata))
-        )
+        self._vm.preview_metadata_ready.connect(self._on_preview_metadata)
         self._vm.saved.connect(self.saved.emit)
         self._vm.error_occurred.connect(
             lambda title, msg, details: show_friendly_error(self, title, msg, details)
@@ -236,13 +235,24 @@ class TemplateEditorView(QWidget):
 
     def _on_sections_summary(self, sections: list[dict]) -> None:
         self._section_anchor_map = {s["id"]: s for s in sections}
+        self._preview_panel.set_anchor_map(self._section_anchor_map)
         self._sidebar.render_sections(sections)
         if self._active_section_id:
             self._sidebar.set_active_section(self._active_section_id)
             section = self._section_anchor_map.get(self._active_section_id, {})
             title = section.get("display_title") or section.get("title", self._active_section_id)
             self._section_title_label.setText(f"Seção: {title}")
-            self._preview_panel.focus_section(self._active_section_id)
+            self._preview_panel.highlight_section(self._active_section_id)
+
+    def _on_preview_metadata(self, metadata: dict) -> None:
+        sections = metadata.get("sections", metadata) if isinstance(metadata, dict) else {}
+        photo_anchors = metadata.get("photo_anchors", []) if isinstance(metadata, dict) else []
+        self._preview_panel.set_photo_anchors(photo_anchors)
+        self._preview_panel.update_anchor_map(sections)
+        for section_id, info in sections.items():
+            if section_id in self._section_anchor_map:
+                self._section_anchor_map[section_id]["page_start"] = info.get("page")
+                self._section_anchor_map[section_id]["anchor_rect"] = info
 
     def _on_dirty_changed(self, dirty: bool) -> None:
         self._dirty_label.setText("● não salvo" if dirty else "")
@@ -273,6 +283,8 @@ class TemplateEditorView(QWidget):
         focus_target: str = "section_title",
         image_path: str = "",
     ) -> None:
+        if not is_sidebar_section(section_id):
+            return
         _ = image_path
         self._active_section_id = section_id
         self._sidebar.open_edit_for_section(section_id)

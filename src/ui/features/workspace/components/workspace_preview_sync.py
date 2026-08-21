@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 
 from src.core.application.project_serializer import resolved_display_name
 from src.core.domain.ports import ReportDocument
+from src.core.domain.section_schema import is_sidebar_section
 from src.ui.components.feedback import confirm_action, show_friendly_error, show_info
 from src.ui.components.icons import icon_close
 from src.ui.components.modal_presentation import present_modal_dialog
@@ -51,7 +52,9 @@ class WorkspacePreviewSyncMixin:
         self._section_editor.render_sections(sections)
         if self._active_section_id:
             self._section_editor.set_active_section(self._active_section_id)
-            self._focus_preview_section(self._active_section_id)
+            # Só destaca — rolar de novo puxava a folha para o título a cada
+            # regeneração do preview enquanto o usuário editava.
+            self._preview_panel.highlight_section(self._active_section_id)
 
 
     def _on_preview_page_clicked(self, page_number: int) -> None:
@@ -66,6 +69,8 @@ class WorkspacePreviewSyncMixin:
         focus_target: str = "section_title",
         image_path: str = "",
     ) -> None:
+        if not is_sidebar_section(section_id):
+            return
         self._active_section_id = section_id
         self._section_editor.open_edit_for_section(section_id)
         anchor = self._section_anchor_map.get(section_id, {})

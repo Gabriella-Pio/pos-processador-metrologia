@@ -175,6 +175,11 @@ def is_navigable_section(section_id: str) -> bool:
     return section_id in _NAVIGABLE_IDS
 
 
+def is_sidebar_section(section_id: str) -> bool:
+    """Seções que aparecem no sumário (workspace e editor de template)."""
+    return is_navigable_section(section_id) or is_custom_section_id(section_id)
+
+
 def is_tomography_template(template_id: str) -> bool:
     return template_id in {"tomografia", "tomo"}
 

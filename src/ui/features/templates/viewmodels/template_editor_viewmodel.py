@@ -128,7 +128,6 @@ class TemplateEditorViewModel(QObject):
 
     def set_active_section(self, section_id: str | None) -> None:
         self._active_section_id = section_id
-        self._emit_sections_summary()
 
     def update_section_field(self, section_id: str, field_key: str, value: str) -> None:
         section = self._content_defaults.setdefault(section_id, {})

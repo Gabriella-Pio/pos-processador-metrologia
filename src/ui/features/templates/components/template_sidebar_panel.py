@@ -89,6 +89,8 @@ class TemplateSidebarPanel(BaseSidebarPanel):
         *,
         itens_medicao: list[dict[str, str]] | None = None,
     ) -> None:
+        if self._sidebar_tabs.currentIndex() != 0:
+            self._sidebar_tabs.setCurrentIndex(0)
         super().open_edit_for_section(section_id, itens_medicao=itens_medicao)
         self.section_edit_requested.emit(section_id)
 
