@@ -7,6 +7,8 @@ from unittest.mock import patch
 from PIL import Image
 
 from src.core.application.bosello_image_import import (
+    _copy_capture,
+    _safe_path_component,
     attach_bosello_captures,
     bosello_images_storage_dir,
     build_bosello_image_document,
@@ -258,3 +260,59 @@ def test_build_bosello_image_document_reuses_disk_cache_on_reopen(tmp_path: Path
     assert len(document.images) == 1
     assert document.images[0].image_path == cached
     assert document.images[0].bosello_import is True
+
+
+def test_safe_path_component_strips_windows_invalid_names() -> None:
+    assert _safe_path_component("Relatorio fim. ") == "Relatorio fim"
+    assert _safe_path_component("a:b*c?.pdf") == "a_b_c_.pdf"
+    assert _safe_path_component("...") == "bosello"
+
+
+def test_render_falls_back_to_workspace_when_copy_next_to_pdf_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pdf = tmp_path / "relatorio.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    raw = tmp_path / "raw.png"
+    Image.new("RGB", (800, 600), (10, 10, 10)).save(raw)
+    fallback = tmp_path / "workspace-bosello"
+    primary = bosello_images_storage_dir(pdf)
+    monkeypatch.setattr(
+        "src.core.application.bosello_image_import.workspace_bosello_storage_dir",
+        lambda _pdf: fallback,
+    )
+    original_copy = _copy_capture
+
+    def copy_fail_primary(src: Path, dest: Path) -> bool:
+        if dest.parent == primary or primary in dest.parents:
+            return False
+        return original_copy(src, dest)
+
+    monkeypatch.setattr(
+        "src.core.application.bosello_image_import._copy_capture",
+        copy_fail_primary,
+    )
+    with patch(
+        "src.core.application.bosello_image_import.InspEctParser.extract_graphic_images_from_pdf",
+        return_value=[str(raw)],
+    ):
+        library = render_bosello_capture_paths(pdf)
+
+    assert len(library) == 1
+    assert library[0].parent == fallback
+    assert library[0].is_file()
+
+
+def test_build_bosello_document_survives_copy_failure(tmp_path: Path) -> None:
+    pdf = tmp_path / "bosello.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    with patch(
+        "src.core.application.bosello_image_import.merge_bosello_images",
+        side_effect=FileNotFoundError("[WinError 3] path"),
+    ):
+        document = build_bosello_image_document(pdf)
+    assert document.source_kind == "insp_ect"
+    assert document.images == []
+    assert document.evaluated_component
+

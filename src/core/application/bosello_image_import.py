@@ -1,6 +1,8 @@
 """Importação de imagens de PDFs Bosello (INSPECT) para a seção Tomografia."""
 from __future__ import annotations
 
+import hashlib
+import logging
 import shutil
 from pathlib import Path
 
@@ -11,7 +13,11 @@ from src.core.domain.image_workspace import new_image_id
 from src.core.domain.ports import ReportDocument, ReportImage
 from src.core.parser.insp_ect_parser import InspEctParser, RelatorioInspEctDto
 
+logger = logging.getLogger(__name__)
+
 TOMOGRAPHY_SECTION_ID = "tomografia"
+_WORKSPACE_BOSELLO_ROOT = Path("output_pdfs") / "workspace" / ".pos-metrologia" / "bosello-rendered"
+_INVALID_PATH_CHARS = '<>:"/\\|?*'
 
 # Limiar para descartar marcas quadradas do cabeçalho (ex.: Zeiss 295×295).
 _MAX_LOGO_SIDE_PX = 400
@@ -88,22 +94,78 @@ def filter_importable_image_paths(paths: list[Path]) -> list[Path]:
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
 
+def _safe_path_component(name: str, *, fallback: str = "bosello", max_len: int = 80) -> str:
+    """Nome de pasta/arquivo aceito pelo Windows (sem : * ? e sem ponto/espaço no fim)."""
+    cleaned = "".join(
+        "_" if ch in _INVALID_PATH_CHARS or ord(ch) < 32 else ch for ch in (name or "")
+    )
+    cleaned = cleaned.rstrip(" .")
+    return (cleaned or fallback)[:max_len]
+
+
+def _image_suffix(path: Path) -> str:
+    suffix = path.suffix.lower()
+    return suffix if suffix in _IMAGE_SUFFIXES else ".png"
+
+
+def _list_image_files(dest_dir: Path) -> list[Path]:
+    if not dest_dir.is_dir():
+        return []
+    try:
+        entries = list(dest_dir.iterdir())
+    except OSError:
+        return []
+    return sorted(
+        path
+        for path in entries
+        if path.is_file() and path.suffix.lower() in _IMAGE_SUFFIXES
+    )
+
+
 def bosello_images_storage_dir(source_pdf: Path) -> Path:
     """Diretório persistente ao lado do PDF de origem."""
-    stem = source_pdf.stem or "bosello"
+    stem = _safe_path_component(source_pdf.stem or "bosello")
     return source_pdf.parent / ".pos-metrologia" / "bosello-rendered" / stem
+
+
+def workspace_bosello_storage_dir(source_pdf: Path) -> Path:
+    """Fallback gravável no workspace da aplicação (Downloads/rede/caminho longo)."""
+    try:
+        key = str(source_pdf.resolve())
+    except OSError:
+        key = str(source_pdf)
+    digest = hashlib.sha1(key.encode("utf-8", "replace")).hexdigest()[:12]
+    stem = _safe_path_component(source_pdf.stem or "bosello", max_len=60)
+    return _WORKSPACE_BOSELLO_ROOT / f"{stem}_{digest}"
 
 
 def list_cached_bosello_captures(source_pdf: Path) -> list[Path]:
     """Lista capturas já renderizadas em disco (sem reextrair do PDF)."""
-    dest_dir = bosello_images_storage_dir(source_pdf)
-    if not dest_dir.is_dir():
-        return []
-    return sorted(
-        path
-        for path in dest_dir.iterdir()
-        if path.is_file() and path.suffix.lower() in _IMAGE_SUFFIXES
-    )
+    for dest_dir in (bosello_images_storage_dir(source_pdf), workspace_bosello_storage_dir(source_pdf)):
+        cached = _list_image_files(dest_dir)
+        if cached:
+            return cached
+    return []
+
+
+def _copy_capture(src: Path, dest: Path) -> bool:
+    """Copia via bytes para evitar WinError 3 do CopyFile2 em caminhos longos."""
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(src.read_bytes())
+    except OSError:
+        logger.warning("Falha ao copiar captura Bosello %s → %s", src, dest, exc_info=True)
+        return False
+    return dest.is_file()
+
+
+def _remove_dir_if_exists(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        shutil.rmtree(path)
+    except OSError:
+        logger.warning("Não foi possível limpar cache Bosello %s", path, exc_info=True)
 
 
 def minimal_insp_ect_dto(source_pdf: Path) -> RelatorioInspEctDto:
@@ -139,19 +201,28 @@ def render_bosello_capture_paths(
         return []
 
     dest_dir = bosello_images_storage_dir(source_pdf)
-    if replace_library and dest_dir.exists():
-        shutil.rmtree(dest_dir)
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    fallback_dir = workspace_bosello_storage_dir(source_pdf)
+    if replace_library:
+        _remove_dir_if_exists(dest_dir)
+        _remove_dir_if_exists(fallback_dir)
 
     library: list[Path] = []
     next_index = 1
+    active_dir = dest_dir
     for src in filtered_paths:
         if not src.is_file():
             continue
-        dest = dest_dir / f"img_{next_index:02d}{src.suffix or '.png'}"
-        next_index += 1
-        shutil.copy2(src, dest)
+        filename = f"img_{next_index:02d}{_image_suffix(src)}"
+        dest = active_dir / filename
+        copied = _copy_capture(src, dest)
+        if not copied and active_dir != fallback_dir:
+            active_dir = fallback_dir
+            dest = active_dir / filename
+            copied = _copy_capture(src, dest)
+        if not copied:
+            continue
         library.append(dest)
+        next_index += 1
     return library
 
 
@@ -284,7 +355,10 @@ def build_bosello_image_document(pdf_path: Path) -> ReportDocument:
         template_id="tomografia",
     )
     # Reutiliza cache em disco na reabertura; só reextrai se não houver capturas.
-    merge_bosello_images(document, pdf_path, replace_auto_imported=False)
+    try:
+        merge_bosello_images(document, pdf_path, replace_auto_imported=False)
+    except OSError:
+        logger.exception("Falha ao importar capturas Bosello de %s", pdf_path)
     return document
 
 
