@@ -45,6 +45,7 @@ class SectionContentTab(QWidget):
         self._debounce.setInterval(600)
         self._debounce.timeout.connect(self._flush_textarea_pending)
         self._pending_textarea_key: str | None = None
+        self._force_next_patch = False
 
         self._section_title_edit = PlaceholderTextEdit(multiline=False)
         self._section_title_edit.text_changed.connect(self._on_section_title_changed)
@@ -91,7 +92,7 @@ class SectionContentTab(QWidget):
             defaults_mode=False,
             on_field_changed=self._on_field_changed,
             on_line_finished=self._on_line_finished,
-            on_field_restore=lambda sid, key: self.section_field_restore_requested.emit(sid, key),
+            on_field_restore=self._on_field_restore,
             on_manage_versions=self.manage_versions_requested.emit,
         )
 
@@ -221,10 +222,11 @@ class SectionContentTab(QWidget):
                 version_entries=self._version_entries,
             )
 
-    def patch_fields(self, section_id: str, overrides: dict) -> None:
+    def patch_fields(self, section_id: str, overrides: dict, *, force: bool = False) -> None:
         self._section_overrides = dict(overrides)
+        force = force or self.consume_force_patch()
         default = SECTION_HEADING_DEFAULTS.get(section_id, overrides.get("title", section_id))
-        self._section_title_edit.set_text(overrides.get("section_title", default))
+        self._section_title_edit.set_text(overrides.get("section_title", default), force=force)
         defaults = default_field_values(section_id)
         for key, widget in self._field_widgets.items():
             if key.startswith("title_"):
@@ -232,9 +234,22 @@ class SectionContentTab(QWidget):
             else:
                 value = overrides.get(key, defaults.get(key, ""))
             if isinstance(widget, PlaceholderTextEdit):
-                widget.set_text(value)
+                widget.set_text(value, force=force)
             elif isinstance(widget, QLineEdit):
                 widget.setText(value)
+
+    def prepare_restore(self) -> None:
+        """Cancela debounce e autoriza patch mesmo com o editor focado."""
+        self._cancel_pending_textarea()
+        self._force_next_patch = True
+
+    def should_force_patch(self) -> bool:
+        return self._force_next_patch
+
+    def consume_force_patch(self) -> bool:
+        force = self._force_next_patch
+        self._force_next_patch = False
+        return force
 
     def has_focused_editor(self) -> bool:
         if self._section_title_edit.has_editor_focus():
@@ -284,16 +299,27 @@ class SectionContentTab(QWidget):
             return
         self.section_field_changed.emit(self._section_id, key, widget.text())
 
+    def _cancel_pending_textarea(self) -> None:
+        self._debounce.stop()
+        self._pending_textarea_key = None
+
     def _flush_textarea_pending(self) -> None:
         if self._section_id is None or self._pending_textarea_key is None:
+            self._cancel_pending_textarea()
             return
         key = self._pending_textarea_key
+        self._cancel_pending_textarea()
         widget = self._field_widgets.get(key)
         if isinstance(widget, PlaceholderTextEdit):
             self.section_field_changed.emit(self._section_id, key, widget.get_text())
 
+    def _on_field_restore(self, section_id: str, key: str) -> None:
+        self.prepare_restore()
+        self.section_field_restore_requested.emit(section_id, key)
+
     def _on_restore_section(self) -> None:
         if self._section_id is not None:
+            self.prepare_restore()
             self.section_restore_requested.emit(self._section_id)
 
     def _on_delete(self) -> None:

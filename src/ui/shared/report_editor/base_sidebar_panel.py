@@ -97,10 +97,12 @@ class BaseSidebarPanel(QFrame):
     def _refresh_edit_if_open(self) -> None:
         if not self._edit_open or self._active_section_id is None:
             return
-        if self._edit_view.has_pending_textarea():
-            return
-        if self._should_skip_refresh_while_focused() and self._edit_view.has_focused_editor():
-            return
+        force = self._edit_view.should_force_patch()
+        if not force:
+            if self._edit_view.has_pending_textarea():
+                return
+            if self._should_skip_refresh_while_focused() and self._edit_view.has_focused_editor():
+                return
         section = self._sections_map.get(self._active_section_id, {})
         self._edit_view.patch_section(
             self._section_overrides_from_summary(section),

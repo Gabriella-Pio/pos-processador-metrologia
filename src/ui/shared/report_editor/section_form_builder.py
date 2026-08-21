@@ -13,7 +13,7 @@ from src.core.domain.table_row_registry import INTRODUCAO_BLOCK_TITLES
 from src.ui.components.buttons import SecondaryButton
 from src.ui.components.placeholder_field import PlaceholderTextEdit
 from src.ui.features.workspace.components.section_field_schema import default_field_values
-from src.ui.styles import SPACING, caption_style
+from src.ui.styles import SPACING, caption_style, configure_restore_link
 
 
 class SectionFormBuilder:
@@ -127,10 +127,8 @@ class SectionFormBuilder:
             title_caption.setObjectName("GlobalFieldLabel")
             header.addWidget(title_caption, stretch=1)
         if not self._defaults_mode:
-            restore = QLabel('<a href="restore">Restaurar</a>')
-            restore.setObjectName("FieldRestoreLink")
-            restore.setTextFormat(Qt.TextFormat.RichText)
-            restore.setOpenExternalLinks(False)
+            restore = QLabel()
+            configure_restore_link(restore)
             fkey = field_def.key
             restore.linkActivated.connect(
                 lambda _href, sid=section_id, k=fkey: self._on_field_restore(sid, k)

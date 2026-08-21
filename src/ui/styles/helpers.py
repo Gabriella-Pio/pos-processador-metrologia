@@ -1,8 +1,9 @@
 """Funções de estilo Python — delegam tokens e fragmentos QSS quando possível."""
 from __future__ import annotations
 
-from PyQt6.QtGui import QColor
-from PyQt6.QtWidgets import QGraphicsDropShadowEffect, QWidget
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QPalette
+from PyQt6.QtWidgets import QGraphicsDropShadowEffect, QLabel, QWidget
 
 from src.ui.styles.qss_loader import load_fragment, load_qss
 from src.ui.styles.tokens import PALETTE, SPACING, TYPOGRAPHY
@@ -96,6 +97,30 @@ def apply_elevation(
     effect.setOffset(0, y_offset)
     effect.setColor(QColor(0, 0, 0, alpha))
     widget.setGraphicsEffect(effect)
+
+
+def restore_link_color() -> str:
+    """Azul institucional no claro (contraste); azul claro no escuro."""
+    from src.ui.accessibility.themes import is_light_palette
+
+    return PALETTE.senai_blue if is_light_palette() else PALETTE.senai_blue_light
+
+
+def configure_restore_link(label: QLabel, *, caption: str = "Restaurar") -> None:
+    """QLabel com ``<a>`` visível nos dois temas — o QSS não pinta âncoras HTML."""
+    color = restore_link_color()
+    label.setObjectName("FieldRestoreLink")
+    label.setTextFormat(Qt.TextFormat.RichText)
+    label.setOpenExternalLinks(False)
+    label.setCursor(Qt.CursorShape.PointingHandCursor)
+    label.setText(
+        f'<a href="restore" style="color:{color}; text-decoration:none;">{caption}</a>'
+    )
+    palette = label.palette()
+    qcolor = QColor(color)
+    palette.setColor(QPalette.ColorRole.Link, qcolor)
+    palette.setColor(QPalette.ColorRole.LinkVisited, qcolor)
+    label.setPalette(palette)
 
 
 def caption_style(muted: bool = True) -> str:

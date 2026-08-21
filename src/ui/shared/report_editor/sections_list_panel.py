@@ -254,6 +254,7 @@ class SectionsListPanel(QFrame):
         self._active_section_id: str | None = None
         self._loading = False
         self._pending_section_id: str | None = None
+        self._pending_list_scroll: int | None = None
 
         self._click_timer = QTimer(self)
         self._click_timer.setSingleShot(True)
@@ -261,7 +262,7 @@ class SectionsListPanel(QFrame):
         self._click_timer.timeout.connect(self._emit_single_click)
 
         self._hint = QLabel(
-            "Marque para incluir no template · clique para ver no preview · lápis ou duplo-clique para editar"
+            "Marque para incluir no template · clique para o preview · lápis ou duplo-clique para editar"
             if self._mode == "template"
             else "Marque para incluir no relatório · clique no preview · duplo-clique para editar"
         )
@@ -327,7 +328,7 @@ class SectionsListPanel(QFrame):
             enabled_count = sum(1 for s in sections if s.get("enabled", True))
             self._hint.setText(
                 f"{enabled_count} de {count} seç{'ões' if count != 1 else 'ão'} ativas · "
-                "≡ arraste para reordenar · marque e clique para editar defaults"
+                "≡ arraste para reordenar · clique para o preview · lápis ou duplo-clique para editar"
             )
         else:
             enabled_count = sum(1 for s in sections if s.get("enabled", True))
@@ -374,7 +375,11 @@ class SectionsListPanel(QFrame):
                 return
 
     def _rebuild_rows(self) -> None:
+        current_scroll = self._list.verticalScrollBar().value()
+        if self._pending_list_scroll is None:
+            self._pending_list_scroll = current_scroll
         self._loading = True
+        self._list.blockSignals(True)
         self._list.clear()
         for section in self._sections:
             section_id = section["id"]
@@ -407,7 +412,24 @@ class SectionsListPanel(QFrame):
             self._list.addItem(item)
             self._list.setItemWidget(item, row)
         self._append_add_row()
+        self._list.setCurrentItem(None)
+        self._list.blockSignals(False)
         self._loading = False
+        self._restore_list_scroll()
+
+    def _restore_list_scroll(self) -> None:
+        pos = self._pending_list_scroll
+        if pos is None:
+            return
+        self._list.verticalScrollBar().setValue(pos)
+        QTimer.singleShot(0, self._apply_pending_list_scroll)
+
+    def _apply_pending_list_scroll(self) -> None:
+        pos = self._pending_list_scroll
+        self._pending_list_scroll = None
+        if pos is None:
+            return
+        self._list.verticalScrollBar().setValue(pos)
 
     def _on_row_clicked(self, section_id: str) -> None:
         if self._click_timer.isActive() and self._pending_section_id == section_id:

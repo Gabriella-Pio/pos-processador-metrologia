@@ -156,6 +156,9 @@ class SectionEditView(QFrame):
             or self._medicoes_editor.has_pending_emit()
         )
 
+    def should_force_patch(self) -> bool:
+        return self._content_tab.should_force_patch()
+
     def refresh_appearance(self) -> None:
         self.setStyleSheet(sidebar_panel_style())
         self._close_btn.refresh_appearance()
@@ -223,6 +226,7 @@ class SectionEditView(QFrame):
     ) -> None:
         if self._section_id is None:
             return
+        force = self._content_tab.consume_force_patch()
         if self._needs_field_rebuild(self._section_id, overrides):
             self.open_section(
                 self._section_id,
@@ -240,7 +244,7 @@ class SectionEditView(QFrame):
         prev_disabled = set(self._section_overrides.get("disabled_chart_ids") or [])
         prev_media = list(self._section_overrides.get("media_kinds") or [])
         self._section_overrides = dict(overrides)
-        self._content_tab.patch_fields(section_id, overrides)
+        self._content_tab.patch_fields(section_id, overrides, force=force)
 
         if uses_table_rows_editor(section_id) and table_rows is not None:
             from src.core.application.statistical_aggregator import (

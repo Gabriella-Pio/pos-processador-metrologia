@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 
 from src.core.domain.report_field_registry import GLOBAL_FIELDS, GlobalFieldDef
 from src.ui.shared.report_editor.sidebar_chrome import sidebar_section_header
-from src.ui.styles import SPACING, caption_style, sidebar_panel_style
+from src.ui.styles import SPACING, caption_style, configure_restore_link, sidebar_panel_style
 
 
 class _GlobalFieldRow(QFrame):
@@ -58,11 +58,8 @@ class _GlobalFieldRow(QFrame):
         meta.setWordWrap(True)
         meta_row.addWidget(meta, stretch=1)
         if overridden and show_restore:
-            restore = QLabel('<a href="restore">Restaurar</a>')
-            restore.setObjectName("FieldRestoreLink")
-            restore.setTextFormat(Qt.TextFormat.RichText)
-            restore.setOpenExternalLinks(False)
-            restore.setCursor(Qt.CursorShape.PointingHandCursor)
+            restore = QLabel()
+            configure_restore_link(restore)
             restore.linkActivated.connect(lambda _href: self.restore_requested.emit(self._key))
             meta_row.addWidget(restore, alignment=Qt.AlignmentFlag.AlignRight)
         if meta_parts or overridden:
