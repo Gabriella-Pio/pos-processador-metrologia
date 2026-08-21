@@ -10,7 +10,7 @@ def default_prose_values(section_id: str, context: dict[str, str] | None = None)
     """Templates de prosa com placeholders — não resolve valores globais."""
     base = dict(PROSE_TEMPLATES.get(section_id, {}))
     kind = (context or {}).get("report_kind") or ""
-    if kind == "tomografia":
+    if kind in {"tomografia", "insp_ect"}:
         from src.core.domain.tomo_template_defaults import TOMO_PROSE_DEFAULTS
 
         base.update(TOMO_PROSE_DEFAULTS.get(section_id, {}))

@@ -34,11 +34,15 @@ def measurement_limits(item: Any) -> MeasurementLimits | None:
     )
 
 
+def _md_bold(text: str) -> str:
+    return f"**{text}**"
+
+
 def format_item_bullet_plain(item: Any) -> str:
-    """Texto plano para o editor (sem marcação HTML)."""
-    caracteristica = getattr(item, "caracteristica", "") or "característica"
+    """Texto markdown do editor — os mesmos negritos do preview/PDF."""
+    caracteristica = _md_bold(getattr(item, "caracteristica", "") or "característica")
     tipo = getattr(item, "tipo", "") or "—"
-    valor = getattr(item, "valor_medido", "") or "—"
+    valor = _md_bold(getattr(item, "valor_medido", "") or "—")
     status = getattr(item, "status", "") or ""
     limits = measurement_limits(item)
     if limits is None:
@@ -49,24 +53,24 @@ def format_item_bullet_plain(item: Any) -> str:
     if status == "Dentro":
         return (
             f"A característica {caracteristica}, do tipo {tipo}, apresentou valor medido de "
-            f"{valor}, permanecendo dentro dos limites cadastrados de "
+            f"{valor}, permanecendo {_md_bold('dentro')} dos limites cadastrados de "
             f"{limits.limite_inferior:.4f} a {limits.limite_superior:.4f}."
         )
     if limits.valor_medido > limits.limite_superior:
         excedente = limits.valor_medido - limits.limite_superior
         return (
             f"A característica {caracteristica}, do tipo {tipo}, apresentou valor medido de "
-            f"{valor}, ficando acima dos limites cadastrados de "
+            f"{valor}, ficando {_md_bold('acima')} dos limites cadastrados de "
             f"{limits.limite_inferior:.4f} a {limits.limite_superior:.4f}, "
-            f"resultando em um excedente de +{excedente:.4f}."
+            f"resultando em um excedente de {_md_bold(f'+{excedente:.4f}')}."
         )
     if limits.valor_medido < limits.limite_inferior:
         faltante = limits.limite_inferior - limits.valor_medido
         return (
             f"A característica {caracteristica}, do tipo {tipo}, apresentou valor medido de "
-            f"{valor}, ficando abaixo dos limites cadastrados de "
+            f"{valor}, ficando {_md_bold('abaixo')} dos limites cadastrados de "
             f"{limits.limite_inferior:.4f} a {limits.limite_superior:.4f}, "
-            f"resultando em um déficit de -{faltante:.4f}."
+            f"resultando em um déficit de {_md_bold(f'-{faltante:.4f}')}."
         )
     return (
         f"A característica {caracteristica} ({tipo}) apresentou valor medido de "
@@ -75,43 +79,22 @@ def format_item_bullet_plain(item: Any) -> str:
 
 
 def format_item_bullet_html(item: Any, *, alert_color: str) -> str:
-    """Parágrafo HTML para o PDF (ReportLab)."""
-    caracteristica = getattr(item, "caracteristica", "") or "característica"
-    tipo = getattr(item, "tipo", "") or "—"
-    valor = getattr(item, "valor_medido", "") or "—"
-    status = getattr(item, "status", "") or ""
+    """Parágrafo HTML para o PDF — deriva do markdown do editor."""
+    from src.core.domain.markdown_prose import markdown_to_reportlab_html
+
+    body = markdown_to_reportlab_html(format_item_bullet_plain(item))
     limits = measurement_limits(item)
-    if limits is None:
-        return (
-            f"• A característica <b>{caracteristica}</b>, do tipo {tipo}, apresentou valor medido de "
-            f"<b>{valor}</b>, sem valores de tolerância cadastrados no relatório de origem."
-        )
-    if status == "Dentro":
-        return (
-            f"• A característica <b>{caracteristica}</b>, do tipo {tipo}, apresentou valor medido de "
-            f"<b>{valor}</b>, permanecendo <b>dentro</b> dos limites cadastrados de "
-            f"{limits.limite_inferior:.4f} a {limits.limite_superior:.4f}."
-        )
-    if limits.valor_medido > limits.limite_superior:
-        excedente = limits.valor_medido - limits.limite_superior
-        return (
-            f"• A característica <b>{caracteristica}</b>, do tipo {tipo}, apresentou valor medido de "
-            f"<b>{valor}</b>, ficando <b>acima</b> dos limites cadastrados de "
-            f"{limits.limite_inferior:.4f} a {limits.limite_superior:.4f}, "
-            f"resultando em um excedente de <font color='{alert_color}'><b>+{excedente:.4f}</b></font>."
-        )
-    if limits.valor_medido < limits.limite_inferior:
-        faltante = limits.limite_inferior - limits.valor_medido
-        return (
-            f"• A característica <b>{caracteristica}</b>, do tipo {tipo}, apresentou valor medido de "
-            f"<b>{valor}</b>, ficando <b>abaixo</b> dos limites cadastrados de "
-            f"{limits.limite_inferior:.4f} a {limits.limite_superior:.4f}, "
-            f"resultando em um déficit de <font color='{alert_color}'><b>-{faltante:.4f}</b></font>."
-        )
-    return (
-        f"• A característica <b>{caracteristica}</b> ({tipo}) apresentou valor medido de "
-        f"<b>{valor}</b> fora dos limites."
-    )
+    status = getattr(item, "status", "") or ""
+    if limits is not None and status != "Dentro":
+        if limits.valor_medido > limits.limite_superior:
+            excedente = limits.valor_medido - limits.limite_superior
+            marked = f"<b>+{excedente:.4f}</b>"
+            body = body.replace(marked, f"<font color='{alert_color}'>{marked}</font>", 1)
+        elif limits.valor_medido < limits.limite_inferior:
+            faltante = limits.limite_inferior - limits.valor_medido
+            marked = f"<b>-{faltante:.4f}</b>"
+            body = body.replace(marked, f"<font color='{alert_color}'>{marked}</font>", 1)
+    return f"• {body}"
 
 
 def iter_mmc_bullet_htmls(items: list[Any], *, alert_color: str) -> list[str]:

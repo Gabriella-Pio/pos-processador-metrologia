@@ -29,8 +29,8 @@ def test_mmc_bullet_count_matches_items_automatically() -> None:
     assert "5 características" in fields["intro"]
     keys = [d.key for d in interpretacao_field_defs(fields)]
     assert keys == ["intro", "bullet_1", "bullet_2", "bullet_3", "bullet_4", "bullet_5", "nota"]
-    assert "A" in fields["bullet_1"]
-    assert "E" in fields["bullet_5"]
+    assert "**A**" in fields["bullet_1"]
+    assert "**E**" in fields["bullet_5"]
 
 
 def test_scales_from_3_to_5_when_pdf_changes() -> None:
@@ -62,3 +62,17 @@ def test_preserves_only_explicit_user_overrides() -> None:
     assert "A" in fields["bullet_1"]
     assert fields["bullet_2"] == "Texto editado pelo usuário"
     assert "C" in fields["bullet_3"]
+
+
+def test_mmc_preview_keeps_unedited_bullets_when_one_is_edited() -> None:
+    dto = _dto(("A", "Fora"), ("B", "Dentro"), ("C", "Dentro"))
+    from src.core.application.interpretacao_edit import iter_mmc_interpretacao_bullets
+
+    entries = iter_mmc_interpretacao_bullets(
+        list(dto.itens_medicao),
+        {"intro": "Intro", "bullet_2": "Texto editado pelo usuário"},
+    )
+    assert len(entries) == 3
+    assert entries[0] == ("item", dto.itens_medicao[0])
+    assert entries[1] == ("prose", "Texto editado pelo usuário")
+    assert entries[2] == ("item", dto.itens_medicao[2])

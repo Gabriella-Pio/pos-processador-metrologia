@@ -78,6 +78,34 @@ def build_interpretacao_editor_fields(
     return result
 
 
+def iter_mmc_interpretacao_bullets(
+    items: list[Any],
+    prose: dict[str, str] | None = None,
+) -> list[tuple[str, Any]]:
+    """Um bullet por item de medição; texto editado substitui só aquele item.
+
+    Retorna ``("prose", texto)`` ou ``("item", dto)``. Sem isso, gravar um
+    único ``bullet_N`` no override fazia o PDF/preview omitir os demais.
+    """
+    prose = prose or {}
+    entries: list[tuple[str, Any]] = []
+    last_index = len(items)
+    for key, value in prose.items():
+        if not key.startswith("bullet_"):
+            continue
+        suffix = key.split("_", 1)[1]
+        if not suffix.isdigit():
+            continue
+        last_index = max(last_index, int(suffix))
+    for index in range(1, last_index + 1):
+        edited = str(prose.get(f"bullet_{index}") or "").strip()
+        if edited:
+            entries.append(("prose", edited))
+        elif index <= len(items):
+            entries.append(("item", items[index - 1]))
+    return entries
+
+
 def interpretacao_field_defs(fields: dict[str, str] | None = None) -> tuple[SectionFieldDef, ...]:
     """Campos dinâmicos: intro + bullet_1..N + nota de rodapé."""
     fields = fields or {}
